@@ -196,6 +196,11 @@ export const handlers = [
         if (typeof idx !== 'number' || !Number.isInteger(idx) || !db.selectCandidate(page, idx)) {
           return fail(422, 'Unknown candidate.');
         }
+      } else if (keys === 'candidates') {
+        const idxs = body.candidates;
+        const valid = Array.isArray(idxs) && idxs.length >= 2 && new Set(idxs).size === idxs.length && idxs.every((i) => Number.isInteger(i));
+        if (!valid) return fail(422, 'Showing subjects together needs at least 2 different candidates.');
+        if (!db.subjectTogether(page, idxs as number[])) return fail(422, 'Unknown candidate.');
       } else if (keys === 'point') {
         if (!isPoint(body.point)) return fail(422, 'point must be [x, y] fractions between 0 and 1.');
         db.subjectFromPoint(page, body.point);

@@ -206,7 +206,10 @@ describe('Contract 1 mock coverage', () => {
     expect((afterEdit as ApiError).status).toBe(403);
     // Switching back restores it.
     await api.updateProfile(maya!.id, { settings: maya!.settings });
-    await expect(api.getReaderPage(first.page_id, { profile: maya!.id, level: 1, v: first.v })).resolves.toBeInstanceOf(Blob);
+    // Size and type, not `instanceof Blob`: which Blob class fetch returns under jsdom differs by Node version.
+    const restored = await api.getReaderPage(first.page_id, { profile: maya!.id, level: 1, v: first.v });
+    expect(restored.size).toBeGreaterThan(0);
+    expect(restored.type).toMatch(/^image\//);
   });
 
   it('eval summary (P1) has a mock', async () => {

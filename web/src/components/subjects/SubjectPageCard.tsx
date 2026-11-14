@@ -3,6 +3,7 @@ import { api } from '../../api';
 import { useAction } from '../../hooks/useAction';
 import type { Page } from '../../types/api';
 import { PAGE_STATE_HINT, formatConfidence } from '../../utils/display';
+import { secondLookText } from '../../utils/secondLook';
 import { OverlayImage } from '../books/OverlayImage';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
@@ -72,11 +73,8 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
           </p>
         ))}
         {page.second_look && page.confirmed && (
-          <p className="text-sm text-slate-700">
-            {page.second_look.status === 'pending' && 'Second look: still checking.'}
-            {page.second_look.status === 'pass' && 'Second look: named the same subject.'}
-            {page.second_look.status === 'warn' &&
-              `Second look: named “${page.second_look.answer ?? 'something else'}”. Worth a glance; it can be wrong too.`}
+          <p className="text-sm text-slate-700" title={secondLookText(page.second_look).raw ?? undefined}>
+            Second look: {secondLookText(page.second_look).text}
           </p>
         )}
 
