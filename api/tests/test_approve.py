@@ -1,4 +1,4 @@
-from api import db
+from api import db, modules
 from api.tests.helpers import EX, approve_all, client, confirmed_book, make_profile, upload
 
 send = lambda book, p, rows, level=1, decision="approve": client.post(
@@ -21,7 +21,7 @@ def test_approve_records_and_the_sheet_shows_it():
     assert rows(book, p)[0]["approval"] == "approved"
     stored = db.approvals.find_one()
     assert stored["subject_hash"] == book["pages"][0]["subject_hash"]
-    assert (stored["settings_hash"], stored["level"], stored["render_version"]) == (p["settings_hash"], 1, "stub-1")
+    assert (stored["settings_hash"], stored["level"], stored["render_version"]) == (p["settings_hash"], 1, modules.display.RENDER_VERSION)
 
 
 def test_the_newest_decision_wins():

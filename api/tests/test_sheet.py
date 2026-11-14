@@ -13,10 +13,10 @@ def test_sheet_rows():
     book, p = confirmed_book(), make_profile()
     body = sheet(book, p).json()
     example = EX["GET /api/books/{id}/sheet"]["response"]
-    assert set(body) == set(example) and (body["level"], body["render_version"]) == (1, "stub-1")
+    assert set(body) == set(example) and (body["level"], body["render_version"]) == (1, modules.display.RENDER_VERSION)
     row, unpicked, failed = body["pages"]
     assert set(row) == set(example["pages"][0])
-    assert row["version"] == version_token(book["pages"][0]["subject_hash"], p["settings_hash"], 1, "stub-1")
+    assert row["version"] == version_token(book["pages"][0]["subject_hash"], p["settings_hash"], 1, modules.display.RENDER_VERSION)
     assert (row["label"], row["source"], row["approval"]) == ("rabbit", "auto", "none")
     assert row["checks"]["fidelity"]["status"] == "pass" and row["second_look"]["status"] == "pass"
     assert row["preview_url"] == f"/api/render/{row['page_id']}?profile={p['id']}&level=1&v={row['version']}"
