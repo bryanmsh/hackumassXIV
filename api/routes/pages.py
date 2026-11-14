@@ -1,4 +1,5 @@
 """Page and subject routes."""
+import logging
 from datetime import datetime, timezone
 
 from bson import ObjectId
@@ -7,6 +8,7 @@ from pydantic import BaseModel, model_validator
 
 from api import coords, db, images, jobs, modules, views
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 CUTOUT_FAILED = "The cut-out could not be made. Try again or draw an outline."
@@ -55,13 +57,17 @@ def _page_response(page_id: ObjectId) -> dict:
 
 def select(page: dict, index: int) -> dict:
     """Make candidate `index` the subject. The page is then ready; a changed subject needs
-    confirming again, the same one does not. Stores and returns the updated page."""
+    confirming again, the same one does not. Stores and returns the updated page.
+
+    Refuses (409) if the page went into processing meanwhile; nothing is written then."""
     subject_hash = page["candidates"][index]["mask_hash"]
     changed = subject_hash != page["subject_hash"]
     fields = {"candidates": page["candidates"], "selected": index, "subject_hash": subject_hash,
               "state": "ready", "reason": None,
               "confirmed": page["confirmed"] and not changed}
-    db.pages.update_one({"_id": page["_id"]}, {"$set": fields})
+    done = db.pages.update_one({"_id": page["_id"], "state": {"$ne": "processing"}}, {"$set": fields})
+    if done.matched_count == 0:
+        raise HTTPException(409, "This page is being processed.")
     return {**page, **fields}
 
 
@@ -70,6 +76,7 @@ def _cutout(page: dict, make) -> dict:
     try:
         return make(jobs.book_dir(page["book_id"])).model_dump()
     except Exception:
+        logger.exception("cut-out failed for page %s", page["_id"])
         raise HTTPException(502, CUTOUT_FAILED)
 
 
@@ -84,10 +91,11 @@ def _pixels(point, page: dict) -> tuple[float, float]:
 def retry_page(page_id: str, background: BackgroundTasks, body: RetryBody | None = None):
     page = _find_page(page_id)
     force = body.force if body else False
-    if not (page["state"] == "failed" or (page["state"] == "unsupported" and force)):
-        raise HTTPException(409, "Only a failed page can be retried; an unsupported page needs force.")
-    db.pages.update_one({"_id": page["_id"]}, {"$set": {
+    allowed = ["failed", "unsupported"] if force else ["failed"]
+    started = db.pages.update_one({"_id": page["_id"], "state": {"$in": allowed}}, {"$set": {
         "state": "processing", "reason": None, "processing_started_at": datetime.now(timezone.utc)}})
+    if started.matched_count == 0:
+        raise HTTPException(409, "Only a failed page can be retried; an unsupported page needs force.")
     background.add_task(jobs.process_one, page["_id"], force)
     return _page_response(page["_id"])
 
@@ -111,6 +119,11 @@ def set_subject(page_id: str, body: SubjectBody):
         points = [_pixels(p, page) for p in body.outline]
         found = _cutout(page, lambda out_dir: modules.pipeline.mask_from_outline(
             image_path, body.label.strip(), points, out_dir))
+    # The pipeline is slow: add to the page as it is now, never to the copy read before the call.
+    page = _find_page(page_id)
+    if page["state"] == "processing":
+        raise HTTPException(409, "This page is still being processed.")
+    candidates = page["candidates"]
     index = next((i for i, c in enumerate(candidates) if c["mask_hash"] == found["mask_hash"]), None)
     if index is None:
         candidates = [*candidates, found]

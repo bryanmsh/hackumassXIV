@@ -71,11 +71,46 @@ def test_positions_outside_the_page_are_refused(body):
     assert subject(upload()["pages"][0], body).status_code == 422
 
 
-def test_pipeline_error_on_click_leaves_the_page_unchanged(monkeypatch):
+def test_pipeline_error_on_click_leaves_the_page_unchanged(monkeypatch, caplog):
     page = upload()["pages"][0]
     monkeypatch.setattr(modules.pipeline, "segment_at_point", lambda *a: 1 / 0)
     assert subject(page, {"point": [0.5, 0.5]}).status_code == 502
+    assert any("cut-out failed for page" in r.getMessage() and r.exc_info for r in caplog.records)
     assert client.get(f"/api/books/{page['book_id']}").json()["pages"][0] == page
+
+
+def test_a_click_never_erases_a_candidate_added_meanwhile(monkeypatch):
+    page = upload()["pages"][1]
+    real = modules.pipeline.segment_at_point
+
+    def slow_click(path, x, y, out):
+        found = real(path, x, y, out)
+        stored = db.pages.find_one({"_id": ObjectId(page["id"])})
+        other = {**stored["candidates"][0], "mask_hash": "added-meanwhile", "source": "click"}
+        db.pages.update_one({"_id": stored["_id"]}, {"$push": {"candidates": other}})
+        return found
+
+    monkeypatch.setattr(modules.pipeline, "segment_at_point", slow_click)
+    r = subject(page, {"point": [0.5, 0.1]}).json()
+    hashes = [c["mask_hash"] for c in r["candidates"]]
+    assert len(hashes) == 4 and "added-meanwhile" in hashes
+    assert r["selected"] == 3 and r["subject_hash"] == hashes[3]
+    assert db.pages.find_one({"_id": ObjectId(page["id"])})["selected"] == 3
+
+
+def test_a_click_overlapping_a_retry_changes_nothing(monkeypatch):
+    page = upload()["pages"][1]
+    real = modules.pipeline.segment_at_point
+
+    def click_during_retry(path, x, y, out):
+        found = real(path, x, y, out)
+        db.pages.update_one({"_id": ObjectId(page["id"])}, {"$set": {"state": "processing"}})
+        return found
+
+    monkeypatch.setattr(modules.pipeline, "segment_at_point", click_during_retry)
+    assert subject(page, {"point": [0.5, 0.1]}).status_code == 409
+    stored = db.pages.find_one({"_id": ObjectId(page["id"])})
+    assert stored["state"] == "processing" and len(stored["candidates"]) == 2
 
 
 def test_confirm_needs_a_subject():
