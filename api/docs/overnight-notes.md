@@ -4,12 +4,18 @@
 
 ## Needed from other owners
 
-This is the expected state before the hour 4 (display) and hour 7 (pipeline) swaps; re-run with `PIPELINE=real RENDER=real .venv/bin/python -m pytest api/tests/test_swap.py -q 2>&1 | tail -30`.
+This is the expected state before the hour 4 (display) and hour 7 (pipeline) swaps; re-run it as the swaps land (a missing pipeline aborts collection and hides display problems, so check the display alone first):
+
+- Hour 4, display only: `RENDER=real .venv/bin/python -m pytest api/tests/test_swap.py -q 2>&1 | tail -30`
+- Pipeline only: `PIPELINE=real .venv/bin/python -m pytest api/tests/test_swap.py -q 2>&1 | tail -30`
+- Hour 7, both: `PIPELINE=real RENDER=real .venv/bin/python -m pytest api/tests/test_swap.py -q 2>&1 | tail -30`
+
+Output of the both-real command tonight:
 
 ```text
 ==================================== ERRORS ====================================
 ___________________ ERROR collecting api/tests/test_swap.py ____________________
-api/tests/test_swap.py:13: in <module>
+api/tests/test_swap.py:16: in <module>
     from api import modules
 api/modules.py:42: in <module>
     pipeline, display = load(settings.PIPELINE, settings.RENDER)
