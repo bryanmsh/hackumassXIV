@@ -2,6 +2,20 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Fidelity check: minimum cut-out size 1% -> 0.1% of the page
+
+**What changed**
+- `checks/core.py`: `COVERAGE_MIN` is now 0.001. The detail text shows two decimals ("0.08%").
+- Tests: a 0.26% subject now passes fidelity and still gets the size warning for enlargement; a new 0.03% speck test still fails.
+
+**Why**
+- On Animal Homes, 8 of 13 real cut-outs failed at 1% although they were mostly right: the frogs, fish and tortoises are small in this artwork (0.2 to 0.7% of the page). The size check already warns when a small subject is enlarged more than 2.5 times, so a soft-looking result is still flagged. Kevin chose 0.1%; this departs from the spec's 1%, so tell the team.
+- Check results only, no pixel changes, so `RENDER_VERSION` stays "b1" and no approvals are voided.
+
+**Verified**
+- 49 tests pass in `render` and `checks`.
+- Animal Homes: fidelity failures went from 8 to 1. The one left is the woodpecker on the cover at 0.08%, a speck on a page the pipeline already marked No clear subject. A fair failure.
+
 ## render/try_book.py: real artwork from Animal Homes (hour 5)
 
 **What changed**
