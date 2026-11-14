@@ -73,6 +73,7 @@ function EditorForBook({ bookId, pageId }: { bookId: string; pageId: string }) {
 const MODES: { mode: EditorMode; label: string }[] = [
   { mode: 'suggestions', label: 'Suggestions' },
   { mode: 'point', label: 'Click the object' },
+  { mode: 'refine', label: 'Add a missing part' },
   { mode: 'outline', label: 'Draw an outline' },
 ];
 
@@ -138,6 +139,21 @@ function Editor({
         setTogether([]);
       },
       `Now showing ${names} together. Check the highlight covers each one, then confirm.`,
+    );
+  }
+
+  function sendRefine() {
+    if (!point) return;
+    const p = roundPoint(point);
+    void submit(
+      'refine',
+      { refine_point: p },
+      () => {
+        setSent({ point: p });
+        setShowSent(true);
+        setPoint(null);
+      },
+      'Added the part you clicked to the cut-out. Check the highlight now covers it, then confirm.',
     );
   }
 
@@ -257,7 +273,7 @@ function Editor({
         </section>
 
         <section className="space-y-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200" aria-label="Change the subject">
-          <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1" role="group" aria-label="How to choose">
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" role="group" aria-label="How to choose">
             {MODES.map((m) => (
               <button
                 key={m.mode}
@@ -267,6 +283,7 @@ function Editor({
                   setMode(m.mode);
                   setFormError(null);
                   setTapHint(null);
+                  setPoint(null);
                 }}
                 className={`min-h-11 rounded-md px-2 text-sm font-semibold ${
                   mode === m.mode ? 'bg-white text-sky-900 shadow ring-1 ring-slate-300' : 'text-slate-700 hover:bg-white/60'
@@ -328,6 +345,34 @@ function Editor({
                   {together.length === 1 && <p className="text-sm text-slate-600">Tick one more to show them together.</p>}
                 </>
               )}
+            </div>
+          )}
+
+          {mode === 'refine' && (
+            <div className="space-y-2">
+              {selected ? (
+                <p className="text-slate-700">
+                  Click a part of <span className="font-semibold">{selected.label || 'the subject'}</span> that the cut-out missed, such as
+                  a tail or an ear. It is added to the current cut-out; the subject keeps its name.
+                </p>
+              ) : (
+                <p className="text-slate-700">Pick a subject first. Then this adds any part the cut-out missed.</p>
+              )}
+              {tapHint && (
+                <p role="alert" className="text-amber-900">
+                  {tapHint}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="primary" disabled={!point || !selected || busy || processing} onClick={sendRefine}>
+                  {action.pending === 'refine' ? 'Adding…' : 'Add this part'}
+                </Button>
+                {point && (
+                  <Button disabled={busy} onClick={() => setPoint(null)}>
+                    Clear spot
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
@@ -402,7 +447,7 @@ function Editor({
           {action.error && (
             <p role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
               {errorMessage(action.error)}
-              {action.pending === null && mode === 'point' && ' You can draw an outline instead.'}
+              {action.pending === null && (mode === 'point' || mode === 'refine') && ' You can draw an outline instead.'}
             </p>
           )}
           {notice && (

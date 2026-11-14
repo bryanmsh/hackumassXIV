@@ -426,6 +426,28 @@ export function subjectFromPoint(p: MockPage, [x, y]: NormPoint): void {
   });
 }
 
+/** Phase 2 refine: the current cut-out plus a 10% square around the click. Same label. False with no subject. */
+export function subjectRefine(p: MockPage, [x, y]: NormPoint): boolean {
+  const cur = selectedCandidate(p);
+  if (!cur) return false;
+  const r = 0.05;
+  const box: Candidate['box'] = [
+    Math.min(cur.box[0], Math.max(0, x - r)),
+    Math.min(cur.box[1], Math.max(0, y - r)),
+    Math.max(cur.box[2], Math.min(1, x + r)),
+    Math.max(cur.box[3], Math.min(1, y + r)),
+  ];
+  selectNew(p, {
+    label: cur.label,
+    synonyms: [...cur.synonyms],
+    box,
+    confidence: 1,
+    source: 'click',
+    mask_hash: mockHash(`${p.id}:refine:${cur.mask_hash}:${x.toFixed(4)},${y.toFixed(4)}`),
+  });
+  return true;
+}
+
 export function subjectFromOutline(p: MockPage, label: string, outline: NormPoint[]): void {
   const xs = outline.map((pt) => pt[0]);
   const ys = outline.map((pt) => pt[1]);

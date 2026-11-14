@@ -114,6 +114,30 @@ describe('Child profiles', () => {
     );
   });
 
+  it('size, position and text controls are saved and previewed', async () => {
+    const user = openProfiles();
+    const calls = captureWrites();
+    const [, leo] = await api.listProfiles();
+    await user.click(await screen.findByRole('button', { name: 'Edit Leo' }));
+    expect(screen.getByRole('radio', { name: /Medium/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Center' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Show the text below the picture' })).not.toBeChecked();
+
+    await user.click(screen.getByRole('radio', { name: /Large/ }));
+    await user.click(screen.getByRole('radio', { name: 'Left' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Show the text below the picture' }));
+    await waitFor(() => {
+      const last = writesTo(calls, 'POST', '/api/preview').at(-1)?.body as { settings: Record<string, string> } | undefined;
+      expect(last?.settings).toEqual(expect.objectContaining({ size: 'large', position: 'left', text_mode: 'below' }));
+    });
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByText('Leo’s profile was saved.');
+    const patch = writesTo(calls, 'PATCH', `/api/profiles/${leo!.id}`)[0]?.body as { settings: Record<string, string> };
+    expect(patch.settings).toEqual({ ...leo!.settings, size: 'large', position: 'left', text_mode: 'below' });
+    const card = within((await screen.findByRole('heading', { name: 'Leo' })).closest('li')!);
+    expect(card.getByText(/Large · Left · text below the picture/)).toBeInTheDocument();
+  });
+
   it('editing Leo keeps his other settings and says approvals will need redoing', async () => {
     const user = openProfiles();
     const calls = captureWrites();

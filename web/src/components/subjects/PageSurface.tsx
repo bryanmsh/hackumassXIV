@@ -15,7 +15,7 @@ import { formatConfidence } from '../../utils/display';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
 
-export type EditorMode = 'suggestions' | 'point' | 'outline';
+export type EditorMode = 'suggestions' | 'point' | 'refine' | 'outline';
 
 /** A new stroke vertex is kept only once the pointer has moved this far (page fraction). */
 const STROKE_STEP = 0.003;
@@ -95,7 +95,7 @@ export function PageSurface({
 
   // ----- Point mode -----
   function onTap(e: React.MouseEvent<HTMLDivElement>) {
-    if (mode !== 'point' || disabled) return;
+    if ((mode !== 'point' && mode !== 'refine') || disabled) return;
     const rect = frameRect();
     if (!rect) return;
     const { point: p, inside } = clientToNorm(e.clientX, e.clientY, rect);
@@ -164,6 +164,8 @@ export function PageSurface({
   const label =
     mode === 'point'
       ? 'Page. Click the object to choose it.'
+      : mode === 'refine'
+        ? 'Page. Click the part the cut-out missed.'
       : mode === 'outline'
         ? 'Page. Draw a line around the object.'
         : 'Page with suggested subjects.';
@@ -247,7 +249,7 @@ export function PageSurface({
               )}
             </svg>
 
-            {mode === 'point' && point && <Marker point={point} testId="tap-marker" />}
+            {(mode === 'point' || mode === 'refine') && point && <Marker point={point} testId="tap-marker" />}
             {sent?.point && <Marker point={sent.point} testId="sent-marker" dashed />}
           </div>
         )}
