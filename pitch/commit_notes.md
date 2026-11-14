@@ -2,6 +2,21 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## render: overlay_palette, one colour per candidate on the review image
+
+**What changed**
+- `render/__init__.py`: new `overlay_palette(view_path, mask_paths, selected, fmt="webp")`, exported in `__all__`, next to an unchanged `overlay()`. New constants `SUBJECT_PALETTE` (the six web tokens, #1D4ED8 #C2410C #6D28D9 #BE185D #0F766E #EAB308; no green) and `OVERLAY_OTHER_TINT = 0.30`.
+- Starts from the page dimmed by 0.55. Candidate i is tinted in `SUBJECT_PALETTE[i % 6]`: 0.30 when not selected, 0.45 plus a 3 px ring in its colour when selected. Painted largest mask first, selected last. Missing or unreadable masks are skipped silently.
+- 6 new tests in `render/tests/test_render.py` (size, colours per candidate, dimmed page outside, selected ring exact and none when `selected=None`, empty list, index 6 = index 0, bad path skipped). 61 tests pass across render, checks and tests.
+
+**Why**
+- The Subject review chips are colour-coded but the picture was one cyan, so a teacher could not tell which chip was which object without number markers on the art.
+- `RENDER_VERSION` stays "b1": a teacher-review image, not a child-facing render, so no approval is voided.
+
+**Still open**
+- Andrew: `page_overlay` takes optional `?palette=1` and calls `overlay_palette`; `api/modules.py` wires it like `overlay`. Then Thomas removes the number markers.
+- On a page with a combined candidate, the combined one's colour is fully hidden by its parts (by design: parts stay visible). Its chip has no visible patch unless it is the selected one.
+
 ## Merge main (Bryan's pipeline, Andrew's API, Thomas's web) and demo script for the new subject rules
 
 **What changed**

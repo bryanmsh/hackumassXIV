@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from render import RENDER_VERSION, overlay, render
+from render import RENDER_VERSION, SUBJECT_PALETTE, overlay, overlay_palette, render
 from render.color import contrast_ratio, hex_to_rgb
 from render.core import (CANVAS_LONG, compose, load_mask, load_rgb, resample,
                          subject_placement)
@@ -138,6 +138,99 @@ def test_white_background_gets_black_text():
 def test_overlay_matches_view_size():
     out = decode(overlay(PAGES[0][1], PAGES[0][2]))
     assert out.shape[:2] == load_rgb(PAGES[0][1]).shape[:2]
+
+
+BLUE, ORANGE, PURPLE = SUBJECT_PALETTE[0], SUBJECT_PALETTE[1], SUBJECT_PALETTE[2]
+
+
+@pytest.fixture
+def two_masks(tmp_path):
+    """Page 1's bird mask, plus a second subject: a block in a corner clear of the bird."""
+    bird_path = PAGES[0][2]
+    bird = load_mask(bird_path)
+    h, w = bird.shape
+    second = np.zeros_like(bird)
+    second[int(h * 0.05):int(h * 0.25), int(w * 0.05):int(w * 0.25)] = 255
+    assert not (second & bird).any()
+    second_path = tmp_path / "second_mask.png"
+    cv2.imwrite(str(second_path), second)
+    return bird_path, second_path
+
+
+def view_masks(view_path, *mask_paths):
+    view = load_rgb(view_path)
+    vh, vw = view.shape[:2]
+    return view, [cv2.resize(load_mask(p), (vw, vh), interpolation=cv2.INTER_AREA) for p in mask_paths]
+
+
+def tint_colour(out_px, view_px, tint):
+    """The palette colour that produced this tinted pixel."""
+    return (out_px.astype(np.float32) - view_px.astype(np.float32) * (1 - tint)) / tint
+
+
+def closer(colour, a, b) -> bool:
+    return np.linalg.norm(colour - np.float32(a)) < np.linalg.norm(colour - np.float32(b))
+
+
+def inside(mask):
+    ys, xs = np.nonzero(cv2.erode((mask == 255).astype(np.uint8), np.ones((9, 9), np.uint8)))
+    return ys[len(ys) // 2], xs[len(xs) // 2]
+
+
+def dimmed(view):
+    return np.clip(np.rint(view.astype(np.float32) * 0.55), 0, 255).astype(np.uint8)
+
+
+def test_overlay_palette_matches_view_size(two_masks):
+    out = decode(overlay_palette(PAGES[0][1], list(two_masks), 0))
+    assert out.shape[:2] == load_rgb(PAGES[0][1]).shape[:2]
+
+
+def test_overlay_palette_colours_each_candidate(two_masks):
+    view, (m0, m1) = view_masks(PAGES[0][1], *two_masks)
+    out = decode(overlay_palette(PAGES[0][1], list(two_masks), None, fmt="png"))
+    y, x = inside(m0)
+    assert closer(tint_colour(out[y, x], view[y, x], 0.30), BLUE, ORANGE)
+    y, x = inside(m1)
+    assert closer(tint_colour(out[y, x], view[y, x], 0.30), ORANGE, BLUE)
+    clear = cv2.dilate(((m0 > 0) | (m1 > 0)).astype(np.uint8), np.ones((15, 15), np.uint8)) == 0
+    assert np.array_equal(out[clear], dimmed(view)[clear])
+
+
+def test_overlay_palette_rings_the_selected_candidate_only(two_masks):
+    from render.core import ring_around
+    view, (m0, m1) = view_masks(PAGES[0][1], *two_masks)
+    ring0, ring1 = ring_around(m0 >= 128, 3), ring_around(m1 >= 128, 3)
+    out = decode(overlay_palette(PAGES[0][1], list(two_masks), 1, fmt="png"))
+    assert (out[ring1] == ORANGE).all()
+    assert (out[ring0] == BLUE).all(axis=1).mean() < 0.05
+    none = decode(overlay_palette(PAGES[0][1], list(two_masks), None, fmt="png"))
+    assert (none[ring0] == BLUE).all(axis=1).mean() < 0.05
+    assert (none[ring1] == ORANGE).all(axis=1).mean() < 0.05
+
+
+def test_overlay_palette_empty_list_is_the_dimmed_page():
+    view = load_rgb(PAGES[0][1])
+    out = decode(overlay_palette(PAGES[0][1], [], None, fmt="png"))
+    assert np.array_equal(out, dimmed(view))
+
+
+def test_overlay_palette_cycles_after_six(tmp_path):
+    missing = [tmp_path / f"missing_{i}.png" for i in range(6)]
+    seventh = decode(overlay_palette(PAGES[0][1], missing + [PAGES[0][2]], 6, fmt="png"))
+    first = decode(overlay_palette(PAGES[0][1], [PAGES[0][2]], 0, fmt="png"))
+    assert np.array_equal(seventh, first)
+
+
+def test_overlay_palette_skips_a_bad_path(two_masks, tmp_path):
+    broken = tmp_path / "broken.png"
+    broken.write_bytes(b"not a png")
+    view, (m0, m1) = view_masks(PAGES[0][1], *two_masks)
+    out = decode(overlay_palette(PAGES[0][1], [two_masks[0], broken, two_masks[1]], None, fmt="png"))
+    y, x = inside(m0)
+    assert closer(tint_colour(out[y, x], view[y, x], 0.30), BLUE, PURPLE)
+    y, x = inside(m1)
+    assert closer(tint_colour(out[y, x], view[y, x], 0.30), PURPLE, BLUE)
 
 
 def test_settings_accept_model_or_dict_and_bad_level_raises():
