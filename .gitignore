@@ -3,4 +3,7 @@ Product and technical spec.pdf
 PRD and technical req.md
 Mirai 24-Hour Build Plan.md
 
-*.env
+*.envMirai 24-Hour Build Plan.pdf
+
+# Claude dev log (local only)
+CLAUDE_NOTES.md
