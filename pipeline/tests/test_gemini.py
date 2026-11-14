@@ -192,3 +192,62 @@ def test_label_crop_bad_reply_raises_gemini_error(reply):
     reply("nope")
     with pytest.raises(GeminiError):
         label_crop(b"png-bytes")
+
+
+# --- limits on a single call, so one that goes wrong cannot run up a bill ---
+# They are set far above normal use: a real answer is a few hundred tokens and a
+# picture-book page a few hundred characters. They should never trip in a demo.
+
+def test_call_caps_output_and_thinking(page_image, monkeypatch):
+    calls = fake_client(monkeypatch, lambda: SimpleNamespace(text=answer(candidate())))
+    choose_subjects(page_image, "The rabbit sat.")
+    config = calls[0]["config"]
+    assert config.max_output_tokens == gemini.MAX_OUTPUT_TOKENS
+    assert config.thinking_config.thinking_budget == gemini.MAX_THINKING_TOKENS
+    # thinking counts against the output cap, so there must always be room left for the answer
+    assert gemini.MAX_OUTPUT_TOKENS - gemini.MAX_THINKING_TOKENS >= 4000
+    assert gemini.MAX_THINKING_TOKENS >= 8000
+
+
+def test_label_crop_has_the_same_caps(monkeypatch):
+    calls = fake_client(monkeypatch, lambda: SimpleNamespace(text=json.dumps({"label": "ball"})))
+    label_crop(b"png-bytes")
+    assert calls[0]["config"].max_output_tokens == gemini.MAX_OUTPUT_TOKENS
+
+
+def test_very_long_page_text_is_cut_before_sending(page_image, reply):
+    reply(answer(candidate()))
+    text = "a" * gemini.MAX_TEXT_CHARS + "ZZZ-past-the-limit"
+    choose_subjects(page_image, text)
+    prompt = reply.calls[0]["prompt"]
+    assert "a" * gemini.MAX_TEXT_CHARS in prompt
+    assert "ZZZ" not in prompt
+    assert gemini.MAX_TEXT_CHARS >= 5000
+
+
+def test_ordinary_page_text_is_sent_whole(page_image, reply):
+    reply(answer(candidate()))
+    text = "The rabbit was hiding under the tree. " * 20  # 760 characters: a long page for a picture book
+    choose_subjects(page_image, text)
+    assert text.strip() in reply.calls[0]["prompt"]
+
+
+def test_answer_cut_off_at_the_output_cap_is_a_clear_gemini_error(page_image, monkeypatch):
+    from google.genai import types
+
+    cut_off = SimpleNamespace(text='{"page_kind": "sin',
+                              candidates=[SimpleNamespace(finish_reason=types.FinishReason.MAX_TOKENS)])
+    fake_client(monkeypatch, lambda: cut_off)
+    with pytest.raises(GeminiError) as error:
+        choose_subjects(page_image, "")
+    assert "output limit" in str(error.value)
+
+
+def test_empty_answer_at_the_output_cap_says_so(page_image, monkeypatch):
+    from google.genai import types
+
+    fake_client(monkeypatch, lambda: SimpleNamespace(
+        text=None, candidates=[SimpleNamespace(finish_reason=types.FinishReason.MAX_TOKENS)]))
+    with pytest.raises(GeminiError) as error:
+        choose_subjects(page_image, "")
+    assert "output limit" in str(error.value)

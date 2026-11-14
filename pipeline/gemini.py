@@ -16,6 +16,13 @@ DEFAULT_MODEL = "gemini-3.8-flash"  # used when GEMINI_MODEL is empty; newest Fl
 MAX_CANDIDATES = 3
 MAX_SYNONYMS = 5
 
+# Limits on one call, so a call that goes wrong cannot run up a bill. They sit far above
+# normal use (a real answer is a few hundred tokens, a picture-book page a few hundred
+# characters) and should never trip in ordinary running.
+MAX_OUTPUT_TOKENS = 16384  # thinking plus answer; a cut-off answer becomes a GeminiError
+MAX_THINKING_TOKENS = 8192  # thinking counts against the output cap, so this leaves room for the answer
+MAX_TEXT_CHARS = 8000  # page text sent with the picture; anything longer is cut
+
 PROMPT = """You are helping adapt a picture-book page for a child with cortical visual impairment.
 Find the subject of this page: the one object the story is about on this page, not the
 largest thing in the picture. Use the page text to decide. If the text says "The rabbit
@@ -90,6 +97,8 @@ def _generate(image_png: bytes, prompt: str, schema) -> str:
         response_mime_type="application/json",
         response_schema=schema,
         temperature=0,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
+        thinking_config=types.ThinkingConfig(thinking_budget=MAX_THINKING_TOKENS),
         # One attempt here: retrying is decided in one place, by the caller.
         http_options=types.HttpOptions(timeout=TIMEOUT_S * 1000,
                                        retry_options=types.HttpRetryOptions(attempts=1)),
@@ -105,6 +114,10 @@ def _generate(image_png: bytes, prompt: str, schema) -> str:
         raise (RateLimited if error.code == 429 else GeminiError)(message) from None
     except Exception as error:
         raise GeminiError(_scrub(f"{type(error).__name__}: {error}", key)) from None
+    candidates = getattr(response, "candidates", None) or []
+    finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    if getattr(finish_reason, "name", finish_reason) == "MAX_TOKENS":
+        raise GeminiError("Gemini's answer was cut off at the output limit")
     if not response.text:
         raise GeminiError("Gemini returned an empty answer")
     return response.text
@@ -119,7 +132,7 @@ def _parse(text: str, schema):
 
 def choose_subjects(view_path, text: str) -> SubjectAnswer:
     """Ask what this page is about. Candidates come back highest confidence first, at most three."""
-    prompt = PROMPT.format(text=text.strip() or "(none)")
+    prompt = PROMPT.format(text=text.strip()[:MAX_TEXT_CHARS] or "(none)")
     answer = _parse(_generate(Path(view_path).read_bytes(), prompt, SubjectAnswer), SubjectAnswer)
     for candidate in answer.candidates:
         if len(candidate.box_2d) != 4:
