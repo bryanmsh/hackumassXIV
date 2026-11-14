@@ -1,5 +1,6 @@
 import type { CheckItem, CheckResult, CheckStatus, SecondLook } from '../../types/api';
 import { CHECK_TONE } from '../../utils/display';
+import { secondLookText } from '../../utils/secondLook';
 
 export const CHECK_LABEL: Record<keyof CheckResult, string> = {
   fidelity: 'Cut-out',
@@ -68,15 +69,10 @@ function rank(item: CheckItem | null): number {
 /** The AI's second look: a weak signal, never proof and never a blocker. */
 export function SecondLookLine({ look }: { look: SecondLook | null }) {
   if (!look) return null;
+  const { text, raw } = secondLookText(look);
   return (
-    <p className={`text-sm ${look.status === 'warn' ? 'text-amber-900' : 'text-slate-700'}`}>
-      <span className="font-semibold">Second look (AI):</span>{' '}
-      {look.status === 'pending' && 'still checking.'}
-      {look.status === 'pass' && `named the same subject${look.answer ? ` (“${look.answer}”)` : ''}.`}
-      {look.status === 'warn' &&
-        (look.answer?.trim()
-          ? `named “${look.answer}”${look.detail ? ` (${look.detail})` : ''}. It can be wrong too; check the picture.`
-          : `${look.detail ?? 'could not name the subject.'} Check the picture yourself.`)}
+    <p className={`text-sm ${look.status === 'warn' ? 'text-amber-900' : 'text-slate-700'}`} title={raw ?? undefined}>
+      <span className="font-semibold">Second look (AI):</span> {text}
     </p>
   );
 }
