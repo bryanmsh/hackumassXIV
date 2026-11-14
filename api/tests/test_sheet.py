@@ -18,7 +18,7 @@ def test_sheet_rows():
     assert set(row) == set(example["pages"][0])
     assert row["version"] == version_token(book["pages"][0]["subject_hash"], p["settings_hash"], 1, "stub-1")
     assert (row["label"], row["source"], row["approval"]) == ("rabbit", "auto", "none")
-    assert row["checks"]["fidelity"]["status"] == "pass" and row["second_look"]["status"] == "pending"
+    assert row["checks"]["fidelity"]["status"] == "pass" and row["second_look"]["status"] == "pass"
     assert row["preview_url"] == f"/api/render/{row['page_id']}?profile={p['id']}&level=1&v={row['version']}"
     assert client.get(row["preview_url"]).status_code == 200
     for other in (unpicked, failed):

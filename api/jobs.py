@@ -100,6 +100,35 @@ def ingest_book(book_id: ObjectId) -> None:
         list(pool.map(process_one, page_ids))
 
 
+def start_second_look(page: dict) -> bool:
+    """Mark the second look pending for this page's subject. False if one already exists for it."""
+    look = page.get("second_look")
+    if look and look["subject_hash"] == page["subject_hash"]:
+        return False
+    db.pages.update_one({"_id": page["_id"], "subject_hash": page["subject_hash"]}, {"$set": {
+        "second_look": {"subject_hash": page["subject_hash"], "status": "pending",
+                        "answer": None, "detail": None}}})
+    return True
+
+
+def run_second_look(page_id: ObjectId, subject_hash: str) -> None:
+    """Name the subject from the adapted page and store it. A warning only: failure never raises.
+
+    A result for a subject the page no longer has is dropped.
+    """
+    try:
+        page = db.pages.find_one({"_id": page_id})
+        candidate = next(c for c in page["candidates"] if c["mask_hash"] == subject_hash)
+        found = modules.display.second_look(page["image_path"], candidate["mask_path"],
+                                            candidate["label"], candidate["synonyms"])
+        result = {"status": found.status, "answer": found.answer, "detail": found.detail}
+    except Exception:
+        logger.exception("second look failed for page %s", page_id)
+        result = {"status": "warn", "answer": None, "detail": "The second look could not run."}
+    db.pages.update_one({"_id": page_id, "subject_hash": subject_hash},
+                        {"$set": {"second_look": {"subject_hash": subject_hash, **result}}})
+
+
 def recover_interrupted() -> None:
     """Jobs run inside the server process, so a restart strands them: fail what was in flight."""
     db.books.update_many({"state": "ingesting"}, {"$set": {"state": "failed"}})

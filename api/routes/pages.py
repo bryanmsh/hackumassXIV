@@ -132,11 +132,13 @@ def set_subject(page_id: str, body: SubjectBody):
 
 
 @router.post("/pages/{page_id}/confirm")
-def confirm_page(page_id: str):
+def confirm_page(page_id: str, background: BackgroundTasks):
     page = _find_page(page_id)
     if page["selected"] is None or page["state"] == "processing":
         raise HTTPException(409, "This page has no subject to confirm.")
     db.pages.update_one({"_id": page["_id"]}, {"$set": {"confirmed": True}})
+    if jobs.start_second_look(page):
+        background.add_task(jobs.run_second_look, page["_id"], page["subject_hash"])
     return _page_response(page["_id"])
 
 

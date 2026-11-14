@@ -103,7 +103,7 @@ def update_book(book_id: str, patch: BookPatch):
 
 
 @router.post("/books/{book_id}/confirm-all")
-def confirm_all(book_id: str):
+def confirm_all(book_id: str, background: BackgroundTasks):
     """Confirm every ready page that has a subject and is neither left out nor already confirmed."""
     book = _find_book(book_id)
     waiting = db.pages.find({"book_id": book["_id"], "state": "ready", "selected": {"$ne": None},
@@ -111,5 +111,7 @@ def confirm_all(book_id: str):
     done = []
     for page in waiting:
         db.pages.update_one({"_id": page["_id"]}, {"$set": {"confirmed": True}})
-        done.append(views.page_json({**page, "confirmed": True}))
+        if jobs.start_second_look(page):
+            background.add_task(jobs.run_second_look, page["_id"], page["subject_hash"])
+        done.append(views.page_json(db.pages.find_one({"_id": page["_id"]})))
     return done
