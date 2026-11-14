@@ -153,6 +153,14 @@ export const handlers = [
     }),
   ),
 
+  http.delete(
+    `${API}/books/:id`,
+    route(({ params }) => {
+      if (!db.deleteBook(param(params.id))) return notFound('Book');
+      return new HttpResponse(null, { status: 204 });
+    }),
+  ),
+
   http.patch(
     `${API}/books/:id`,
     route(async ({ params, request }) => {

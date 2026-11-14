@@ -1,5 +1,5 @@
 /** Library: upload with credits, browser-side checks, server rejections, and the book list. */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { MemoryRouter } from 'react-router';
@@ -184,6 +184,43 @@ describe('Library', () => {
     expect(credits.getByText('R. Writer')).toBeInTheDocument();
     expect(credits.getByText('Not found')).toBeInTheDocument();
     expect(credits.getByText(/Type anything marked/)).toBeInTheDocument();
+  });
+
+  it('Delete book asks first and names the book; Cancel sends nothing; Delete sends DELETE and removes the card', async () => {
+    const user = renderLibrary();
+    const heading = await screen.findByRole('heading', { name: 'Animal Homes (mock)' });
+    const card = within(heading.closest('li')!);
+    const deletes: string[] = [];
+    server.use(
+      http.delete('*/api/books/:id', ({ request }) => {
+        deletes.push(new URL(request.url).pathname);
+        return undefined;
+      }),
+    );
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)…' }));
+    const dialog = within(card.getByRole('dialog', { name: 'Delete “Animal Homes (mock)”?' }));
+    expect(dialog.getByText(/cannot be undone/)).toBeInTheDocument();
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }));
+    expect(deletes).toEqual([]);
+    expect(card.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)…' }));
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)' }));
+    expect(await screen.findByText('“Animal Homes (mock)” was deleted.')).toBeInTheDocument();
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]).toMatch(/^\/api\/books\/[^/]+$/);
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Animal Homes (mock)' })).not.toBeInTheDocument());
+  });
+
+  it('a failed delete says so and keeps the book', async () => {
+    const user = renderLibrary();
+    const heading = await screen.findByRole('heading', { name: 'Animal Homes (mock)' });
+    const card = within(heading.closest('li')!);
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)…' }));
+    scenarios.networkErrorNext = true;
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)' }));
+    expect(await card.findByText(/Not deleted: Could not reach the server/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Animal Homes (mock)' })).toBeInTheDocument();
   });
 
   it('shows a retry when the list cannot load', async () => {

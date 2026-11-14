@@ -9,7 +9,7 @@ import { useApi } from '../hooks/useApi';
 /** Library: upload a PDF with credits, list books with live page states. */
 export function LibraryPage() {
   const books = useApi((signal) => api.listBooks(signal), 'books');
-  const [uploaded, setUploaded] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <>
@@ -19,9 +19,9 @@ export function LibraryPage() {
           <h2 id="books-h" className="sr-only">
             Books
           </h2>
-          {uploaded && (
+          {notice && (
             <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-emerald-950 ring-1 ring-emerald-200">
-              “{uploaded}” was uploaded. Its pages are being processed; this list updates every 2 seconds.
+              {notice}
             </p>
           )}
           {books.status === 'loading' && <Loading label="Loading books…" />}
@@ -34,7 +34,14 @@ export function LibraryPage() {
           {books.data && books.data.length > 0 && (
             <ul className="grid gap-4 xl:grid-cols-2">
               {books.data.map((b) => (
-                <BookCard key={b.id} book={b} />
+                <BookCard
+                  key={b.id}
+                  book={b}
+                  onDeleted={(deleted) => {
+                    setNotice(`“${deleted.title}” was deleted.`);
+                    books.reload();
+                  }}
+                />
               ))}
             </ul>
           )}
@@ -42,7 +49,7 @@ export function LibraryPage() {
         <div className="order-1 lg:order-2">
           <UploadForm
             onUploaded={(_res, title) => {
-              setUploaded(title);
+              setNotice(`“${title}” was uploaded. Its pages are being processed; this list updates every 2 seconds.`);
               books.reload();
             }}
           />

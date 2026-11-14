@@ -15,6 +15,7 @@ import { formatConfidence } from '../../utils/display';
 import { subjectNumber, subjectTone } from '../../utils/subjectColors';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
+import { Spotlight } from './Spotlight';
 
 export type EditorMode = 'suggestions' | 'point' | 'refine' | 'outline';
 
@@ -271,6 +272,10 @@ export function PageSurface({
 
             {(mode === 'point' || mode === 'refine') && point && <Marker point={point} testId="tap-marker" />}
             {sent?.point && <Marker point={sent.point} testId="sent-marker" dashed />}
+            {/* Pointing at a row or a box emphasises that suggestion on the page. */}
+            {mode === 'suggestions' && highlight !== null && page.candidates[highlight] && isValidBox(page.candidates[highlight]!.box) && (
+              <Spotlight box={page.candidates[highlight]!.box} index={highlight} />
+            )}
           </div>
         )}
         {busyLabel && (

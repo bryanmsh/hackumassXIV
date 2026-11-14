@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
+import { api } from '../../api';
+import { useAction } from '../../hooks/useAction';
 import { useBook } from '../../hooks/useBook';
 import type { Book, PageState } from '../../types/api';
 import { PAGE_STATE_LABEL, PAGE_STATE_TONE } from '../../utils/display';
@@ -21,8 +24,21 @@ const SQUARE_TONE: Record<PageState, string> = {
 };
 
 /** One book in the Library. Polls GET /books/{id} every 2 seconds while it is in progress. */
-export function BookCard({ book: initial }: { book: Book }) {
+export function BookCard({ book: initial, onDeleted }: { book: Book; onDeleted?: (book: Book) => void }) {
   const { book = initial, error, polling, refresh } = useBook(initial.id, { initial });
+  const [askingDelete, setAskingDelete] = useState(false);
+  const removal = useAction();
+
+  async function doDelete() {
+    const ok = await removal.run('delete', async (s) => {
+      await api.deleteBook(book.id, s);
+      return true;
+    });
+    if (ok) {
+      setAskingDelete(false);
+      onDeleted?.(book);
+    }
+  }
   const counts = countByState(book.pages);
   const total = book.page_count ?? book.pages.length;
   const processed = processedCount(book.pages);
@@ -113,6 +129,32 @@ export function BookCard({ book: initial }: { book: Book }) {
         </div>
       )}
 
+      {askingDelete && (
+        <div role="dialog" aria-modal="false" aria-labelledby={`${book.id}-del-h`} className="mt-4 rounded-xl bg-rose-50 p-4 ring-1 ring-rose-300">
+          <h3 id={`${book.id}-del-h`} className="text-lg font-bold text-rose-950">
+            Delete “{book.title}”?
+          </h3>
+          <p className="mt-1 text-rose-950">
+            Its pages, subjects, checks and approvals for every child go with it. This cannot be undone.
+          </p>
+          {removal.error && (
+            <p role="alert" className="mt-2 rounded-lg bg-white p-2 text-rose-900 ring-1 ring-rose-200">
+              Not deleted: {errorMessage(removal.error)}
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="danger" disabled={removal.pending !== null}
+              onClick={() => void doDelete()}
+            >
+              {removal.pending ? 'Deleting…' : `Delete ${book.title}`}
+            </Button>
+            <Button disabled={removal.pending !== null} onClick={() => setAskingDelete(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="mt-auto flex flex-wrap gap-2 pt-4">
         {book.state === 'ready' ? (
           <>
@@ -130,6 +172,11 @@ export function BookCard({ book: initial }: { book: Book }) {
             </Link>
           </>
         ) : null}
+        {onDeleted && !askingDelete && (
+          <Button variant="danger" className="ms-auto" onClick={() => setAskingDelete(true)} aria-label={`Delete ${book.title}…`}>
+            Delete book…
+          </Button>
+        )}
       </div>
     </li>
   );
