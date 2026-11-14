@@ -24,8 +24,9 @@ def flat(value):
 
 
 def test_every_position_is_a_fraction():
-    numbers = [n for d in walk(EXAMPLES) for key in ("box", "point", "outline") if key in d
-               for n in flat(d[key])]
+    # "outline" is also a profile setting ("off"), so only lists count as positions.
+    numbers = [n for d in walk(EXAMPLES) for key in ("box", "point", "outline")
+               if isinstance(d.get(key), list) for n in flat(d[key])]
     assert numbers, "expected at least one position in the examples"
     assert all(0 <= n <= 1 for n in numbers)
 
