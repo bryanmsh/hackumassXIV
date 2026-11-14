@@ -421,7 +421,7 @@ data/books/{book_id}/pages/{n}_view.png     working copy: longer side 1,600 px
 data/books/{book_id}/masks/{n}_{hash}.png   8-bit, one channel, same size as the master, 255 = subject
 ```
 
-Every coordinate in every contract is in pixels of the master page image, measured from the top-left corner. Mask files are never overwritten; a new cut-out is a new file.
+Positions are measured from the top-left corner of the page. In Contract 1 (boxes, clicks, outlines and refine points, in requests and responses) they are fractions from 0 to 1 of the page's width and height. In Contracts 2 and 3 they are pixels of the master page image. The API converts between the two in one place, `api/coords.py`, and refuses a position outside 0 to 1. Mask files are never overwritten; a new cut-out is a new file.
 
 ## Implementation: pipeline (Owner A)
 
@@ -595,7 +595,7 @@ The web app is a React single-page app that talks only to Contract 1. Until the 
 - The app shows level names (Tinted, Cut-out, Faded page, Outlined) and sends the numbers 1 to 4.
 - **Profiles:** the live preview calls `POST /preview` with the unsaved settings, at most once every 300 ms. Nothing is saved until the teacher presses Save, so trying colors never disturbs approvals.
 - **Contact sheet:** Approve sends back the version of every page exactly as the sheet received it. On a 409, the sheet reloads the changed pages and tells the teacher to look again.
-- **Outline drawing:** record pointer positions, thin them to at most 200 points, convert from screen to master pixels, and close the shape.
+- **Outline drawing:** record pointer positions, thin them to at most 200 points, convert from screen positions to 0 to 1 fractions of the page, and close the shape.
 - Platform is a web app in a desktop or laptop browser only. There is no tablet or touch target, so no touch-gesture handling is needed.
 
 **Reader**
@@ -664,7 +664,7 @@ In each list below, "Needs" names the only thing a task waits for. Tasks marked 
 | --- | --- | --- | --- |
 | D1 | Scaffold the app, routes and typed client. Type your own mock responses from Contract 1, with placeholder images | Nothing | Every route in Contract 1 has a mock |
 | D2 | Library and Subject review | D1 | Works on mocks |
-| D3 | Subject editor: click to pick, and the outline canvas sending master-pixel points | D1 | An outline drawn on screen posts the right coordinates |
+| D3 | Subject editor: click to pick, and the outline canvas sending points as 0 to 1 fractions | D1 | An outline drawn on screen posts the right coordinates |
 | D4 | Profiles with live preview and contrast warning | D1 | Works on mocks |
 | D5 | Contact sheet that sends versions back and handles the 409 | D1 | Works on mocks, including a forced 409 |
 | D6 | Reader: gestures, keys, teacher bar, prefetch, credits | D1 | A single click does nothing; arrow keys turn the page |
