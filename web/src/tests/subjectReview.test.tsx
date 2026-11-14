@@ -1,5 +1,5 @@
 /** Subject review: each action sends the agreed body, the card shows the server's answer, nothing auto-confirms. */
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { MemoryRouter } from 'react-router';
@@ -185,6 +185,15 @@ describe('Subject review', () => {
     // No markers or numbers on the artwork: the server's overlay carries the colours.
     expect(card(3).queryByTestId('page-marker')).not.toBeInTheDocument();
     expect(card(3).getByText(/tinted in its own colour on the page/)).toBeInTheDocument();
+    // Pointing at a chip emphasises that object on the picture: a spotlight at its box, in its colour.
+    const beehive = card(3).getByRole('button', { name: /^beehive/ });
+    expect(card(3).queryByTestId('spotlight')).not.toBeInTheDocument();
+    fireEvent.mouseEnter(beehive);
+    const spot = card(3).getByTestId('spotlight');
+    expect(spot.dataset.subject).toBe('2');
+    expect(spot).toHaveClass('border-subject-2');
+    fireEvent.mouseLeave(beehive);
+    expect(card(3).queryByTestId('spotlight')).not.toBeInTheDocument();
     await waitFor(() => expect(urls.length).toBeGreaterThan(0));
     expect(urls.every((u) => new URL(u).searchParams.get('palette') === '1')).toBe(true);
   });

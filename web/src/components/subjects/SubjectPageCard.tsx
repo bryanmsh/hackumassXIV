@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { api } from '../../api';
 import { useAction } from '../../hooks/useAction';
 import type { Page } from '../../types/api';
+import { containRect, isValidBox } from '../../utils/coordinates';
 import { PAGE_STATE_HINT, formatConfidence, sourceLabel } from '../../utils/display';
 import { subjectTone } from '../../utils/subjectColors';
 import { plainReason, secondLookText } from '../../utils/secondLook';
@@ -10,6 +11,7 @@ import { OverlayImage } from '../books/OverlayImage';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
 import { Badge, PageStateBadge } from '../ui/StatusBadge';
+import { Spotlight } from './Spotlight';
 import { SubjectMarker } from './SubjectMarker';
 
 const FLAG_TEXT: Record<string, string> = {
@@ -35,6 +37,11 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
   const [joined, setJoined] = useState<{ parts: number[]; hash: string | null } | null>(null);
   const parts = joined && joined.hash === page.subject_hash ? joined.parts : page.selected !== null ? [page.selected] : [];
   const hiddenChip = (i: number) => parts.length > 1 && page.selected === i; // the joined subject shows as its ticked parts
+  /** The chip the teacher is pointing at; its object is emphasised on the picture. */
+  const [highlight, setHighlight] = useState<number | null>(null);
+  const lit = highlight !== null && !processing && !page.omitted ? page.candidates[highlight] : undefined;
+  // The overlay sits in a 4:3 box with object-contain; the spotlight frame covers the drawn page only.
+  const drawn = containRect({ left: 0, top: 0, width: 4, height: 3 }, page.width > 0 ? page.width : 4, page.height > 0 ? page.height : 3);
 
   /** Tapping a suggestion adds it to the subject or takes it out; the result is saved at once. */
   async function toggle(i: number) {
@@ -55,8 +62,21 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
 
   return (
     <li className={`flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ${page.omitted ? 'ring-slate-300' : 'ring-slate-200'}`}>
-      <div className={`relative ${page.omitted ? 'opacity-60' : ''}`}>
+      <div className={`relative overflow-hidden ${page.omitted ? 'opacity-60' : ''}`}>
         <OverlayImage page={page} />
+        {lit && isValidBox(lit.box) && (
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: `${(drawn.left / 4) * 100}%`,
+              top: `${(drawn.top / 3) * 100}%`,
+              width: `${(drawn.width / 4) * 100}%`,
+              height: `${(drawn.height / 3) * 100}%`,
+            }}
+          >
+            <Spotlight box={lit.box} index={highlight!} />
+          </div>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -118,6 +138,10 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
                     aria-pressed={isSel}
                     disabled={busy || (isSel && parts.length === 1)}
                     onClick={() => void toggle(i)}
+                    onMouseEnter={() => setHighlight(i)}
+                    onMouseLeave={() => setHighlight(null)}
+                    onFocus={() => setHighlight(i)}
+                    onBlur={() => setHighlight(null)}
                     className={`inline-flex min-h-11 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-base ring-inset disabled:cursor-default ${
                       isSel
                         ? `${tone.tint} font-semibold text-slate-900 ring-2 ${tone.ring}`

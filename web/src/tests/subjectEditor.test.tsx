@@ -320,8 +320,13 @@ describe('Subject editor', () => {
     await user.hover(beehiveRow);
     expect(hornbillBox).toHaveClass('opacity-40');
     expect(beehiveBox).not.toHaveClass('opacity-40');
+    // and the beehive is spotlit on the page, at its box (44%, 12%)
+    const spot = within(frame).getByTestId('spotlight');
+    expect(spot).toHaveClass('border-subject-2');
+    expect(spot).toHaveStyle({ left: '44.000%', top: '12.000%' });
     await user.unhover(beehiveRow);
     expect(hornbillBox).not.toHaveClass('opacity-40');
+    expect(within(frame).queryByTestId('spotlight')).not.toBeInTheDocument();
 
     // And the other way round: pointing at a box dims the other rows.
     await user.hover(hornbillBox);
