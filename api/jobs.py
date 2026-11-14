@@ -99,6 +99,11 @@ def ingest_book(book_id: ObjectId) -> None:
             "auto_state": None, "auto_subject_hash": None, "auto_reason": None,
             "second_look": None}).inserted_id)
     db.books.update_one({"_id": book_id}, {"$set": {"state": "ready", "page_count": len(assets)}})
+    process_pages(page_ids)
+
+
+def process_pages(page_ids: list[ObjectId]) -> None:
+    """Run the pipeline on these pages, a few at a time."""
     with ThreadPoolExecutor(max_workers=settings.PAGE_CONCURRENCY) as pool:
         list(pool.map(process_one, page_ids))
 

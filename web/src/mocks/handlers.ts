@@ -165,6 +165,16 @@ export const handlers = [
     }),
   ),
 
+  http.post(
+    `${API}/books/:id/rerun`,
+    route(({ params }) => {
+      const book = db.findBook(param(params.id));
+      if (!book) return notFound('Book');
+      const updated = book.pages.filter((p) => db.rerunPage(p));
+      return HttpResponse.json(updated.map(db.publicPage));
+    }),
+  ),
+
   // ---------------- Pages ----------------
   http.post(
     `${API}/pages/:id/retry`,

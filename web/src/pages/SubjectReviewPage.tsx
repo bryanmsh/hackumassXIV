@@ -8,7 +8,7 @@ import { ErrorPanel, Loading, errorMessage } from '../components/ui/LoadState';
 import { useAction } from '../hooks/useAction';
 import { useBook } from '../hooks/useBook';
 import type { Page } from '../types/api';
-import { confirmablePages, processedCount, undecidedPages } from '../utils/pages';
+import { confirmablePages, processedCount, rerunnablePages, undecidedPages } from '../utils/pages';
 
 /**
  * Subject review: every page with its highlighted subject. The teacher
@@ -20,6 +20,8 @@ export function SubjectReviewPage() {
   const { book, status, error, polling, refresh, replacePages } = useBook(id);
   const confirmAll = useAction();
   const [asking, setAsking] = useState(false);
+  const rerun = useAction();
+  const [askingRerun, setAskingRerun] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   function changed(pages: Page[]) {
@@ -31,6 +33,7 @@ export function SubjectReviewPage() {
   const pages = book?.pages ?? [];
   const confirmable = confirmablePages(pages);
   const undecided = undecidedPages(pages);
+  const rerunnable = rerunnablePages(pages);
   const processed = processedCount(pages);
 
   async function doConfirmAll() {
@@ -39,6 +42,19 @@ export function SubjectReviewPage() {
     if (updated) {
       changed(updated);
       setNotice(`Confirmed ${updated.length} ${updated.length === 1 ? 'page' : 'pages'}.`);
+    }
+  }
+
+  async function doRerun() {
+    const updated = await rerun.run('rerun', (s) => api.rerunBook(id, s));
+    setAskingRerun(false);
+    if (updated) {
+      changed(updated);
+      setNotice(
+        updated.length === 0
+          ? 'No pages to ask about.'
+          : `Asking the AI again about ${updated.length} ${updated.length === 1 ? 'page' : 'pages'}. New suggestions appear as each page finishes.`,
+      );
     }
   }
 
@@ -59,10 +75,21 @@ export function SubjectReviewPage() {
               disabled={confirmable.length === 0 || confirmAll.pending !== null}
               onClick={() => {
                 setNotice(null);
+                setAskingRerun(false);
                 setAsking(true);
               }}
             >
               Confirm all…
+            </Button>
+            <Button
+              disabled={rerunnable.length === 0 || rerun.pending !== null}
+              onClick={() => {
+                setNotice(null);
+                setAsking(false);
+                setAskingRerun(true);
+              }}
+            >
+              Ask the AI again…
             </Button>
             <Link
               to={`/books/${encodeURIComponent(id)}/approve`}
@@ -122,6 +149,31 @@ export function SubjectReviewPage() {
                 </Button>
               </div>
             </div>
+          )}
+          {askingRerun && (
+            <div role="dialog" aria-modal="false" aria-labelledby="rerun-h" className="mb-5 rounded-xl bg-sky-50 p-4 ring-1 ring-sky-300">
+              <h2 id="rerun-h" className="text-lg font-bold">
+                Ask the AI again about {rerunnable.length} {rerunnable.length === 1 ? 'page' : 'pages'}?
+              </h2>
+              <p className="mt-1">
+                Pages {rerunnable.map((p) => p.number).join(', ')} will be sent to the outside AI service again. Its answers
+                can differ each time. New suggestions are added to the ones already there, and the subject on each of
+                these pages becomes the AI’s new guess. Pages you have confirmed or left out are not changed.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="primary" disabled={rerun.pending !== null} onClick={() => void doRerun()}>
+                  {rerun.pending ? 'Asking…' : `Ask about ${rerunnable.length}`}
+                </Button>
+                <Button disabled={rerun.pending !== null} onClick={() => setAskingRerun(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+          {rerun.error && (
+            <p role="alert" className="mb-5 rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
+              Could not ask the AI again: {errorMessage(rerun.error)}
+            </p>
           )}
           {confirmAll.error && (
             <p role="alert" className="mb-5 rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
