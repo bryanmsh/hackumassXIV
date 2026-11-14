@@ -189,10 +189,7 @@ export function ProfileEditor({
                   className="size-5"
                 />
                 <span className="size-7 rounded ring-1 ring-slate-400" style={{ backgroundColor: b.hex }} aria-hidden />
-                <span>
-                  {b.name}
-                  {import.meta.env.DEV && b.provisional && <span className="block text-xs text-amber-800">hex unconfirmed</span>}
-                </span>
+                <span>{b.name}</span>
               </label>
             ))}
           </div>

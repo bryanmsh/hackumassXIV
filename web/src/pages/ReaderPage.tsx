@@ -12,9 +12,11 @@ function parseLevel(raw: string | null): Level | null {
 }
 
 /**
- * D1 shell. Loads only the authorized manifest (GET /reader/{book_id}). It
- * deliberately shows NO page images yet: image display, input handling,
- * teacher bar, prefetch and credits arrive in D6, using only /reader/page.
+ * D1 shell. Loads only the authorized manifest (GET /reader/{book_id}): 200
+ * with only approved pages (the rest in `skipped`), 404 for an unknown book or
+ * child. It deliberately shows NO page images yet: image display, input,
+ * teacher bar, prefetch and credits arrive in D6, using only /reader/page,
+ * where every refusal is 403 {"detail": "not approved"}.
  */
 export function ReaderPage() {
   const { bookId = '' } = useParams();
@@ -35,12 +37,15 @@ export function ReaderPage() {
         {manifest.status === 'loading' && profile && level && <p>Loading…</p>}
         {manifest.status === 'error' && (
           <p role="alert">
-            {manifest.error instanceof ApiError && manifest.error.status === 403
-              ? 'This child and look is not approved for this book.'
+            {manifest.error instanceof ApiError && manifest.error.status === 404
+              ? 'This book or child was not found.'
               : errorMessage(manifest.error)}
           </p>
         )}
-        {manifest.data && (
+        {manifest.data && manifest.data.pages.length === 0 && (
+          <p role="alert">No pages are approved for this child and look yet. Approve them on the contact sheet first.</p>
+        )}
+        {manifest.data && manifest.data.pages.length > 0 && (
           <p>
             {manifest.data.pages.length} approved pages ready. The reader view is not built yet (D6).
           </p>

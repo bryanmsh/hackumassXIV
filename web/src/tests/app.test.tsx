@@ -65,7 +65,7 @@ describe('every P0 route renders', () => {
   it('Reader refuses an unapproved version and shows no image', async () => {
     const { demo, maya } = await ids();
     renderAt(`/read/${demo.id}?profile=${maya.id}&level=1`);
-    expect(await screen.findByRole('alert')).toHaveTextContent('not approved');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pages are approved for this child and look yet.');
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 

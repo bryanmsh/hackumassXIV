@@ -1,8 +1,13 @@
 /**
- * Library and Subject review against a real server, through api.ts with no mocks.
- * Works against Andrew's stand-in (fixed example answers) and the live site.
- *   LIVE_API_URL=http://127.0.0.1:8000 npm run test:live
- * It sends one subject pick and one confirm, never an approval.
+ * The app against a real server, through api.ts with no mocks.
+ *   LIVE_API_URL=https://140-82-15-107.sslip.io LIVE_API_AUTH=user:pw npm run test:live
+ *
+ * READ-ONLY by default: lists, pages, images, and POST /preview (which stores
+ * nothing). Tests that change data (a subject pick, a point, an outline) run
+ * only with LIVE_ALLOW_WRITES=1: on the real API they change a page's subject,
+ * which un-confirms it and voids its approvals. Use them on the skeleton or a
+ * throwaway book, never on the demo book before a rehearsal. Nothing here
+ * ever approves.
  */
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -28,6 +33,8 @@ async function firstBook(): Promise<Book> {
   expect(books.length).toBeGreaterThan(0);
   return books[0]!;
 }
+
+const WRITES = process.env.LIVE_ALLOW_WRITES === '1';
 
 describe(`live API at ${API_BASE}`, () => {
   it('is real mode, with /api added once', () => {
@@ -62,10 +69,16 @@ describe(`live API at ${API_BASE}`, () => {
     expect(within(heading.closest('li')!).getByRole('list', { name: 'Each page' })).toBeInTheDocument();
   });
 
-  it('Subject review renders every page and a pick round-trips', async () => {
+  it('Subject review renders every page', async () => {
     const b = await api.getBook((await firstBook()).id);
     renderAt(`/books/${b.id}/subjects`);
     for (const p of b.pages) expect(await screen.findByRole('heading', { name: `Page ${p.number}` })).toBeInTheDocument();
+  });
+
+  it.skipIf(!WRITES)('WRITES: a candidate pick round-trips', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    renderAt(`/books/${b.id}/subjects`);
+    await screen.findByRole('heading', { name: `Page ${b.pages[0]!.number}` });
 
     // Pick an unselected candidate on the first page that has one, if any.
     const target = b.pages.find((p) => !p.omitted && p.state !== 'processing' && p.candidates.some((_, i) => i !== p.selected));
@@ -81,13 +94,27 @@ describe(`live API at ${API_BASE}`, () => {
 });
 
 describe(`live API at ${API_BASE}: subject editor`, () => {
-  it('opens a page, and the server accepts a 0-1 point and a 0-1 outline', async () => {
+  it('opens a page with its picture ready to tap or draw on', async () => {
     const b = await api.getBook((await firstBook()).id);
     const target = b.pages.find((p) => p.state !== 'processing');
     if (!target) return;
     renderAt(`/pages/${target.id}?book=${b.id}`);
     expect(await screen.findByRole('heading', { name: new RegExp(`Page ${target.number}`) })).toBeInTheDocument();
     expect(await screen.findByTestId('image-frame')).toBeInTheDocument();
+  });
+
+  it('a page with no subject still has a picture (the overlay is the plain page)', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    const target = b.pages.find((p) => p.selected === null && p.state !== 'processing');
+    if (!target) return;
+    const img = await api.getOverlay(target.id);
+    expect(img.size).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!WRITES)('WRITES: the server accepts a 0-1 point and a 0-1 outline', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    const target = b.pages.find((p) => p.state !== 'processing');
+    if (!target) return;
 
     const byPoint = await api.setSubject(target.id, { point: [0.5, 0.5] });
     expect(typeof byPoint.id).toBe('string');

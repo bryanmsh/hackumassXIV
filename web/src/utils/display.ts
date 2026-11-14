@@ -28,15 +28,14 @@ export const SWATCHES: readonly { name: string; hex: string }[] = [
 ];
 
 /**
- * Background choices. Black and white are unambiguous.
- * ⚠️ PROVISIONAL: the spec does not freeze dark gray / navy hex codes.
- * Confirm with Andrew before profiles are persisted on the live server.
+ * Background choices. The spec names four but gives no hex codes; Andrew
+ * confirmed these values are the definition (Kevin's checks use #001F3F too).
  */
-export const BACKGROUNDS: readonly { name: string; hex: string; provisional: boolean }[] = [
-  { name: 'Black', hex: '#000000', provisional: false },
-  { name: 'Dark gray', hex: '#333333', provisional: true },
-  { name: 'Navy', hex: '#001F3F', provisional: true },
-  { name: 'White', hex: '#FFFFFF', provisional: false },
+export const BACKGROUNDS: readonly { name: string; hex: string }[] = [
+  { name: 'Black', hex: '#000000' },
+  { name: 'Dark gray', hex: '#333333' },
+  { name: 'Navy', hex: '#001F3F' },
+  { name: 'White', hex: '#FFFFFF' },
 ];
 
 /** Defaults for the P1 fields, sent until their controls ship after checkpoint 2. */
