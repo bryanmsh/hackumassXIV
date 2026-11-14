@@ -99,6 +99,28 @@ Cut-outs are a separate matter: on page 2 GrabCut cut the children and the woodp
 cleanly, did poorly on the ants among leaves, and found no shape for one ant, which was
 dropped. That is the segmenter's limit, not the finding step.
 
+## What gets pre-selected
+
+Almost every page comes back Ready with a selection; the teacher is asked only when nothing
+is reasonably sure. The teacher still confirms or changes every page.
+
+| Page | Pre-selected | State |
+| --- | --- | --- |
+| About one thing (`single`) | The top candidate, if its confidence is 0.5 or more | Ready |
+| Several main subjects, or a scene | One **combined cut-out** of every candidate at 0.5 or more, added after the single ones (for example "rabbit and rat") | Ready |
+| Candidates found, none at 0.5 | Nothing | Needs subject |
+| No candidates, or no usable cut-out | Nothing | No clear subject |
+| The first choice had no usable cut-out | Nothing | Needs subject |
+
+The combined cut-out is the single masks joined, not cleaned again, so a small subject beside
+a large one is kept. Its synonyms are every member's names, its confidence the lowest member's.
+The page text no longer blocks a selection, and the old 0.7 / 0.2-ahead thresholds are gone.
+**This departs from the spec**, which sends `several` pages to Needs subject and scenes to
+No clear subject (Andrew's decision, 2026-11-14).
+
+On *Animal Homes*: page 2 selects "children, woodpecker and ants", page 3 "beehive, bird and
+bird nest", page 7 "rabbit and rat" (both rabbits and both rats), page 10 "crocodile".
+
 ## Limits on one Gemini call
 
 Set in `gemini.py`, far above normal use, so they trip only when a call goes badly wrong.
