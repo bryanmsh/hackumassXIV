@@ -2,6 +2,22 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## render/try_book.py: real artwork from Animal Homes (hour 5)
+
+**What changed**
+- `render/try_book.py`: takes a book processed by Bryan's `pipeline.run_book` and, for every page and candidate, writes the overlay and all four looks, runs every check, and prints one line per look. No AI calls.
+
+**What the real book showed** (5 pages, Bryan's pipeline with GrabCut, 51 s for the book)
+- States: 4 pages Needs subject (several animals), the cover No clear subject. Nothing pre-selected, as the spec predicted for this book.
+- 13 candidates, all rendered at all four looks: 52 images, median 184 ms per render on the laptop (the real masters are bigger than the samples).
+- Good: hornbill (page 2), beehive, bird nest, spider, termite mound. All pass, except contrast warnings, which are real (dark subjects on black).
+- Fidelity fails on all 8 candidates on pages 1, 4 and 5 for one reason: the cut-out covers under 1% of the page (0.1 to 0.7%). Looking at the overlays, the cut-outs are mostly right; the animals are just small in this artwork. The spec's 1% floor looks too strict for real books.
+- Cut-out quality, for Bryan: the spider's cut-out includes a large patch of web and leaves, and the tortoise's has the shell but not the head. The checks cannot catch "wrong but in one piece"; that is the teacher's job.
+
+**Still open**
+- Decide whether to lower the fidelity floor (team call; the size check already warns about enlarging small subjects).
+- Render speed on real pages: 184 ms on the laptop against a 150 ms server target; measure on the server.
+
 ## Reader tests over HTTP (hour 11)
 
 **What changed**
