@@ -76,7 +76,9 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
             {page.second_look.status === 'pending' && 'Second look: still checking.'}
             {page.second_look.status === 'pass' && 'Second look: named the same subject.'}
             {page.second_look.status === 'warn' &&
-              `Second look: named “${page.second_look.answer ?? 'something else'}”. Worth a glance; it can be wrong too.`}
+              (page.second_look.answer?.trim()
+                ? `Second look: named “${page.second_look.answer}”. Worth a glance; it can be wrong too.`
+                : `Second look: ${page.second_look.detail ?? 'could not name the subject.'}`)}
           </p>
         )}
 
