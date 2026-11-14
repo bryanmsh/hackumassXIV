@@ -9,7 +9,6 @@ from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ValidationError
 
 from api import db, jobs, settings, views
-from api.main import example
 
 router = APIRouter(prefix="/api")
 
@@ -105,4 +104,12 @@ def update_book(book_id: str, patch: BookPatch):
 
 @router.post("/books/{book_id}/confirm-all")
 def confirm_all(book_id: str):
-    return example("POST /api/books/{id}/confirm-all")
+    """Confirm every ready page that has a subject and is neither left out nor already confirmed."""
+    book = _find_book(book_id)
+    waiting = db.pages.find({"book_id": book["_id"], "state": "ready", "selected": {"$ne": None},
+                             "omitted": False, "confirmed": False}).sort("number", 1)
+    done = []
+    for page in waiting:
+        db.pages.update_one({"_id": page["_id"]}, {"$set": {"confirmed": True}})
+        done.append(views.page_json({**page, "confirmed": True}))
+    return done

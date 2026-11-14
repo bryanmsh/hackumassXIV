@@ -5,13 +5,25 @@ and ignores ids and bodies. Image routes return one stand-in page. Each route is
 function in api/routes/ so it can be replaced by the real version without touching the others.
 """
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 
+from api import db, jobs
+
 EXAMPLES = json.loads((Path(__file__).parents[1] / "contracts" / "examples.json").read_text())
 
-app = FastAPI(title="Mirai API")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    db.ensure_indexes()
+    jobs.recover_interrupted()
+    yield
+
+
+app = FastAPI(title="Mirai API", lifespan=lifespan)
 
 
 def example(key: str):

@@ -1,6 +1,6 @@
 import json
 
-from api import db, modules, settings
+from api import db, jobs, modules, settings
 from api.tests.helpers import EX, client, make_pdf, upload
 from contracts.types import PageResult
 
@@ -136,3 +136,9 @@ def test_second_look_is_hidden_without_a_subject():
     doc = db.pages.find_one({"number": 2})
     doc["second_look"] = {"subject_hash": None, "status": "pass", "answer": "x", "detail": None}
     assert doc["subject_hash"] is None and views.page_json(doc)["second_look"] is None
+
+
+def test_failure_reason_keeps_words_that_contain_a_relative_data_dir(monkeypatch):
+    from pathlib import Path
+    monkeypatch.setattr(settings, "DATA_DIR", Path("data"))
+    assert jobs.failure_reason(RuntimeError("database is down")) == "database is down"

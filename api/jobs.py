@@ -19,7 +19,10 @@ def book_dir(book_id) -> Path:
 def failure_reason(error: Exception) -> str:
     """Error text safe to show a client: the data folder path removed, class name if no text."""
     text = str(error)
-    for root in (str(settings.DATA_DIR.resolve()), str(settings.DATA_DIR)):
+    roots = [str(settings.DATA_DIR.resolve())]
+    if settings.DATA_DIR.is_absolute():  # a relative one ("data") would mangle ordinary words
+        roots.append(str(settings.DATA_DIR))
+    for root in roots:
         text = text.replace(root, "")
     return text.strip() or type(error).__name__
 
@@ -95,3 +98,10 @@ def ingest_book(book_id: ObjectId) -> None:
     db.books.update_one({"_id": book_id}, {"$set": {"state": "ready", "page_count": len(assets)}})
     with ThreadPoolExecutor(max_workers=settings.PAGE_CONCURRENCY) as pool:
         list(pool.map(process_one, page_ids))
+
+
+def recover_interrupted() -> None:
+    """Jobs run inside the server process, so a restart strands them: fail what was in flight."""
+    db.books.update_many({"state": "ingesting"}, {"$set": {"state": "failed"}})
+    db.pages.update_many({"state": "processing"},
+                         {"$set": {"state": "failed", "reason": "interrupted, retry"}})
