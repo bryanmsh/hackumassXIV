@@ -102,13 +102,13 @@ describe.skipIf(!RUN)(`checkpoint-2 flow on the local real API at ${API_BASE}`, 
     expect(await card(1).findByText('Confirmed')).toBeInTheDocument();
   }, 30000);
 
-  it('3. Editor: fix page 2 by tapping the object (0-1 point), then confirm', async () => {
+  it('3. Editor: fix page 2 by clicking the object (0-1 point), then confirm', async () => {
     const user = renderAt(`/pages/${pageNo(2).id}?book=${book.id}`);
     const frame = await screen.findByTestId('image-frame', {}, { timeout: 10000 });
-    await user.click(screen.getByRole('button', { name: 'Tap the object' }));
+    await user.click(screen.getByRole('button', { name: 'Click the object' }));
     fireEvent.click(frame, at([0.5, 0.5]));
     await user.click(screen.getByRole('button', { name: 'Cut out the object here' }));
-    expect(await screen.findByText(/picked by tapping/, {}, { timeout: 10000 })).toBeInTheDocument();
+    expect(await screen.findByText(/picked by clicking/, {}, { timeout: 10000 })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Confirm this subject' }));
     expect(await screen.findByText('Subject confirmed.')).toBeInTheDocument();
   }, 30000);
@@ -127,7 +127,7 @@ describe.skipIf(!RUN)(`checkpoint-2 flow on the local real API at ${API_BASE}`, 
     for (const p of pts.slice(1)) fireEvent.pointerMove(frame, { ...base, ...at(p) });
     fireEvent.pointerUp(frame, { ...base, ...at(pts[pts.length - 1]!) });
     await user.click(screen.getByRole('button', { name: 'Save outline' }));
-    expect(await screen.findByText(/outlined by teacher/, {}, { timeout: 10000 })).toBeInTheDocument();
+    expect(await screen.findByText(/made by teacher/, {}, { timeout: 10000 })).toBeInTheDocument();
     // The server turned our 0-1 outline into a candidate box that matches what was drawn.
     const fresh = await api.getBook(book.id);
     const p3 = fresh.pages.find((p) => p.number === 3)!;

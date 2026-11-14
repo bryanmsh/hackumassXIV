@@ -1,5 +1,5 @@
 /** Subject review: each action sends the agreed body, the card shows the server's answer, nothing auto-confirms. */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { MemoryRouter } from 'react-router';
@@ -44,10 +44,11 @@ async function open() {
 const card = (n: number) => within(screen.getByRole('heading', { name: `Page ${n}` }).closest('li')!);
 
 describe('Subject review', () => {
-  it('shows every page with its state, subject, and AI confidence', async () => {
+  it('shows every page with its state, subject, and the AI’s guess (never styled as correct)', async () => {
     await open();
     expect(card(1).getByText('Ready')).toBeInTheDocument();
-    expect(card(1).getByText(/AI confidence 0\.88/)).toBeInTheDocument();
+    expect(card(1).getByText(/the AI’s guess, confidence 0\.88/)).toBeInTheDocument();
+    expect(card(1).getByText('Ready').className).not.toMatch(/emerald/);
     expect(card(3).getByText('Needs subject')).toBeInTheDocument();
     expect(card(3).getByText('No subject chosen yet.')).toBeInTheDocument();
     expect(card(4).getByText('No clear subject')).toBeInTheDocument();
@@ -121,6 +122,49 @@ describe('Subject review', () => {
     expect(card(2).getByText('Confirmed')).toBeInTheDocument();
     expect(card(3).queryByText('Confirmed')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm all…' })).toBeDisabled();
+    expect(screen.getByText(/Confirm all is off: no page has a subject waiting to be confirmed/)).toBeInTheDocument();
+  });
+
+  it('Ask the AI again asks first; a confirmed page is asked about too and stays confirmed', async () => {
+    const { user, demo } = await open();
+    await user.click(card(1).getByRole('button', { name: 'Confirm' }));
+    expect(await card(1).findByText('Confirmed')).toBeInTheDocument();
+    const calls = capturePosts();
+    await user.click(screen.getByRole('button', { name: 'Ask the AI again…' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('outside AI service');
+    expect(dialog).toHaveTextContent('Pages 1,');
+    expect(dialog).toHaveTextContent('keep their subject and stay confirmed');
+    expect(calls).toHaveLength(0);
+
+    await user.click(within(dialog).getByRole('button', { name: /^Ask about \d+$/ }));
+    expect(await screen.findByText(/Asking the AI again about \d+ pages?\./)).toBeInTheDocument();
+    expect(calls[0]).toEqual({ path: `/api/books/${demo.id}/rerun`, body: null });
+    expect(await card(1).findByText('Processing')).toBeInTheDocument();
+    expect(card(1).getByText('Confirmed')).toBeInTheDocument();
+    expect(await card(2).findByText('Processing')).toBeInTheDocument();
+  });
+
+  it('tapping a second suggestion shows both together; tapping one again takes it out', async () => {
+    const { user, id } = await open();
+    const calls = capturePosts();
+    const chip = (name: RegExp) => card(3).getByRole('button', { name });
+    await user.click(chip(/^beehive/));
+    await waitFor(() => expect(chip(/^beehive/)).toHaveAttribute('aria-pressed', 'true'));
+    await user.click(chip(/^hornbill/));
+    await waitFor(() => expect(chip(/^hornbill/)).toHaveAttribute('aria-pressed', 'true'));
+    expect(chip(/^beehive/)).toHaveAttribute('aria-pressed', 'true');
+    expect(card(3).getByText(/Subject:/)).toHaveTextContent(/hornbill and beehive|beehive and hornbill/);
+    expect(calls.map((c) => c.path)).toEqual([`/api/pages/${id(3)}/subject`, `/api/pages/${id(3)}/subject`]);
+    expect(Object.keys(calls[0]!.body as object)).toEqual(['candidate']);
+    expect((calls[1]!.body as { candidates: number[] }).candidates).toHaveLength(2);
+    // the joined subject has no chip of its own while its parts are ticked
+    expect(card(3).queryByRole('button', { name: / and / })).not.toBeInTheDocument();
+
+    await user.click(chip(/^beehive/));
+    await waitFor(() => expect(chip(/^beehive/)).toHaveAttribute('aria-pressed', 'false'));
+    expect(Object.keys(calls[2]!.body as object)).toEqual(['candidate']);
+    expect(card(3).getByText(/Subject:/)).toHaveTextContent('hornbill');
   });
 
   it('Cancel in Confirm all sends nothing', async () => {

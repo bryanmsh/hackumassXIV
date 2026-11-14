@@ -19,17 +19,18 @@ interface Props {
   checking: boolean;
   /** The last re-check or switch failed; what is shown is still the last approved version. */
   checkError: string | null;
+  /** The current page could not be shown (e.g. 403). Explained here, never in front of the child. */
+  pageProblem: string | null;
 }
 
 const btn = 'min-h-12 rounded-lg px-4 text-base font-semibold disabled:cursor-not-allowed';
 
 /**
- * Teacher-only controls, hidden until the teacher asks for them (T key or a
- * 1-second press in a corner). Lists only versions the server says are fully
+ * Teacher-only controls, hidden until the teacher asks for them (the T key). Lists only versions the server says are fully
  * approved as choices; the rest are greyed "not approved". Approving happens
  * outside the reader.
  */
-export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNext, onSwitch, onClose, fullscreen, checking, checkError }: Props) {
+export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNext, onSwitch, onClose, fullscreen, checking, checkError, pageProblem }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
 
@@ -72,6 +73,14 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
           </div>
         </div>
 
+        {pageProblem && (
+          <div role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
+            <p>{pageProblem}</p>
+            <Link to={sheetLink} className="font-semibold underline">
+              Leave the reader and open the contact sheet
+            </Link>
+          </div>
+        )}
         {checkError && (
           <p role="alert" className="rounded-lg bg-amber-50 p-3 text-amber-950 ring-1 ring-amber-300">
             Could not check with the server: {checkError}. The pages shown are still the last version the server approved.

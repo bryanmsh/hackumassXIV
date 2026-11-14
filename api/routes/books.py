@@ -118,3 +118,24 @@ def confirm_all(book_id: str, background: BackgroundTasks):
             background.add_task(jobs.run_second_look, page["_id"], page["subject_hash"])
         done.append(views.page_json(db.pages.find_one({"_id": page["_id"]})))
     return done
+
+
+@router.post("/books/{book_id}/rerun")
+def rerun_book(book_id: str, background: BackgroundTasks):
+    """Ask the pipeline again about every page that is not left out or already processing.
+    New suggestions are added to the old ones. A confirmed page keeps its subject and its
+    confirmation; any other page's subject becomes the pipeline's new answer.
+    Returns the pages now processing."""
+    book = _find_book(book_id)
+    started = datetime.now(timezone.utc)
+    open_pages = {"omitted": False, "state": {"$ne": "processing"}}
+    page_ids = []
+    for page in db.pages.find({"book_id": book["_id"], **open_pages}).sort("number", 1):
+        # Checked again in the write: a page left out since it was read is left alone.
+        taken = db.pages.update_one({"_id": page["_id"], **open_pages}, {"$set": {
+            "state": "processing", "reason": None, "processing_started_at": started}})
+        if taken.matched_count:
+            page_ids.append(page["_id"])
+    if page_ids:
+        background.add_task(jobs.process_pages, page_ids)
+    return [views.page_json(page) for page in db.pages.find({"_id": {"$in": page_ids}}).sort("number", 1)]
