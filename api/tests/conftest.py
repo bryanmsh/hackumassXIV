@@ -38,3 +38,14 @@ def clean_db(throwaway_database):
     images._cache.clear()
     for collection in (db.books, db.pages, db.profiles, db.checks, db.approvals):
         collection.delete_many({})
+
+
+@pytest.fixture(autouse=True)
+def fixed_second_look(monkeypatch):
+    """The second look is one AI call. Tests answer it themselves, so a run against the real
+    display code (RENDER=real) gives the same result and never calls Gemini."""
+    from api import modules
+    from contracts.types import SecondLook
+
+    monkeypatch.setattr(modules.display, "second_look", lambda image_path, mask_path, label, synonyms:
+                        SecondLook(status="pass", answer=label, detail="stub"))

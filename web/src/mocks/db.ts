@@ -432,6 +432,27 @@ export function subjectFromOutline(p: MockPage, label: string, outline: NormPoin
   });
 }
 
+/** Several candidates shown together as one subject. False when an index is unknown. */
+export function subjectTogether(p: MockPage, indexes: number[]): boolean {
+  const parts = indexes.map((i) => p.candidates[i]);
+  if (parts.some((c) => !c)) return false;
+  const labels = [...new Set(parts.map((c) => c!.label))];
+  selectNew(p, {
+    label: labels.join(' and '),
+    synonyms: [...new Set([...labels, ...parts.flatMap((c) => c!.synonyms)])],
+    box: [
+      Math.min(...parts.map((c) => c!.box[0])),
+      Math.min(...parts.map((c) => c!.box[1])),
+      Math.max(...parts.map((c) => c!.box[2])),
+      Math.max(...parts.map((c) => c!.box[3])),
+    ],
+    confidence: 1,
+    source: 'manual',
+    mask_hash: mockHash(`${p.id}:together:${parts.map((c) => c!.mask_hash).sort().join('+')}`),
+  });
+  return true;
+}
+
 export function confirmPage(p: MockPage, now: number = Date.now()): boolean {
   if (p.selected === null || p.state === 'processing') return false;
   p.confirmed = true;

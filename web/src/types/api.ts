@@ -127,6 +127,8 @@ export interface UpdateBookInput {
 /** POST /pages/{id}/subject — exactly one shape per request. */
 export type SubjectRequest =
   | { candidate: number }
+  /** Several suggestions shown together as one subject. At least 2 different indexes. */
+  | { candidates: number[] }
   | { point: NormPoint }
   | { label: string; outline: NormPoint[] };
 // P1 only, not before checkpoint 2: | { refine_point: NormPoint }
