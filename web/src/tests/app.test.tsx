@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import { App } from '../App';
@@ -67,6 +67,21 @@ describe('every P0 route renders', () => {
     renderAt(`/read/${demo.id}?profile=${maya.id}&level=1`);
     expect(await screen.findByRole('alert')).toHaveTextContent('not approved');
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('the gesture test page counts a two-finger tap and shows no teacher chrome', () => {
+    renderAt('/gesture-test');
+    expect(screen.getByRole('heading', { name: 'Reader gesture test' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
+    const surface = screen.getByLabelText('Gesture test surface');
+    expect(surface).toHaveClass('touch-none');
+    fireEvent.pointerDown(surface, { pointerId: 1, clientX: 500, clientY: 300, pointerType: 'touch' });
+    fireEvent.pointerDown(surface, { pointerId: 2, clientX: 560, clientY: 300, pointerType: 'touch' });
+    fireEvent.pointerUp(surface, { pointerId: 1, clientX: 500, clientY: 300, pointerType: 'touch' });
+    fireEvent.pointerUp(surface, { pointerId: 2, clientX: 560, clientY: 300, pointerType: 'touch' });
+    expect(screen.getByTestId('count-two-finger-tap')).toHaveTextContent('1');
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.getByRole('list', { name: 'Gesture log' })).toHaveTextContent('key ArrowRight → next page');
   });
 
   it('unknown routes show not found', () => {

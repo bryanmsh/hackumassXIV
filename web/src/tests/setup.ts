@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest';
 import { resetMockDb, scenarios } from '../mocks/db';
 import { server } from '../mocks/node';
 import { installTestBridges } from './fetchBridge';
+import './pointerEvents';
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });

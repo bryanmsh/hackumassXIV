@@ -79,3 +79,27 @@ describe(`live API at ${API_BASE}`, () => {
     expect(card.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
+
+describe(`live API at ${API_BASE}: subject editor`, () => {
+  it('opens a page, and the server accepts a 0-1 point and a 0-1 outline', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    const target = b.pages.find((p) => p.state !== 'processing');
+    if (!target) return;
+    renderAt(`/pages/${target.id}?book=${b.id}`);
+    expect(await screen.findByRole('heading', { name: new RegExp(`Page ${target.number}`) })).toBeInTheDocument();
+    expect(await screen.findByTestId('image-frame')).toBeInTheDocument();
+
+    const byPoint = await api.setSubject(target.id, { point: [0.5, 0.5] });
+    expect(typeof byPoint.id).toBe('string');
+    const byOutline = await api.setSubject(target.id, {
+      label: 'test shape',
+      outline: [
+        [0.4, 0.4],
+        [0.6, 0.4],
+        [0.6, 0.6],
+        [0.4, 0.6],
+      ],
+    });
+    expect(byOutline.candidates.length).toBeGreaterThan(0);
+  });
+});
