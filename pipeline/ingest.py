@@ -1,4 +1,5 @@
 """Ingest: turn a PDF into master and working-copy page images plus each page's text."""
+import threading
 from pathlib import Path
 
 import pymupdf
@@ -11,6 +12,8 @@ MASTER_MAX = 3000  # longer side of the master, in pixels
 VIEW_MAX = 1600  # longer side of the working copy
 SPREAD_RATIO = 1.9
 LOW_QUALITY_MAX = 1000  # an only-image whose longer side is under this is low quality
+
+_pymupdf_lock = threading.Lock()  # PyMuPDF is not safe on two threads at once; two uploads take turns
 
 
 def _fit(image: Image.Image, longest: int) -> Image.Image:
@@ -26,7 +29,7 @@ def rasterize(pdf_path, out_dir) -> list[PageAsset]:
     pages_dir = Path(out_dir) / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
     assets = []
-    with pymupdf.open(pdf_path) as doc:
+    with _pymupdf_lock, pymupdf.open(pdf_path) as doc:
         for number, page in enumerate(doc, start=1):
             pixmap = page.get_pixmap(dpi=DPI, alpha=False)  # applies the page's rotation
             master = _fit(Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples), MASTER_MAX)

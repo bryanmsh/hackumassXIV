@@ -38,6 +38,8 @@ def make_pdf(tmp_path):
                 buffer = io.BytesIO()
                 Image.new("RGB", spec["image_px"], (40, 120, 200)).save(buffer, "PNG")
                 page.insert_image(page.rect, stream=buffer.getvalue())
+            if spec.get("mark"):  # a red square at the page's own top-left corner
+                page.draw_rect(pymupdf.Rect(0, 0, 60, 60), color=(1, 0, 0), fill=(1, 0, 0))
             if spec.get("text"):
                 page.insert_text((72, 72), spec["text"])
             if spec.get("rotate"):

@@ -162,3 +162,56 @@ def test_refine_box_matches_the_new_mask(page_image, tmp_path, left_half, monkey
     candidate = refine_mask(page_image, left_half, 700, 450, tmp_path)
     assert candidate.box == (400, 300, 720, 601)
     assert read_mask(candidate)[450, 700] == 255
+
+
+# --- found in the whole-branch review ---
+
+def test_click_on_flat_background_with_grabcut_gives_the_rectangle(page_image, tmp_path, labeller, monkeypatch):
+    monkeypatch.setenv("SEGMENTER", "grabcut")
+    labeller("")
+    candidate = segment_at_point(page_image, 100, 100, tmp_path)
+    x0, y0, x1, y1 = (int(v) for v in point_box(100, 100, 1200, 900))
+    expected = np.zeros((900, 1200), np.uint8)
+    expected[y0:y1, x0:x1] = 255
+    assert np.array_equal(read_mask(candidate), expected)
+
+
+@pytest.mark.parametrize("x, y", [(1200, 900), (-5, -5), (5000, 450), (-4000, 450)])
+def test_click_on_or_past_the_page_edge_is_pulled_onto_the_page(page_image, tmp_path, labeller, monkeypatch, x, y):
+    monkeypatch.setenv("SEGMENTER", "stub")
+    labeller("")
+    candidate = segment_at_point(page_image, x, y, tmp_path)
+    mask = read_mask(candidate)
+    assert mask.any()
+    cx, cy = min(max(x, 0), 1199), min(max(y, 0), 899)
+    assert mask[cy, cx] == 255
+    x0, y0, x1, y1 = candidate.box
+    assert x1 - x0 <= 480 and y1 - y0 <= 480  # a box around the click, not most of the page
+
+
+def test_refine_at_the_page_edge_does_not_raise(page_image, tmp_path, left_half, monkeypatch):
+    monkeypatch.setenv("SEGMENTER", "stub")
+    candidate = refine_mask(page_image, left_half, 1200, 900, tmp_path)
+    assert read_mask(candidate)[899, 1199] == 255
+
+
+def test_refine_keeps_a_small_detached_part_the_teacher_clicked(page_image, tmp_path, left_half, monkeypatch):
+    tail = np.zeros((900, 1200), np.uint8)
+    tail[440:460, 690:710] = 255  # 400 px: far under 5% of the body, and not touching it
+    patch_segmenter(monkeypatch, tail)
+    candidate = refine_mask(page_image, left_half, 700, 450, tmp_path)
+    assert read_mask(candidate)[450, 700] == 255
+    assert candidate.mask_path != left_half
+
+
+def test_refine_never_removes_a_region_of_the_old_mask(page_image, tmp_path, monkeypatch):
+    old = np.zeros((900, 1200), np.uint8)
+    old[100:200, 100:200] = 255  # body: 10000 px
+    old[600:620, 600:630] = 255  # second region: 600 px, 6% of the body, so cleanup kept it
+    old_path, _ = save_mask(old, page_image, tmp_path)
+    grown = np.zeros((900, 1200), np.uint8)
+    grown[100:300, 100:300] = 255  # the body grows to 40000 px; 600 px is now under 5%
+    patch_segmenter(monkeypatch, grown)
+    new = read_mask(refine_mask(page_image, old_path, 250, 250, tmp_path))
+    assert new[610, 610] == 255
+    assert not (old & ~new).any()

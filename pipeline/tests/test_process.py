@@ -295,3 +295,20 @@ def test_reason_never_contains_the_key_and_is_short(asset, tmp_path, gemini, mon
     assert result.state == "failed"
     assert "secret123" not in result.reason
     assert len(result.reason) <= 200
+
+
+# --- found in the whole-branch review ---
+
+def test_a_lower_candidate_is_not_made_ready_when_the_top_one_could_not_be_cut(asset, tmp_path, gemini):
+    """Gemini's first choice had no usable cut-out. Its second choice must not be picked silently."""
+    gemini(answer(subject("speck", 0.95, box=(500, 500, 500, 500)), subject("ball", 0.75)))
+    result = process_page(asset, tmp_path)
+    assert [c.label for c in result.candidates] == ["ball"]
+    assert (result.state, result.selected) == ("needs_subject", None)
+    assert "speck" in result.reason
+
+
+def test_a_dropped_lower_candidate_does_not_block_ready(asset, tmp_path, gemini):
+    gemini(answer(subject("ball", 0.9), subject("speck", 0.3, box=(500, 500, 500, 500))))
+    result = process_page(asset, tmp_path)
+    assert (result.state, result.selected) == ("ready", 0)

@@ -1,6 +1,7 @@
 # Keeps secrets and local clutter out of both images. .env must never be copied in.
-.env
+.env*
 *.env
+!.env.example
 .git
 .venv
 **/node_modules

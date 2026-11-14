@@ -86,6 +86,9 @@ def _grabcut(image, box, points) -> np.ndarray:
                         GRABCUT_ITERATIONS, cv2.GC_INIT_WITH_RECT)
     except cv2.error:
         return empty  # GrabCut refuses prompts with no background or no foreground to learn from
+    seeded = int((labels == cv2.GC_FGD).sum())
+    if points and int((labels == cv2.GC_PR_FGD).sum()) <= seeded:
+        return empty  # little more than the seed discs is left: the click was on empty page
 
     subject = ((labels == cv2.GC_FGD) | (labels == cv2.GC_PR_FGD)).astype(np.uint8) * 255
     if scale == 1.0:

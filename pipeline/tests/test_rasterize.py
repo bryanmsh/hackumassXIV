@@ -65,3 +65,57 @@ def test_low_quality_flag(make_pdf, tmp_path):
     assert "low_quality" in small.flags
     assert "low_quality" not in large.flags
     assert "low_quality" not in text_only.flags
+
+
+# --- found in the whole-branch review ---
+
+def test_rotated_pages_come_out_upright(make_pdf, tmp_path):
+    """A red mark drawn at the page's own top-left corner lands where the rotation puts it."""
+    pdf = make_pdf([{"size": LETTER, "mark": True, "rotate": rotate} for rotate in (0, 90, 180, 270)])
+    assets = rasterize(pdf, tmp_path / "b")
+    corners = {}
+    for asset, rotate in zip(assets, (0, 90, 180, 270)):
+        image = Image.open(asset.image_path)
+        width, height = image.size
+        assert (width > height) == (rotate in (90, 270))
+        points = {"top-left": (20, 20), "top-right": (width - 20, 20),
+                  "bottom-right": (width - 20, height - 20), "bottom-left": (20, height - 20)}
+        red = [name for name, point in points.items() if image.getpixel(point)[0] > 200 and image.getpixel(point)[1] < 80]
+        corners[rotate] = red
+    assert corners == {0: ["top-left"], 90: ["top-right"], 180: ["bottom-right"], 270: ["bottom-left"]}
+
+
+def test_only_one_pdf_is_rasterized_at_a_time(make_pdf, tmp_path, monkeypatch):
+    """PyMuPDF is not safe to use from two threads at once; two uploads must take turns."""
+    import threading
+    import time
+
+    import pipeline.ingest
+
+    real_open = pipeline.ingest.pymupdf.open
+    inside, peak, lock = [0], [0], threading.Lock()
+
+    class Tracked:
+        def __init__(self, path):
+            self.doc = real_open(path)
+
+        def __enter__(self):
+            with lock:
+                inside[0] += 1
+                peak[0] = max(peak[0], inside[0])
+            time.sleep(0.1)
+            return self.doc
+
+        def __exit__(self, *args):
+            with lock:
+                inside[0] -= 1
+            self.doc.close()
+
+    pdf = make_pdf([{"size": (200, 200)}])
+    monkeypatch.setattr(pipeline.ingest.pymupdf, "open", Tracked)
+    threads = [threading.Thread(target=rasterize, args=(pdf, tmp_path / f"b{i}")) for i in range(3)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert peak[0] == 1

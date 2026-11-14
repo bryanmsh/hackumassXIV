@@ -95,3 +95,9 @@ def test_output_shape_and_values(image, monkeypatch, name):
     assert mask.shape == image.shape[:2]
     assert mask.dtype == np.uint8
     assert set(np.unique(mask)) <= {0, 255}
+
+
+def test_grabcut_point_on_flat_background_finds_nothing(image, monkeypatch):
+    """A click on empty page must not come back as a blob the size of the seed disc."""
+    monkeypatch.setenv("SEGMENTER", "grabcut")
+    assert not segment(image, points=[(100, 100)]).any()

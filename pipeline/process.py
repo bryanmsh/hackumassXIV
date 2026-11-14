@@ -94,12 +94,15 @@ def process_page(asset, out_dir, force=False) -> PageResult:
 
         answer = call_with_retry(lambda: choose_subjects(asset.view_path, asset.text))
 
-        candidates = []
-        for found in answer.candidates:  # highest confidence first
+        candidates, lost_first_choice = [], None
+        for index, found in enumerate(answer.candidates):  # highest confidence first
             box = gemini_box_to_pixels(found.box_2d, width, height)
             mask = clean_mask(segmenter.segment(image, box=box))
             if not mask.any():
-                continue  # nothing was cut out, so there is nothing to show the teacher
+                # Nothing was cut out, so there is nothing to show the teacher.
+                if index == 0:
+                    lost_first_choice = found.label
+                continue
             mask_path, mask_hash = save_mask(mask, asset.image_path, out_dir)
             candidates.append(Candidate(
                 label=found.label, synonyms=found.synonyms, box=box, confidence=found.confidence,
@@ -108,6 +111,10 @@ def process_page(asset, out_dir, force=False) -> PageResult:
         if answer.candidates and not candidates:
             return _result("no_clear_subject", answer.page_kind, reason="No usable cut-out could be made")
         state, selected, reason = decide_state(answer.page_kind, candidates, asset.text)
+        if state == "ready" and lost_first_choice is not None:
+            # The AI's first choice is gone; its second choice must not be picked silently.
+            state, selected = "needs_subject", None
+            reason = f'No cut-out could be made for "{lost_first_choice}", the first choice'
         return _result(state, answer.page_kind, candidates, selected, reason)
     except Exception as error:
         return _result("failed", reason=_reason(error))

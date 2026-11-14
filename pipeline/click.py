@@ -19,6 +19,12 @@ def _load_rgb(image_path) -> np.ndarray:
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
 
+def _on_page(x, y, image) -> tuple[float, float]:
+    """Pull a click onto the page. A click at the far edge arrives as x == width."""
+    height, width = image.shape[:2]
+    return min(max(x, 0), width - 1), min(max(y, 0), height - 1)
+
+
 def _label(image: np.ndarray, box) -> str:
     """Ask Gemini to name what is in the box. Empty when it cannot, and the teacher types it."""
     try:
@@ -44,6 +50,7 @@ def _candidate(mask, label, image_path, out_dir) -> Candidate:
 def segment_at_point(image_path, x, y, out_dir) -> Candidate:
     """Cut out whatever the teacher clicked, at (x, y) in master pixels, and try to name it."""
     image = _load_rgb(image_path)
+    x, y = _on_page(x, y, image)
     mask = clean_mask(segmenter.segment(image, points=[(x, y)]))
     if not mask.any():
         # Nothing found, for example a click on flat background. Give the teacher a
@@ -58,10 +65,12 @@ def refine_mask(image_path, mask_path, x, y, out_dir) -> Candidate:
     """Add a missing part, such as a tail, by clicking it. Writes a new mask file; the old one stays.
 
     The original prompt is not passed in, so the old mask's own box stands in for it,
-    grown just far enough to reach the click. The result is the old mask plus whatever
-    was found, so a refine click can only add. The label is empty: the page keeps its own.
+    grown just far enough to reach the click. The result is the old mask, untouched,
+    plus what was found, so a refine click can only add. The piece under the click is
+    always kept, however small. The label is empty: the page keeps its own.
     """
     image = _load_rgb(image_path)
+    x, y = _on_page(x, y, image)
     old = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
     if old is None:
         raise FileNotFoundError("the mask to refine could not be read")
@@ -71,4 +80,10 @@ def refine_mask(image_path, mask_path, x, y, out_dir) -> Candidate:
     box = (min(old_box[0], reach[0]), min(old_box[1], reach[1]),
            max(old_box[2], reach[2]), max(old_box[3], reach[3]))
     found = segmenter.segment(image, box=box, points=[(x, y)])
-    return _candidate(clean_mask(cv2.bitwise_or(old, found)), "", image_path, out_dir)
+    added = clean_mask(found)
+    # Cleanup drops small detached pieces, but the one the teacher clicked is the point.
+    _, pieces = cv2.connectedComponents((found > 0).astype(np.uint8), connectivity=8)
+    clicked = pieces[int(y), int(x)]
+    if clicked:
+        added[pieces == clicked] = 255
+    return _candidate(cv2.bitwise_or(old, added), "", image_path, out_dir)
