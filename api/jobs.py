@@ -1,5 +1,6 @@
 """Background work: take in a book and run the pipeline on its pages."""
 import logging
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -64,6 +65,8 @@ def process_one(page_id: ObjectId, force: bool = False) -> None:
     """Run the pipeline on one page. Whatever goes wrong fails this page and no other."""
     try:
         page = db.pages.find_one({"_id": page_id})
+        if page is None:  # the book was deleted while this page waited its turn
+            return
         asset = PageAsset(page_number=page["number"], image_path=page["image_path"],
                           view_path=page["view_path"], width=page["width"],
                           height=page["height"], text=page["text"],
@@ -90,6 +93,9 @@ def ingest_book(book_id: ObjectId) -> None:
     except Exception:
         logger.exception("rasterize failed for book %s", book_id)
         db.books.update_one({"_id": book_id}, {"$set": {"state": "failed"}})
+        return
+    if db.books.find_one({"_id": book_id}) is None:  # deleted while rasterizing: leave nothing behind
+        shutil.rmtree(directory, ignore_errors=True)
         return
     started = datetime.now(timezone.utc)
     page_ids = []
@@ -131,6 +137,8 @@ def run_second_look(page_id: ObjectId, subject_hash: str) -> None:
     """
     try:
         page = db.pages.find_one({"_id": page_id})
+        if page is None:  # the book was deleted meanwhile
+            return
         candidate = next(c for c in page["candidates"] if c["mask_hash"] == subject_hash)
         found = modules.display.second_look(page["image_path"], candidate["mask_path"],
                                             candidate["label"], candidate["synonyms"])

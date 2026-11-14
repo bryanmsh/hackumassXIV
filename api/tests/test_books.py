@@ -204,3 +204,45 @@ def test_failure_reason_hides_a_relative_book_folder(monkeypatch, tmp_path):
     reason = upload()["pages"][0]["reason"]
     assert str(seen[0]) == f"data/books/{seen[0].name}"
     assert f"books/{seen[0].name}" not in reason and "pages/3.png" in reason
+
+
+def test_delete_removes_the_book_its_pages_checks_approvals_and_files():
+    from api.tests.helpers import approve_all, confirmed_book, make_profile
+    book = confirmed_book()
+    profile = make_profile()
+    assert approve_all(book, profile).status_code == 200
+    page_ids = [db.oid(p["id"]) for p in book["pages"]]
+    assert db.approvals.count_documents({"page_id": {"$in": page_ids}}) > 0
+    assert jobs.book_dir(book["id"]).exists()
+
+    assert client.delete(f"/api/books/{book['id']}").status_code == 204
+
+    assert client.get(f"/api/books/{book['id']}").status_code == 404
+    assert book["id"] not in [b["id"] for b in client.get("/api/books").json()]
+    assert db.pages.count_documents({"book_id": db.oid(book["id"])}) == 0
+    assert db.checks.count_documents({"page_id": {"$in": page_ids}}) == 0
+    assert db.approvals.count_documents({"page_id": {"$in": page_ids}}) == 0
+    assert not jobs.book_dir(book["id"]).exists()
+    # The profile stays; the reader has nothing to show for the book.
+    assert client.get(f"/api/profiles").status_code == 200
+    assert profile["id"] in [p["id"] for p in client.get("/api/profiles").json()]
+    assert client.get(f"/api/reader/{book['id']}?profile={profile['id']}&level=1").status_code == 404
+
+
+def test_delete_unknown_book_is_404_and_other_books_stay():
+    kept = upload()
+    assert client.delete("/api/books/000000000000000000000000").status_code == 404
+    assert client.delete("/api/books/not-an-id").status_code == 404
+    assert client.get(f"/api/books/{kept['id']}").status_code == 200
+
+
+def test_jobs_stop_quietly_when_the_book_is_deleted_mid_flight(monkeypatch):
+    """A page job or a second look that finds its page gone does nothing and raises nothing."""
+    book = upload()
+    page_id = db.oid(book["pages"][0]["id"])
+    assert client.delete(f"/api/books/{book['id']}").status_code == 204
+    called = []
+    monkeypatch.setattr(modules.pipeline, "process_page", lambda *a: called.append(a) or 1 / 0)
+    jobs.process_one(page_id)
+    jobs.run_second_look(page_id, "deadbeef")
+    assert called == [] and db.pages.find_one({"_id": page_id}) is None

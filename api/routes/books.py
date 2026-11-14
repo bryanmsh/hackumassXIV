@@ -1,11 +1,12 @@
 """Book routes."""
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pymupdf
 from bson import ObjectId
-from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel, ValidationError
 
 from api import db, jobs, modules, settings, views
@@ -110,6 +111,24 @@ def update_book(book_id: str, patch: BookPatch):
     if changes:
         db.books.update_one({"_id": book["_id"]}, {"$set": changes})
     return _book_response(db.books.find_one({"_id": book["_id"]}))
+
+
+@router.delete("/books/{book_id}", status_code=204)
+def delete_book(book_id: str):
+    """Remove a book with its pages, checks, approvals and files. Additive route (web PR #30).
+
+    The database goes first and the files last, so a crash part-way never leaves a listed
+    book with no files. Profiles are untouched. A book still being processed may be deleted:
+    the background jobs stop quietly when their page or book is gone.
+    """
+    book = _find_book(book_id)
+    page_ids = [p["_id"] for p in db.pages.find({"book_id": book["_id"]}, {"_id": 1})]
+    db.approvals.delete_many({"page_id": {"$in": page_ids}})
+    db.checks.delete_many({"page_id": {"$in": page_ids}})
+    db.pages.delete_many({"book_id": book["_id"]})
+    db.books.delete_one({"_id": book["_id"]})
+    shutil.rmtree(jobs.book_dir(book["_id"]), ignore_errors=True)
+    return Response(status_code=204)
 
 
 @router.post("/books/{book_id}/confirm-all")

@@ -362,6 +362,7 @@ All paths start with `/api` and return JSON unless marked image. Images are WebP
 | `POST /books` | PDF file, optional `credits` | `book_id` at once, with book state `ingesting`. Refuses files over 30 pages or 50 MB |
 | `GET /books`, `GET /books/{id}` | None | Title, credits, book state, and each page's state, reason, flags, page kind, candidates, selected subject, `subject_hash`, confirmed, omitted, second-look result |
 | `PATCH /books/{id}` | `title`, `credits` | Book |
+| `DELETE /books/{id}` | None | 204. Removes the book with its pages, checks, approvals and files; profiles stay. Unknown id: 404 |
 | `POST /pages/{id}/retry` | Optional `{force}` | Page back in Processing. `force` processes an Unsupported page anyway |
 | `POST /pages/{id}/subject` | One of `{candidate}`, `{candidates}` (two or more shown together), `{point}`, `{label, outline}` with optional `tidy` (P1), or `{refine_point}` (P1) | Page with its new `subject_hash` |
 | `POST /pages/{id}/confirm`, `POST /books/{id}/confirm-all` | None | Updated pages; the second look starts in the background |
