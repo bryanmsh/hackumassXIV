@@ -55,7 +55,7 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
             <h2 className="text-xl font-bold">{manifest.title}</h2>
             <p className="text-slate-700">
               {current ? `${current.profile_name} · ${levelName(manifest.level as Level)}` : levelName(manifest.level as Level)} · {position}
-              {checking && <span className="ml-2 text-sm text-slate-500">checking approvals…</span>}
+              {checking && <span className="ml-2 text-sm text-slate-600">checking approvals…</span>}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -113,7 +113,7 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
                         ? 'bg-sky-700 text-white ring-sky-800'
                         : v.fully_approved
                           ? 'bg-white ring-slate-300 hover:bg-slate-50'
-                          : 'bg-slate-100 text-slate-400 ring-slate-200'
+                          : 'bg-slate-100 text-slate-600 ring-slate-200'
                     }`}
                   >
                     {label}

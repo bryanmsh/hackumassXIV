@@ -87,7 +87,15 @@ export function makeMain(colors: HexColor[], hex: HexColor): HexColor[] {
 }
 
 export function swatchName(hex: string): string {
-  return SWATCHES.find((s) => norm(s.hex) === norm(hex))?.name ?? hex;
+  return SWATCHES.find((s) => norm(s.hex) === norm(hex))?.name ?? `Custom ${norm(hex)}`;
+}
+
+export const isSwatch = (hex: string): boolean => SWATCHES.some((s) => norm(s.hex) === norm(hex));
+
+/** A custom colour: any 6-digit hex (the API accepts any). Returned normalised, or null. */
+export function parseCustomColor(input: string): HexColor | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(input.trim());
+  return m ? `#${m[1]!.toUpperCase()}` : null;
 }
 
 export function backgroundName(hex: string): string {

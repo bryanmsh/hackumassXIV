@@ -14,7 +14,6 @@ import type {
   Settings,
   UpdateBookInput,
 } from '../types/api';
-import { SWATCHES } from '../utils/display';
 import * as db from './db';
 import { overlaySvg, renderSvg } from './images';
 
@@ -60,7 +59,6 @@ const isUnit = (n: unknown): n is number => typeof n === 'number' && Number.isFi
 const isPoint = (p: unknown): p is NormPoint => Array.isArray(p) && p.length === 2 && isUnit(p[0]) && isUnit(p[1]);
 const isLevel = (n: unknown): n is Level => n === 1 || n === 2 || n === 3 || n === 4;
 const isHex = (s: unknown): s is string => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
-const SWATCH_SET = new Set(SWATCHES.map((s) => s.hex.toUpperCase()));
 
 function validSettings(s: unknown): s is Settings {
   if (!s || typeof s !== 'object') return false;
@@ -69,7 +67,7 @@ function validSettings(s: unknown): s is Settings {
     Array.isArray(o.colors) &&
     o.colors.length >= 1 &&
     o.colors.length <= 3 &&
-    o.colors.every((c) => isHex(c) && SWATCH_SET.has(c.toUpperCase())) &&
+    o.colors.every(isHex) &&
     isHex(o.background) &&
     ['small', 'medium', 'large'].includes(o.size as string) &&
     ['center', 'left', 'right', 'upper', 'lower'].includes(o.position as string) &&

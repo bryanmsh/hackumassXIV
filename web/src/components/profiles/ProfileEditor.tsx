@@ -14,6 +14,8 @@ import {
   backgroundName,
   draftFrom,
   inputFrom,
+  isSwatch,
+  parseCustomColor,
   lowContrast,
   mainContrast,
   makeMain,
@@ -48,6 +50,10 @@ export function ProfileEditor({
   const ids = useId();
   const [draft, setDraft] = useState<ProfileDraft>(() => draftFrom(profile));
   const [errors, setErrors] = useState<DraftErrors>({});
+  const [custom, setCustom] = useState('#1E88E5');
+  const customColors = draft.colors.filter((c) => !isSwatch(c));
+  const customValid = parseCustomColor(custom);
+  const customFull = draft.colors.length >= MAX_COLORS;
   const save = useAction();
   const settings = useMemo(() => settingsFrom(draft), [draft]);
   const ratio = mainContrast(draft);
@@ -159,6 +165,64 @@ export function ProfileEditor({
                 </button>
               );
             })}
+          </div>
+          {/* Why some swatches are off, said in view (not only in a tooltip). */}
+          {draft.colors.length >= MAX_COLORS && <p className="mt-2 text-sm text-slate-600">Up to 3 colors. Remove one to add another.</p>}
+          {draft.colors.length === 1 && <p className="mt-2 text-sm text-slate-600">At least one color is needed, so the last one cannot be removed.</p>}
+          <div className="mt-3 rounded-lg bg-slate-50 p-3 ring-1 ring-inset ring-slate-200">
+            <label htmlFor={`${ids}-custom`} className="font-semibold">
+              Custom color <span className="font-normal text-slate-600">(optional)</span>
+            </label>
+            <p className="text-sm text-slate-600">Any color, when none of the eight suits this child. It counts toward the three.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                id={`${ids}-custom`}
+                type="color"
+                className="size-11 cursor-pointer rounded-lg border border-slate-300 bg-white p-1"
+                value={customValid ?? '#000000'}
+                onChange={(e) => setCustom(e.target.value.toUpperCase())}
+                aria-describedby={`${ids}-custom-hex`}
+              />
+              <label htmlFor={`${ids}-custom-hex`} className="font-semibold">
+                Hex code
+              </label>
+              <input
+                id={`${ids}-custom-hex`}
+                className="w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-base"
+                value={custom}
+                maxLength={7}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setCustom(e.target.value)}
+              />
+              <Button
+                disabled={!customValid || customFull || draft.colors.some((c) => c.toUpperCase() === customValid)}
+                onClick={() => customValid && set({ colors: toggleColor(draft.colors, customValid) })}
+              >
+                Add this color
+              </Button>
+              {!customValid && <span className="text-sm text-rose-800">Use a 6-digit code such as #1E88E5.</span>}
+            </div>
+            {customColors.length > 0 && (
+              <ul className="mt-2 flex flex-wrap gap-2" aria-label="Custom colors chosen">
+                {customColors.map((c) => (
+                  <li key={c} className="flex min-h-11 items-center gap-2 rounded-full bg-sky-50 py-1 pl-1 pr-2 font-semibold ring-2 ring-sky-700">
+                    <span className="size-8 rounded-full ring-1 ring-slate-400" style={{ backgroundColor: c }} aria-hidden />
+                    {swatchName(c)}
+                    {draft.colors[0]?.toUpperCase() === c.toUpperCase() && <span className="text-sm text-sky-800">(main)</span>}
+                    <Button
+                      variant="ghost"
+                      className="min-h-9 px-2 py-1 text-sm"
+                      disabled={draft.colors.length === 1}
+                      aria-label={`Remove ${swatchName(c)}`}
+                      onClick={() => set({ colors: toggleColor(draft.colors, c) })}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           {draft.colors.length > 1 && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
