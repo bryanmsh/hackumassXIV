@@ -12,6 +12,7 @@ import { useBook } from '../hooks/useBook';
 import type { NormPoint, Page } from '../types/api';
 import { OUTLINE_PROBLEM_TEXT, outlineProblem, roundPoint } from '../utils/coordinates';
 import { PAGE_STATE_HINT, formatConfidence, sourceLabel } from '../utils/display';
+import { plainReason } from '../utils/secondLook';
 
 /**
  * Contract 1 has no GET /pages/{id}, so the editor finds the page through its
@@ -250,7 +251,7 @@ function Editor({
             <p className="text-slate-700">{processing ? 'Still processing; this updates every 2 seconds.' : 'None yet.'}</p>
           )}
           {!processing && !page.confirmed && <p className="text-sm text-slate-700">{PAGE_STATE_HINT[page.state]}</p>}
-          {page.reason && <p className="text-sm text-slate-600">Reason: {page.reason}</p>}
+          {plainReason(page.reason) && <p className="text-sm text-slate-600">Reason: {plainReason(page.reason)}</p>}
           {page.omitted && <p className="text-sm text-slate-700">This page is left out of the reader. You can still set its subject.</p>}
           {selected && !page.confirmed && !processing && (
             <Button variant="primary" disabled={busy} onClick={() => void confirm()}>

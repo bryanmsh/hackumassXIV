@@ -73,8 +73,8 @@ function defaultMessage(status: number): string {
   if (status === 409) return 'Something changed on the server. Look again.';
   if (status === 413) return 'The file is too large for the server.';
   if (status === 422) return 'The server could not accept this request.';
-  if (status >= 500) return `The server had a problem (${status}). Try again.`;
-  return `Request failed (${status}).`;
+  if (status >= 500) return 'The server had a problem. Try again.';
+  return 'The server could not handle this request. Try again.';
 }
 
 /** Pull a readable message out of a FastAPI-style `{detail}` body. */
