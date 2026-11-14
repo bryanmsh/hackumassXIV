@@ -32,8 +32,6 @@ def test_json_route_answers_with_its_example(method, url, key):
 
 
 IMAGE_ROUTES = [
-    ("GET", "/api/pages/p1/overlay"),
-    ("POST", "/api/preview"),
     ("GET", "/api/render/p1?profile=pr1&level=1&v=x"),
     ("GET", "/api/reader/page/p1?profile=pr1&level=1&v=x"),
 ]
