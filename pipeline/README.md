@@ -20,7 +20,7 @@ Run everything from the repo root so `contracts` and `pipeline` import.
 | --- | --- |
 | `ingest.py` | `rasterize(pdf_path, out_dir)`: master and working-copy PNGs, text, `spread` and `low_quality` flags |
 | `masks.py` | Mask cleanup, saving under the mask's own hash, polygon fill, box and IoU helpers |
-| `outline.py` | `mask_from_outline(...)`: the teacher's drawn shape as the mask. `tidy=False` calls no model |
+| `outline.py` | `mask_from_outline(...)`: the teacher's drawn shape as the mask. `tidy=False` calls no model; tidy=True uses the segmenter's mask when it overlaps the drawing by 30 % or more, clipped to the drawing's box grown by 15 %; otherwise the drawing is kept. |
 | `segment.py` | `segment(image, box=None, points=None)`: the one door to the segmenter, chosen by `SEGMENTER` |
 | `sam.py` | SAM 2.1 small and EdgeTAM through transformers. The only file that imports torch |
 | `gemini.py` | `choose_subjects(view_path, text)` and `label_crop(png_bytes)`: the one door to Gemini |

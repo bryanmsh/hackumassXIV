@@ -93,7 +93,8 @@ def test_tidy_uses_segmenter_when_iou_high(page_image, tmp_path, monkeypatch):
     shifted = polygon_mask([(x + 5, y + 5) for x, y in TRIANGLE], 1200, 900)
     patch_segmenter(monkeypatch, shifted)
     candidate = mask_from_outline(page_image, "rabbit", TRIANGLE, tmp_path, tidy=True)
-    grown = cv2.dilate(polygon, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25)))
+    grown = np.zeros_like(polygon)
+    grown[125:775, 210:990] = 255
     expected = clean_mask(cv2.bitwise_and(shifted, grown))
     result = read_mask(candidate)
     assert np.array_equal(result, expected)
@@ -101,24 +102,40 @@ def test_tidy_uses_segmenter_when_iou_high(page_image, tmp_path, monkeypatch):
     assert (candidate.source, candidate.confidence, candidate.label) == ("manual", 1.0, "rabbit")
 
 
-def test_tidy_result_never_leaves_the_grown_polygon(page_image, tmp_path, monkeypatch):
+def test_tidy_result_never_leaves_the_grown_box(page_image, tmp_path, monkeypatch):
     polygon = polygon_mask(TRIANGLE, 1200, 900)
     spilled = polygon.copy()
     spilled[200:700, 300:1000] = 255  # still overlaps well, but spills far to the right
     spilled[0:40, 0:40] = 255
     patch_segmenter(monkeypatch, spilled)
     result = read_mask(mask_from_outline(page_image, "rabbit", TRIANGLE, tmp_path, tidy=True))
-    grown = cv2.dilate(polygon, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25)))
+    grown = np.zeros_like(polygon)
+    grown[125:775, 210:990] = 255
     assert not (result & ~grown).any()
 
 
-def test_tidy_keeps_polygon_when_iou_low(page_image, tmp_path, monkeypatch):
-    far = np.zeros((900, 1200), np.uint8)
-    far[0:100, 0:100] = 255
-    patch_segmenter(monkeypatch, far)
-    candidate = mask_from_outline(page_image, "rabbit", TRIANGLE, tmp_path, tidy=True)
-    assert np.array_equal(read_mask(candidate), polygon_mask(TRIANGLE, 1200, 900))
-    assert candidate.box == (300, 200, 900, 700)
+@pytest.mark.parametrize("overlap, used", [(0.2, False), (0.4, True)])
+def test_tidy_keeps_polygon_when_iou_low(page_image, tmp_path, monkeypatch, overlap, used):
+    from pipeline.masks import iou
+
+    square = [(300, 200), (799, 200), (799, 699), (300, 699)]
+    polygon = polygon_mask(square, 1200, 900)
+    found = np.zeros_like(polygon)
+    found[200:700, 300:300 + int(500 * overlap)] = 255
+    assert iou(found, polygon) == pytest.approx(overlap)
+    patch_segmenter(monkeypatch, found)
+    candidate = mask_from_outline(page_image, "rabbit", square, tmp_path, tidy=True)
+    assert np.array_equal(read_mask(candidate), found if used else polygon)
+
+
+def test_tidy_keeps_region_ten_percent_outside_outline(page_image, tmp_path, monkeypatch):
+    square = [(300, 200), (900, 200), (900, 700), (300, 700)]
+    found = polygon_mask(square, 1200, 900)
+    found[200:701, 901:961] = 255
+    patch_segmenter(monkeypatch, found)
+    result = read_mask(mask_from_outline(page_image, "rabbit", square, tmp_path, tidy=True))
+    assert np.array_equal(result, found)
+    assert result[400, 960] == 255
 
 
 def test_tidy_keeps_polygon_when_segmenter_raises(page_image, tmp_path, monkeypatch):
@@ -131,7 +148,16 @@ def test_tidy_box_is_polygon_bounding_box(page_image, tmp_path, monkeypatch):
     calls = []
     patch_segmenter(monkeypatch, polygon_mask(TRIANGLE, 1200, 900), calls)
     candidate = mask_from_outline(page_image, "rabbit", TRIANGLE, tmp_path, tidy=True)
-    assert calls == [{"shape": (900, 1200, 3), "box": (300, 200, 900, 700), "points": None}]
+    assert len(calls) == 1
+    assert calls[0]["shape"] == (900, 1200, 3)
+    assert calls[0]["box"] == (300, 200, 900, 700)
+    points = calls[0]["points"]
+    assert 2 <= len(points) <= 5
+    polygon = polygon_mask(TRIANGLE, 1200, 900)
+    distance = cv2.distanceTransform(polygon, cv2.DIST_L2, 5)
+    for x, y, label in points:
+        assert label == 1
+        assert distance[round(y), round(x)] > 1
     assert candidate.box == (300, 200, 901, 701)  # the tidied mask's own box; edge pixels are inclusive
 
 
@@ -142,3 +168,27 @@ def test_tidy_box_follows_the_tightened_mask(page_image, tmp_path, monkeypatch):
     patch_segmenter(monkeypatch, tight)
     candidate = mask_from_outline(page_image, "rabbit", square, tmp_path, tidy=True)
     assert candidate.box == (300, 200, 850, 701)  # fillPoly includes the bottom edge row
+
+
+def test_tidy_keeps_polygon_when_cleanup_raises(page_image, tmp_path, monkeypatch):
+    import pipeline.outline
+
+    polygon = polygon_mask(TRIANGLE, 1200, 900)
+    patch_segmenter(monkeypatch, polygon)
+
+    def broken_cleanup(mask):
+        raise ValueError("cleanup failed")
+
+    monkeypatch.setattr(pipeline.outline, "clean_mask", broken_cleanup)
+    result = read_mask(mask_from_outline(page_image, "rabbit", TRIANGLE, tmp_path, tidy=True))
+    assert np.array_equal(result, polygon)
+
+
+def test_tidy_keeps_polygon_when_cleanup_empty(page_image, tmp_path, monkeypatch):
+    import pipeline.outline
+
+    polygon = polygon_mask(TRIANGLE, 1200, 900)
+    patch_segmenter(monkeypatch, polygon)
+    monkeypatch.setattr(pipeline.outline, "clean_mask", lambda mask: np.zeros_like(mask))
+    result = read_mask(mask_from_outline(page_image, "rabbit", TRIANGLE, tmp_path, tidy=True))
+    assert np.array_equal(result, polygon)
