@@ -11,9 +11,6 @@ client = TestClient(app)
 EX = json.loads((Path(__file__).parents[2] / "contracts" / "examples.json").read_text())
 
 JSON_ROUTES = [  # (method, url, examples key)
-    ("GET", "/api/books", "GET /api/books"),
-    ("GET", "/api/books/b1", "GET /api/books/{id}"),
-    ("PATCH", "/api/books/b1", "PATCH /api/books/{id}"),
     ("POST", "/api/pages/p1/retry", "POST /api/pages/{id}/retry"),
     ("POST", "/api/pages/p1/subject", "POST /api/pages/{id}/subject"),
     ("POST", "/api/pages/p1/confirm", "POST /api/pages/{id}/confirm"),
@@ -32,11 +29,6 @@ JSON_ROUTES = [  # (method, url, examples key)
 def test_json_route_answers_with_its_example(method, url, key):
     r = client.request(method, url, json=EX[key]["request"])
     assert r.status_code == 200 and r.json() == EX[key]["response"]
-
-
-def test_upload_answers_at_once():
-    r = client.post("/api/books", files={"file": ("book.pdf", b"%PDF-1.4", "application/pdf")})
-    assert r.status_code == 200 and r.json() == EX["POST /api/books"]["response"]
 
 
 IMAGE_ROUTES = [

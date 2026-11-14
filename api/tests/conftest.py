@@ -10,6 +10,12 @@ os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="mirai-test-")
 os.environ["MONGODB_URI"] = f"mongodb://localhost:27017/mirai_test_{secrets.token_hex(4)}"
 
 
+def pytest_configure(config):
+    # pymupdf's SWIG bindings warn on import under Python 3.14; the warning is not ours to fix.
+    config.addinivalue_line(
+        "filterwarnings", "ignore:builtin type .* has no __module__ attribute:DeprecationWarning")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def throwaway_database():
     from pymongo.errors import PyMongoError
