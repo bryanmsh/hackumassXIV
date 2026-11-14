@@ -48,3 +48,28 @@ def test_four_calls_at_once():
         results = list(pool.map(timed, [1, 2, 3, 4]))
     print("\nfour at once:", results)  # the finding to record in pipeline/README.md
     assert all(outcome in ("ok", "rate_limited") for _, outcome, _ in results)
+
+
+def test_six_fixture_pages_each_get_a_state(tmp_path):
+    """The plan's "done when" for process_page: every page gets a state, at least one needs a subject."""
+    import json
+
+    from contracts.types import PageAsset
+    from pipeline import process_page
+
+    index = FIXTURES.parent / "pages.json"
+    if not index.exists():
+        pytest.skip(f"{index} is missing; commit the fixture pages first")
+    root = FIXTURES.parents[1]
+    states = {}
+    for entry in json.loads(index.read_text()):
+        asset = PageAsset.model_validate(entry)
+        asset.image_path, asset.view_path = str(root / asset.image_path), str(root / asset.view_path)
+        start = time.time()
+        result = process_page(asset, tmp_path)
+        states[asset.page_number] = (result.state, result.reason, round(time.time() - start, 1))
+    print("\nstates:", states)
+    assert len(states) == 6
+    assert all(state in ("ready", "needs_subject", "no_clear_subject", "unsupported", "failed")
+               for state, _, _ in states.values())
+    assert any(state == "needs_subject" for state, _, _ in states.values())

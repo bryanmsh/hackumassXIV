@@ -5,5 +5,6 @@ The API imports this package and calls the Contract 2 functions below.
 """
 from pipeline.ingest import rasterize
 from pipeline.outline import mask_from_outline
+from pipeline.process import process_page
 
-__all__ = ["rasterize", "mask_from_outline"]
+__all__ = ["rasterize", "process_page", "mask_from_outline"]

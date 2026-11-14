@@ -23,6 +23,7 @@ Run everything from the repo root so `contracts` and `pipeline` import.
 | `outline.py` | `mask_from_outline(...)`: the teacher's drawn shape as the mask. `tidy=False` calls no model |
 | `segment.py` | `segment(image, box=None, points=None)`: the one door to the segmenter, chosen by `SEGMENTER` |
 | `gemini.py` | `choose_subjects(view_path, text)` and `label_crop(png_bytes)`: the one door to Gemini |
+| `process.py` | `process_page(asset, out_dir, force=False)`: Gemini, a mask per candidate, the state rules. Never raises |
 
 ## Files written (Contract 3)
 
