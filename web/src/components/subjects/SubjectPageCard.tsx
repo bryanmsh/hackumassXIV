@@ -3,12 +3,15 @@ import { Link } from 'react-router';
 import { api } from '../../api';
 import { useAction } from '../../hooks/useAction';
 import type { Page } from '../../types/api';
+import { containRect, isValidBox } from '../../utils/coordinates';
 import { PAGE_STATE_HINT, formatConfidence, sourceLabel } from '../../utils/display';
+import { subjectTone } from '../../utils/subjectColors';
 import { plainReason, secondLookText } from '../../utils/secondLook';
 import { OverlayImage } from '../books/OverlayImage';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
 import { Badge, PageStateBadge } from '../ui/StatusBadge';
+import { SubjectMarker } from './SubjectMarker';
 
 const FLAG_TEXT: Record<string, string> = {
   spread: 'Looks like a two-page spread.',
@@ -32,6 +35,23 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
    */
   const [joined, setJoined] = useState<{ parts: number[]; hash: string | null } | null>(null);
   const parts = joined && joined.hash === page.subject_hash ? joined.parts : page.selected !== null ? [page.selected] : [];
+  /** The suggestion the teacher is pointing at, as a marker or a chip; the others dim. */
+  const [highlight, setHighlight] = useState<number | null>(null);
+  const showChoices = !processing && !page.omitted && page.candidates.length > 0;
+  // The overlay sits in a 4:3 box with object-contain; markers go where the page is drawn, never on the letterboxing.
+  const drawn = containRect({ left: 0, top: 0, width: 4, height: 3 }, page.width > 0 ? page.width : 4, page.height > 0 ? page.height : 3);
+  const hiddenChip = (i: number) => parts.length > 1 && page.selected === i; // the joined subject shows as its ticked parts
+  // One marker per suggestion at the middle of its box. Markers that would sit on top of
+  // each other (the same object found twice, a box inside another) step to the right.
+  const placed: { x: number; y: number }[] = [];
+  const markers = page.candidates.flatMap((c, i) => {
+    if (hiddenChip(i) || !isValidBox(c.box)) return [];
+    let x = (c.box[0] + c.box[2]) / 2;
+    const y = (c.box[1] + c.box[3]) / 2;
+    while (placed.some((p) => Math.abs(p.x - x) < 0.085 && Math.abs(p.y - y) < 0.11)) x += 0.09;
+    placed.push({ x, y });
+    return [{ c, i, x, y }];
+  });
 
   /** Tapping a suggestion adds it to the subject or takes it out; the result is saved at once. */
   async function toggle(i: number) {
@@ -52,8 +72,44 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
 
   return (
     <li className={`flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ${page.omitted ? 'ring-slate-300' : 'ring-slate-200'}`}>
-      <div className={page.omitted ? 'opacity-60' : ''}>
+      <div className={`relative ${page.omitted ? 'opacity-60' : ''}`}>
         <OverlayImage page={page} />
+        {showChoices && (
+          // Numbered markers at each suggestion. Pointer-only duplicates of the chips below, which
+          // carry the accessible names, so they are hidden from assistive technology.
+          <div
+            aria-hidden
+            className="pointer-events-none absolute"
+            style={{
+              left: `${(drawn.left / 4) * 100}%`,
+              top: `${(drawn.top / 3) * 100}%`,
+              width: `${(drawn.width / 4) * 100}%`,
+              height: `${(drawn.height / 3) * 100}%`,
+            }}
+          >
+            {markers.map(({ c, i, x, y }) => {
+              const isSel = parts.includes(i);
+              return (
+                <button
+                  key={`${i}:${c.mask_hash}`}
+                  type="button"
+                  tabIndex={-1}
+                  data-testid="page-marker"
+                  disabled={busy || (isSel && parts.length === 1)}
+                  onClick={() => void toggle(i)}
+                  onMouseEnter={() => setHighlight(i)}
+                  onMouseLeave={() => setHighlight(null)}
+                  className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full disabled:cursor-default ${
+                    isSel ? 'ring-4 ring-white/80' : ''
+                  } ${highlight !== null && highlight !== i ? 'opacity-40' : ''}`}
+                  style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
+                >
+                  <SubjectMarker index={i} />
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -98,13 +154,16 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
               {page.candidates.length > 1 ? 'Choose the subject' : 'Suggested subject'}
             </legend>
             {page.candidates.length > 1 && (
-              <p className="text-sm text-slate-700">Click more than one to show them together. Click again to take one out.</p>
+              <p className="text-sm text-slate-700">
+                Each number marks its suggestion on the page. Click more than one to show them together; click again to take one out.
+              </p>
             )}
             <div className="mt-1 flex flex-wrap gap-2">
               {page.candidates.map((c, i) => {
                 // The joined subject is shown by its ticked parts, not as a chip of its own.
-                if (parts.length > 1 && page.selected === i) return null;
+                if (hiddenChip(i)) return null;
                 const isSel = parts.includes(i);
+                const tone = subjectTone(i);
                 return (
                   <button
                     key={`${i}:${c.mask_hash}`}
@@ -112,16 +171,20 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
                     aria-pressed={isSel}
                     disabled={busy || (isSel && parts.length === 1)}
                     onClick={() => void toggle(i)}
-                    className={`inline-flex min-h-11 items-center gap-1 rounded-full px-3 text-base ring-1 ring-inset disabled:cursor-default ${
+                    onMouseEnter={() => setHighlight(i)}
+                    onMouseLeave={() => setHighlight(null)}
+                    onFocus={() => setHighlight(i)}
+                    onBlur={() => setHighlight(null)}
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-base ring-inset disabled:cursor-default ${
                       isSel
-                        ? 'bg-sky-700 font-semibold text-white ring-sky-800'
-                        : 'bg-white text-slate-900 ring-slate-300 hover:bg-slate-100 disabled:opacity-60'
-                    }`}
+                        ? `${tone.tint} font-semibold text-slate-900 ring-2 ${tone.ring}`
+                        : 'bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-100 disabled:opacity-60'
+                    } ${highlight !== null && highlight !== i ? 'opacity-50' : ''}`}
                   >
+                    <SubjectMarker index={i} size="sm" />
                     {isSel && <span aria-hidden>●</span>}
-                    {c.label || 'Unlabeled'}
-                    {c.source === 'auto' && <span className={isSel ? 'text-sky-100' : 'text-slate-600'}>{formatConfidence(c.confidence)}</span>}
-                    {c.source !== 'auto' && <span className={isSel ? 'text-sky-100' : 'text-slate-600'}>({sourceLabel(c.source)})</span>}
+                    <span className={isSel ? '' : 'font-medium'}>{c.label || 'Unlabeled'}</span>
+                    <span className="text-sm text-slate-600">{c.source === 'auto' ? formatConfidence(c.confidence) : `(${sourceLabel(c.source)})`}</span>
                   </button>
                 );
               })}

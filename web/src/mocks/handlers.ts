@@ -212,7 +212,8 @@ export const handlers = [
       } else if (keys === 'point') {
         if (!isPoint(body.point)) return fail(422, 'point must be [x, y] fractions between 0 and 1.');
         db.subjectFromPoint(page, body.point);
-      } else if (keys === 'label,outline') {
+      } else if (keys === 'label,outline' || keys === 'label,outline,tidy') {
+        if ('tidy' in body && typeof body.tidy !== 'boolean') return fail(422, 'tidy must be true or false.');
         const label = typeof body.label === 'string' ? body.label.trim() : '';
         const outline = body.outline;
         if (!label) return fail(422, 'Type what the object is.');
@@ -221,7 +222,7 @@ export const handlers = [
         }
         if (outline.length < 3) return fail(422, 'An outline needs at least 3 points.');
         if (outline.length > 200) return fail(422, 'An outline may have at most 200 points.');
-        db.subjectFromOutline(page, label, outline);
+        db.subjectFromOutline(page, label, outline, body.tidy === true);
       } else if (keys === 'refine_point') {
         if (!isPoint(body.refine_point)) return fail(422, 'refine_point must be [x, y] fractions between 0 and 1.');
         if (!db.subjectRefine(page, body.refine_point)) return fail(409, 'This page has no subject to add to. Pick one first.');
