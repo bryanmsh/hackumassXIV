@@ -1,7 +1,7 @@
 /** Setup for `npm run test:live`: real HTTP to LIVE_API_URL, no mocks. */
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach, beforeAll } from 'vitest';
+import { afterEach } from 'vitest';
 import { installTestBridges } from '../fetchBridge';
 
 /**
@@ -18,8 +18,7 @@ function addBasicAuth() {
     inner(input, { ...init, headers: { ...(init?.headers as Record<string, string>), Authorization: header } });
 }
 
-beforeAll(() => {
-  addBasicAuth();
-  installTestBridges();
-});
+// At import time (not in beforeAll), so a test file's own top-level requests are covered too.
+addBasicAuth();
+installTestBridges();
 afterEach(() => cleanup());
