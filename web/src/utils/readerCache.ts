@@ -43,7 +43,8 @@ export class ReaderImageCache {
   private retired = new Set<string>();
   private pinnedKey: string | null = null;
   private shownUrl: string | null = null;
-  private closed = false;
+  /** Bumped by clear(); loads started before it are released when they land. */
+  private generation = 0;
 
   constructor(
     private readonly max = 16,
@@ -63,10 +64,12 @@ export class ReaderImageCache {
     if (hit) this.drop(key, true); // expired: fetch again so the server re-checks approval
 
     const entry: Entry = { promise: Promise.resolve(''), url: null, at: this.now() };
+    const generation = this.generation;
     entry.promise = load().then(
       (blob) => {
         const url = this.urls.create(blob);
-        if (this.closed) {
+        if (generation !== this.generation) {
+          // Cleared while loading (unmount, or React's development double mount): nobody shows this.
           this.urls.revoke(url);
           return url;
         }
@@ -113,9 +116,12 @@ export class ReaderImageCache {
     return this.entries.size;
   }
 
-  /** Drop everything (unmount). Revokes every object URL. */
+  /**
+   * Drop everything and revoke every object URL (on unmount). The cache stays
+   * usable afterwards, because React's development mode mounts twice.
+   */
   clear(): void {
-    this.closed = true;
+    this.generation += 1;
     for (const e of this.entries.values()) if (e.url) this.urls.revoke(e.url);
     for (const u of this.retired) this.urls.revoke(u);
     this.entries.clear();

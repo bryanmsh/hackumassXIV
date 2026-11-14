@@ -85,4 +85,21 @@ describe('ReaderImageCache', () => {
     expect(revoked.sort()).toEqual([a, b].sort());
     expect(cache.size).toBe(0);
   });
+
+  it('still works after clear() (React development mode mounts, unmounts and mounts again)', async () => {
+    const { cache, revoked, ok, loads } = setup();
+    let release!: () => void;
+    const slow = () => {
+      loads.push('slow');
+      return new Promise<Blob>((r) => (release = () => r(new Blob(['x']))));
+    };
+    const early = cache.get('a', slow); // started before the clear
+    cache.clear();
+    const url = await cache.get('a', ok('a')); // the remounted screen asks again
+    expect(revoked).not.toContain(url);
+    release();
+    const stale = await early;
+    expect(revoked).toContain(stale); // the pre-clear load is released, not shown
+    expect(cache.has('a')).toBe(true);
+  });
 });

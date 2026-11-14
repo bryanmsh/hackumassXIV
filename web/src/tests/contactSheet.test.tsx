@@ -146,6 +146,22 @@ describe('Contact sheet', () => {
     expect(card(1).queryByText('Changed: look again')).not.toBeInTheDocument();
   });
 
+  it('after a 409, decisions wait for the fresh sheet (a slow reload cannot send the old version)', async () => {
+    const { t, user } = await setup();
+    const oldV1 = versionOf(t.sheets[0]!, 1);
+    scenarios.approveConflictNext = true;
+    await user.click(screen.getByRole('button', { name: 'Approve sheet…' }));
+    scenarios.latencyMs = 400; // the reload after the 409 is slow
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve 2' }));
+    await screen.findByRole('alert', {}, { timeout: 3000 });
+    expect(card(1).getByRole('button', { name: 'Approve page' })).toBeDisabled();
+    await waitFor(() => expect(card(1).getByRole('button', { name: 'Approve page' })).toBeEnabled(), { timeout: 3000 });
+    scenarios.latencyMs = 0;
+    await user.click(card(1).getByRole('button', { name: 'Approve page' }));
+    await waitFor(() => expect(card(1).getByText('Approved')).toBeInTheDocument());
+    expect(t.approves.at(-1)!.pages[0]!.version).not.toBe(oldV1);
+  });
+
   it('shows failing and warning checks, and lists them before approving', async () => {
     const low = await api.createProfile({
       name: 'Sam',

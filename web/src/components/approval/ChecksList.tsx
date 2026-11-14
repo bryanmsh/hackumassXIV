@@ -74,7 +74,9 @@ export function SecondLookLine({ look }: { look: SecondLook | null }) {
       {look.status === 'pending' && 'still checking.'}
       {look.status === 'pass' && `named the same subject${look.answer ? ` (“${look.answer}”)` : ''}.`}
       {look.status === 'warn' &&
-        `named “${look.answer ?? 'something else'}”${look.detail ? ` (${look.detail})` : ''}. It can be wrong too; check the picture.`}
+        (look.answer?.trim()
+          ? `named “${look.answer}”${look.detail ? ` (${look.detail})` : ''}. It can be wrong too; check the picture.`
+          : `${look.detail ?? 'could not name the subject.'} Check the picture yourself.`)}
     </p>
   );
 }

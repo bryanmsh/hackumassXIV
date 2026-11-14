@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import { installTestBridges } from '../fetchBridge';
+import '../pointerEvents';
 
 /**
  * The live site sits behind Caddy Basic Auth. A browser asks for the password

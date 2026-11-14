@@ -5,8 +5,9 @@
  */
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { api } from '../api';
 import { scenarios } from '../mocks/db';
@@ -66,6 +67,24 @@ describe('Reader', () => {
       expect(u.searchParams.get('v')).toBe(manifest.pages.find((p) => p.page_id === id)!.v);
     }
     expect(seen.some((u) => u.pathname.startsWith('/api/render') || u.pathname.startsWith('/api/preview'))).toBe(false);
+  });
+
+  it('works under React StrictMode (development double mount): the shown image is never a revoked URL', async () => {
+    const { backup, maya } = await fixtures();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={[`/read/${backup.id}?profile=${maya.id}&level=1`]}>
+          <App />
+        </MemoryRouter>
+      </StrictMode>,
+    );
+    const img = await pageImg(1);
+    await act(() => new Promise<void>((r) => setTimeout(r, 50)));
+    expect(revoke.mock.calls.map((c) => c[0])).not.toContain(img.getAttribute('src'));
+    await key('ArrowRight');
+    const img2 = await pageImg(2);
+    expect(revoke.mock.calls.map((c) => c[0])).not.toContain(img2.getAttribute('src'));
   });
 
   it('a single tap or click does nothing', async () => {

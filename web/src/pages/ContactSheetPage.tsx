@@ -8,7 +8,7 @@ import { Button } from '../components/ui/Button';
 import { ErrorPanel, Loading, errorMessage } from '../components/ui/LoadState';
 import { useAction } from '../hooks/useAction';
 import { useApi } from '../hooks/useApi';
-import type { ApproveRequest, Decision, Level, SheetPage } from '../types/api';
+import type { ApproveRequest, Decision, Level, Sheet, SheetPage } from '../types/api';
 import { LEVELS, levelName } from '../utils/display';
 
 /** While a second look is pending, refetch the sheet this often so it lands on screen. */
@@ -46,6 +46,9 @@ export function ContactSheetPage() {
   );
 
   const action = useAction();
+  // After any decision the sheet reloads. Until the fresh sheet arrives, the cards
+  // still hold the versions that were just sent (or refused), so decisions wait.
+  const [staleSheet, setStaleSheet] = useState<Sheet | null>(null);
   const [asking, setAsking] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [lookAgain, setLookAgain] = useState<LookAgain | null>(null);
@@ -57,6 +60,7 @@ export function ContactSheetPage() {
     setNotice(null);
     setLookAgain(null);
     setChangedIds(new Set());
+    setStaleSheet(null);
   }, [selKey]);
 
   // Second look runs in the background after Confirm; keep the sheet fresh until it lands.
@@ -68,6 +72,8 @@ export function ContactSheetPage() {
     return () => clearTimeout(t);
   }, [pending, sheet.data, sheet.status, reload]);
 
+  const waitingForFresh = staleSheet !== null && sheet.data === staleSheet && sheet.status !== 'error';
+  const deciding = action.pending !== null || waitingForFresh;
   const profile = profiles.data?.find((p) => p.id === profileId);
   const pages = useMemo(() => sheet.data?.pages ?? [], [sheet.data]);
   const aspectOf = (pageId: string) => {
@@ -125,6 +131,7 @@ export function ContactSheetPage() {
         recorded: outcome.conflict.recorded.length,
       });
     }
+    setStaleSheet(sheet.data ?? null);
     reload();
   }
 
@@ -212,7 +219,7 @@ export function ContactSheetPage() {
               </p>
               <Button
                 variant="primary"
-                disabled={toApprove.length === 0 || action.pending !== null}
+                disabled={toApprove.length === 0 || deciding}
                 onClick={() => {
                   setNotice(null);
                   setAsking(true);
@@ -308,7 +315,7 @@ export function ContactSheetPage() {
                   level={level}
                   aspect={aspectOf(p.page_id)}
                   changed={changedIds.has(p.page_id)}
-                  busy={action.pending !== null}
+                  busy={deciding}
                   onDecide={(page, decision) =>
                     void send([page], decision, `Page ${page.number} ${decision === 'approve' ? 'approved' : 'rejected'} for ${who}.`)
                   }
