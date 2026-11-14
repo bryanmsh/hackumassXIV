@@ -61,17 +61,18 @@ def test_empty_page_text_is_sent_as_none(page_image, reply):
     assert "Page text: <<<(none)>>>" in reply.calls[0]["prompt"]
 
 
-def test_trims_to_three_candidates_and_five_synonyms(page_image, reply):
+def test_trims_to_five_candidates_and_five_synonyms(page_image, reply):
     seven = ["a", "b", "c", "d", "e", "f", "g"]
-    reply(answer(candidate("low", 0.2), candidate("top", 0.9, synonyms=seven),
-                 candidate("mid", 0.6), candidate("lowest", 0.1)))
+    boxes = [(0, i * 100, 90, i * 100 + 90) for i in range(7)]  # seven separate objects in a row
+    confidences = [0.2, 0.9, 0.6, 0.1, 0.8, 0.5, 0.7]
+    reply(answer(*[candidate(f"thing{i}", confidences[i], box=boxes[i], synonyms=seven) for i in range(7)]))
     result = choose_subjects(page_image, "")
-    assert [c.label for c in result.candidates] == ["top", "mid", "low"]  # highest confidence first
+    assert [c.confidence for c in result.candidates] == [0.9, 0.8, 0.7, 0.6, 0.5]  # the five most confident
     assert result.candidates[0].synonyms == ["a", "b", "c", "d", "e"]
 
 
 def test_confidence_clamped_to_0_1(page_image, reply):
-    reply(answer(candidate("a", 1.4), candidate("b", -0.2)))
+    reply(answer(candidate("a", 1.4), candidate("b", -0.2, box=(700, 700, 900, 900))))  # two separate objects
     result = choose_subjects(page_image, "")
     assert [c.confidence for c in result.candidates] == [1.0, 0.0]
 
@@ -251,3 +252,88 @@ def test_empty_answer_at_the_output_cap_says_so(page_image, monkeypatch):
     with pytest.raises(GeminiError) as error:
         choose_subjects(page_image, "")
     assert "output limit" in str(error.value)
+
+
+# --- finding every main subject, one clean object each ---
+
+BIRD = (200, 330, 300, 370)       # [ymin, xmin, ymax, xmax] on 0 to 1000
+ANTS = (900, 380, 990, 470)
+CHILDREN = (580, 520, 690, 620)
+
+
+def labels(result):
+    return [c.label for c in result.candidates]
+
+
+def test_answer_may_list_what_is_on_the_page_first(page_image, reply):
+    reply(json.dumps({"things_on_page": ["boy", "girl", "woodpecker"], "page_kind": "single",
+                      "candidates": [candidate()]}))
+    assert choose_subjects(page_image, "").things_on_page == ["boy", "girl", "woodpecker"]
+    assert list(SubjectAnswer.model_fields)[0] == "things_on_page"  # listed before anything is ranked
+
+
+def test_prompt_asks_for_every_main_subject_up_to_five(page_image, reply):
+    reply(answer(candidate()))
+    choose_subjects(page_image, "")
+    prompt = reply.calls[0]["prompt"]
+    assert "up to 5" in prompt
+    assert "every main subject" in prompt
+
+
+@pytest.mark.parametrize("label", ["forest", "dense forest", "the sky", "background", "Grass"])
+def test_the_setting_is_not_a_subject(page_image, reply, label):
+    reply(answer(candidate("woodpecker", 0.6, box=BIRD), candidate(label, 0.9, box=(400, 400, 950, 850))))
+    assert labels(choose_subjects(page_image, "")) == ["woodpecker"]
+
+
+@pytest.mark.parametrize("label", ["grasshopper", "tree", "nest", "burrow"])
+def test_words_that_only_look_like_settings_are_kept(page_image, reply, label):
+    reply(answer(candidate(label, 0.9, box=BIRD)))
+    assert labels(choose_subjects(page_image, "")) == [label]
+
+
+def test_a_box_holding_two_other_candidates_is_a_group_and_is_dropped(page_image, reply):
+    tall = (190, 320, 995, 480)  # runs from the bird down to the ants, as in the demo page failure
+    reply(answer(candidate("bird and lizard", 0.9, box=tall), candidate("bird", 0.5, box=BIRD),
+                 candidate("ants", 0.4, box=ANTS), candidate("children", 0.3, box=CHILDREN)))
+    assert labels(choose_subjects(page_image, "")) == ["bird", "ants", "children"]
+
+
+def test_a_box_holding_one_other_candidate_is_kept(page_image, reply):
+    nest = (150, 300, 400, 500)  # an animal's home is a real subject
+    reply(answer(candidate("nest", 0.6, box=nest), candidate("bird", 0.8, box=BIRD)))
+    assert labels(choose_subjects(page_image, "")) == ["bird", "nest"]
+
+
+def test_overlapping_but_not_containing_boxes_are_kept(page_image, reply):
+    reply(answer(candidate("girl", 0.6, box=(580, 520, 690, 575)), candidate("boy", 0.6, box=(580, 560, 690, 620)),
+                 candidate("woodpecker", 0.5, box=BIRD)))
+    assert sorted(labels(choose_subjects(page_image, ""))) == ["boy", "girl", "woodpecker"]
+
+
+def test_near_duplicate_boxes_keep_the_more_confident(page_image, reply):
+    reply(answer(candidate("bird", 0.5, box=BIRD), candidate("woodpecker", 0.7, box=(202, 331, 299, 369)),
+                 candidate("ants", 0.4, box=ANTS)))
+    assert labels(choose_subjects(page_image, "")) == ["woodpecker", "ants"]
+
+
+def test_guards_run_before_the_trim_so_a_dropped_one_frees_a_place(page_image, reply):
+    boxes = [(0, i * 150, 90, i * 150 + 90) for i in range(5)]
+    reply(answer(candidate("forest", 0.99, box=(0, 0, 1000, 1000)),
+                 *[candidate(f"thing{i}", 0.5 - i * 0.05, box=boxes[i]) for i in range(5)]))
+    assert labels(choose_subjects(page_image, "")) == [f"thing{i}" for i in range(5)]
+
+
+def test_zero_area_boxes_do_not_break_the_guards(page_image, reply):
+    reply(answer(candidate("speck", 0.9, box=(500, 500, 500, 500)), candidate("bird", 0.5, box=BIRD)))
+    assert labels(choose_subjects(page_image, "")) == ["speck", "bird"]
+
+
+def test_every_call_uses_the_same_fixed_seed(page_image, monkeypatch):
+    """Measured live: with the seed, four runs of one page gave the identical answer."""
+    calls = fake_client(monkeypatch, lambda: SimpleNamespace(text=answer(candidate())))
+    choose_subjects(page_image, "")
+    monkeypatch.setattr(gemini, "_client", lambda key: SimpleNamespace(models=SimpleNamespace(
+        generate_content=lambda **kwargs: calls.append(kwargs) or SimpleNamespace(text=json.dumps({"label": "ball"})))))
+    label_crop(b"png-bytes")
+    assert [call["config"].seed for call in calls] == [gemini.SEED, gemini.SEED]
