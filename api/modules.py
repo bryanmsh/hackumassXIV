@@ -22,7 +22,7 @@ def load(pipeline: str, render: str):
         pipeline_module = SimpleNamespace(
             rasterize=real_pipeline.rasterize, process_page=real_pipeline.process_page,
             segment_at_point=real_pipeline.segment_at_point,
-            mask_from_outline=real_pipeline.mask_from_outline)
+            mask_from_outline=real_pipeline.mask_from_outline, refine_mask=real_pipeline.refine_mask)
     else:
         pipeline_module = stubs
 

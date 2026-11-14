@@ -1,7 +1,7 @@
 import pytest
 from bson import ObjectId
 from fastapi.testclient import TestClient
-from PIL import Image
+from PIL import Image, ImageChops
 
 from api import db, modules, stubs
 from api.main import app
@@ -59,7 +59,7 @@ def test_changing_the_subject_clears_the_confirmation():
 @pytest.mark.parametrize("body", [
     {}, {"candidate": 0, "point": [0.5, 0.5]}, {"candidate": 9}, {"candidate": -1},
     {"outline": OUTLINE}, {"label": " ", "outline": OUTLINE},
-    {"label": "frog", "outline": OUTLINE[:2]}, {"refine_point": [0.5, 0.5]}])
+    {"label": "frog", "outline": OUTLINE[:2]}, {"refine_point": [0.5]}])
 def test_bad_subject_bodies_are_refused(body):
     assert subject(upload()["pages"][0], body).status_code == 422
 
@@ -264,3 +264,36 @@ def test_together_refuses_bad_requests():
     for bad in ({"candidates": [0]}, {"candidates": [0, 0]}, {"candidates": [0, 1], "candidate": 0}):
         assert client.post(f"/api/pages/{page['id']}/subject", json=bad).status_code == 422
     assert client.post(f"/api/pages/{page['id']}/subject", json={"candidates": [0, 9]}).status_code == 422
+
+
+def test_refine_adds_to_the_current_subject_and_keeps_its_name():
+    page = upload()["pages"][0]
+    client.post(f"/api/pages/{page['id']}/confirm")
+    before = page["candidates"][page["selected"]]
+    r = client.post(f"/api/pages/{page['id']}/subject", json={"refine_point": [0.05, 0.05]})
+    assert r.status_code == 200
+    body = r.json()
+    made = body["candidates"][body["selected"]]
+    assert (made["label"], made["synonyms"], made["source"]) == (before["label"], before["synonyms"], "click")
+    assert body["subject_hash"] == made["mask_hash"] != before["mask_hash"] and body["confirmed"] is False
+    assert len(body["candidates"]) == len(page["candidates"]) + 1  # the old cut-out is kept
+    stored = db.pages.find_one({"_id": ObjectId(page["id"])})
+    old, new = (Image.open(stored["candidates"][i]["mask_path"]).convert("L") for i in (page["selected"], body["selected"]))
+    assert new.getpixel((int(0.05 * new.width), int(0.05 * new.height))) == 255  # the clicked part is in
+    assert new.histogram()[255] > old.histogram()[255]
+    assert ImageChops.subtract(old, new).getbbox() is None  # nothing removed
+
+
+def test_refine_needs_a_subject_and_a_point_on_the_page():
+    pages = upload()["pages"]
+    assert client.post(f"/api/pages/{pages[1]['id']}/subject", json={"refine_point": [0.5, 0.5]}).status_code == 409
+    for bad in ({"refine_point": [1.5, 0.5]}, {"refine_point": [0.5, 0.5], "candidate": 0}):
+        assert client.post(f"/api/pages/{pages[0]['id']}/subject", json=bad).status_code == 422
+
+
+def test_a_failed_refine_leaves_the_page_untouched(monkeypatch):
+    page = upload()["pages"][0]
+    monkeypatch.setattr(modules.pipeline, "refine_mask", lambda *a: 1 / 0)
+    r = client.post(f"/api/pages/{page['id']}/subject", json={"refine_point": [0.5, 0.5]})
+    assert r.status_code == 502
+    assert client.get(f"/api/books/{page['book_id']}").json()["pages"][0] == page

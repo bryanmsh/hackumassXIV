@@ -19,8 +19,8 @@ CUTOUT_FAILED = "The cut-out could not be made. Try again or draw an outline."
 
 
 class SubjectBody(BaseModel):
-    """One of four shapes: a candidate, several candidates shown together, a click, or a label
-    with an outline."""
+    """One of five shapes: a candidate, several candidates shown together, a click, a label
+    with an outline, or a click that adds a missing part to the current subject."""
     model_config = {"extra": "forbid"}
 
     candidate: int | None = None
@@ -28,6 +28,7 @@ class SubjectBody(BaseModel):
     point: tuple[float, float] | None = None
     label: str | None = None
     outline: list[tuple[float, float]] | None = None
+    refine_point: tuple[float, float] | None = None
 
     @model_validator(mode="after")
     def exactly_one_shape(self):
@@ -36,8 +37,10 @@ class SubjectBody(BaseModel):
         by_several = self.candidates is not None
         by_outline = self.label is not None and self.outline is not None
         partial_outline = (self.label is not None) != (self.outline is not None)
-        if partial_outline or [by_candidate, by_several, by_point, by_outline].count(True) != 1:
-            raise ValueError("send a candidate, several candidates, a point, or a label with an outline")
+        by_refine = self.refine_point is not None
+        if partial_outline or [by_candidate, by_several, by_point, by_outline, by_refine].count(True) != 1:
+            raise ValueError("send a candidate, several candidates, a point, a label with an outline, "
+                             "or a refine point")
         if by_several and (len(self.candidates) < 2 or len(set(self.candidates)) != len(self.candidates)):
             raise ValueError("showing subjects together needs at least 2 different candidates")
         if by_outline and (not self.label.strip() or len(self.outline) < 3):
@@ -148,6 +151,15 @@ def set_subject(page_id: str, body: SubjectBody):
         if not all(0 <= i < len(candidates) for i in body.candidates):
             raise HTTPException(422, "That candidate does not exist.")
         found = _together(page, body.candidates)
+    elif body.refine_point is not None:
+        current = images.selected(page)
+        if current is None:
+            raise HTTPException(409, "This page has no subject to add to. Pick one first.")
+        x, y = _pixels(body.refine_point, page)
+        found = _cutout(page, lambda out_dir: modules.pipeline.refine_mask(
+            image_path, current["mask_path"], x, y, out_dir))
+        # The pipeline returns no label for a refined cut-out: it is still the same subject.
+        found = {**found, "label": current["label"], "synonyms": current["synonyms"]}
     elif body.point is not None:
         x, y = _pixels(body.point, page)
         found = _cutout(page, lambda out_dir: modules.pipeline.segment_at_point(image_path, x, y, out_dir))
