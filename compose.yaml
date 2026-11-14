@@ -1,0 +1,35 @@
+# One server, two containers. Deploy: git pull && docker compose up -d --build
+# Settings come from .env beside this file (see .env.example). It is never committed.
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data # pages, masks and pre-processed books survive a restart
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: .
+      dockerfile: infra/caddy.Dockerfile
+    environment:
+      # Only these three reach Caddy; the Gemini key stays in the api container.
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      SITE_USER: ${SITE_USER:?set SITE_USER in .env}
+      SITE_PASSWORD: ${SITE_PASSWORD:?set SITE_PASSWORD in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # HTTPS certificates
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,14 @@
+# Keeps secrets and local clutter out of both images. .env must never be copied in.
+.env
+*.env
+.git
+.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/dist
+data
+.superpowers
+.DS_Store
+CLAUDE_NOTES.md
+Hackathon Toolkit
