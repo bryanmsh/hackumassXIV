@@ -25,4 +25,4 @@ def upload(pages: int = 3) -> dict:
     """Post a PDF and return the book as GET /api/books/{id} shows it."""
     posted = client.post("/api/books", files={"file": ("book.pdf", make_pdf(pages), "application/pdf")})
     assert posted.status_code == 200, posted.text
-    return client.get(f"/api/books/{posted.json()['id']}").json()
+    return client.get(f"/api/books/{posted.json()['book_id']}").json()

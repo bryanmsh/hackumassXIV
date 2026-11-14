@@ -3,6 +3,7 @@ from bson import ObjectId
 from fastapi import HTTPException
 
 from api import db
+from api.tests.helpers import make_pdf
 
 
 def test_tests_use_a_throwaway_database():
@@ -20,3 +21,7 @@ def test_oid_accepts_a_real_id_and_refuses_a_bad_one():
 def test_each_test_starts_empty():
     assert db.books.count_documents({}) == 0
     db.books.insert_one({"title": "x"})
+
+
+def test_make_pdf_builds_a_pdf():
+    assert make_pdf(1).startswith(b"%PDF")
