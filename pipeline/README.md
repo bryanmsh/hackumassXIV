@@ -25,6 +25,18 @@ Run everything from the repo root so `contracts` and `pipeline` import.
 | `gemini.py` | `choose_subjects(view_path, text)` and `label_crop(png_bytes)`: the one door to Gemini |
 | `process.py` | `process_page(asset, out_dir, force=False)`: Gemini, a mask per candidate, the state rules. Never raises |
 | `click.py` | `segment_at_point(image_path, x, y, out_dir)` and `refine_mask(image_path, mask_path, x, y, out_dir)` |
+| `run_book.py` | Command line: process a whole PDF with no API and no database |
+
+## Run a whole book
+
+```bash
+.venv/bin/python -m pipeline.run_book path/to/book.pdf data/books/my-book
+```
+
+Run it from the repo root: it reads `.env` there for `GEMINI_API_KEY`, `GEMINI_MODEL`,
+`SEGMENTER` and `PAGE_CONCURRENCY` (default 4 pages at once). **This calls the real Gemini
+API, one call per page.** It prints one line per page (state, reason, seconds) and writes
+`summary.json` beside the page and mask folders. A page that fails does not stop the others.
 
 ## Files written (Contract 3)
 
