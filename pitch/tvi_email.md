@@ -1,25 +1,32 @@
-**To:** (TVI contact)
-**Subject:** Quick review request: four ways to show a picture-book page to a child with CVI
+**To:** (one named teacher of students with visual impairments)
+**Subject:** Ten-minute review: four ways to show a picture-book page to a child with CVI
+
+**Attach:** the five files in `pitch/tvi_mockups/` (`hornbill_0_original` plus the four looks)
+
+---
 
 Hi (name),
 
-We are a student team at HackUMass building Mirai, a tool that helps a teacher of students with visual impairments adapt picture-book pages for children with CVI. It uses only the book's own artwork: it finds the subject of each page, cuts it out, and shows it in one of four ways that the teacher chooses for each child. Nothing is drawn or invented by AI, and a teacher approves every page before a child sees it.
+We are a student team at HackUMass building Mirai, a tool that helps a teacher adapt picture-book pages for children with CVI. It uses only the book's own artwork: it finds the subject of each page, cuts it out, and shows it in one of four looks that the teacher chooses for each child. Nothing is drawn or invented by AI, and the teacher approves every page before a child sees it.
 
-We have not had a TVI review it yet, and we would value ten minutes of your judgment. Attached are the same two pages at each of the four presentation modes:
+No teacher has reviewed it yet, and ten minutes of your judgment would help us a lot. Attached is one page from *Animal Homes* (StoryWeaver, CC BY 4.0), first as printed, then in each look:
 
-1. **Tinted** — the subject alone, tinted in the child's preferred color, on a plain background (`*_1_tinted`).
-2. **Cut-out** — the subject alone in its real colors on a plain background, optionally with large text below (`*_2_cutout`).
-3. **Faded page** — the whole page faded, with the subject kept vivid (`*_3_faded`).
-4. **Outlined** — the original page with the subject outlined in the child's color (`*_4_outlined`).
+1. **Tinted:** the hornbill alone, in the child's color (red), on black.
+2. **Cut-out:** the hornbill alone, in its real colors, on black, placed left, with the page text in large print below.
+3. **Faded page:** the whole page faded, with the hornbill kept in full color.
+4. **Outlined:** the page as printed, with a red line around the hornbill.
 
-Questions, if you have time:
+Three questions, if you have time:
 
-- Are these four modes useful, and is anything important missing?
-- We present them as modes, not a ladder of CVI phases. Is that the right call, or would you map them to phases?
-- Do the settings make sense: 1 to 3 preferred colors, background black, dark gray, navy or white, subject size 40/60/80% of the picture, and position center, left, right, upper or lower?
-- We warn when color contrast is below 3 to 1 (text at 4.5 to 1), borrowed from web accessibility guidelines. Is there a better rule of thumb for CVI?
+1. Would any of these four looks be useful for a child you work with? Is something important missing?
+2. We let the teacher pick a look for each child, and we deliberately do not tie the looks to CVI phases. Is that the right call?
+3. Our app warns when the subject's edge has less than 3 to 1 contrast with the background, a rule borrowed from web accessibility. It warns on this hornbill, whose black body almost disappears on black. Is that a sensible rule, and what would you change on a page like this?
 
-Even a one-line reply helps. If we don't hear back before judging, we will say plainly that the tool has not yet been reviewed by a TVI.
+Even a one-line reply helps. If we don't hear back before judging on (date), we will say plainly that the tool has not yet been reviewed by a teacher.
 
 Thank you,
 Kevin, for the Mirai team
+
+---
+
+*Image credit: "Animal Homes", written by (author), illustrated by (illustrator), published by Pratham Books on StoryWeaver, CC BY 4.0. Changed by the Mirai team: cut out, tinted, faded or outlined.*

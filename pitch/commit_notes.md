@@ -2,6 +2,19 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Teacher email: three questions, real book art (B4)
+
+**What changed**
+- `pitch/tvi_email.md`: cut to three questions (looks useful or missing; looks not tied to CVI phases; the 3 to 1 edge contrast rule). Says "teacher" and "not yet reviewed by a teacher". Adds the CC BY credit and a note of what we changed.
+- `pitch/tvi_mockups/`: the made-up bird and rabbit images are replaced by *Animal Homes* page 2 (the hornbill), as printed plus all four looks. Tinted, Faded page and Outlined use Maya's settings (red on black); Cut-out uses Leo's (left, text below). Rendered with `render()` on Bryan's GrabCut mask.
+
+**Why**
+- A teacher judges real book art better than shapes we drew.
+- The checks warn on contrast for the hornbill at Tinted, Cut-out and Faded page (black body on black). That became question 3, so the email asks about a real case, not a hypothetical one.
+
+**Still open**
+- Fill in the recipient, the judging date, and the author and illustrator from the StoryWeaver page, then send.
+
 ## Checkpoint 1 step list and word-for-word demo script (hours 7 and 10)
 
 **What changed**
