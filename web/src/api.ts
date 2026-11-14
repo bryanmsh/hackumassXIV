@@ -245,8 +245,10 @@ export function createApiClient(base: string = API_BASE) {
     omitPage: (pageId: string, omitted: boolean, signal?: AbortSignal) =>
       json<Page>('POST', `/pages/${seg(pageId)}/omit`, { body: { json: { omitted } }, signal }),
 
+    // palette=1 asks for every suggestion tinted in its own colour (additive query;
+    // a server without it ignores the parameter and sends the one-colour overlay).
     getOverlay: (pageId: string, signal?: AbortSignal) =>
-      blob('GET', `/pages/${seg(pageId)}/overlay`, { signal }),
+      blob('GET', `/pages/${seg(pageId)}/overlay`, { query: { palette: 1 }, signal }),
 
     // ----- Profiles and display -----
     listProfiles: (signal?: AbortSignal) => json<Profile[]>('GET', '/profiles', { signal }),

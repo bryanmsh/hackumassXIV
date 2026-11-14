@@ -15,7 +15,6 @@ import { formatConfidence } from '../../utils/display';
 import { subjectNumber, subjectTone } from '../../utils/subjectColors';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
-import { SubjectMarker } from './SubjectMarker';
 
 export type EditorMode = 'suggestions' | 'point' | 'refine' | 'outline';
 
@@ -171,18 +170,6 @@ export function PageSurface({
     // Bigger boxes first, so smaller ones sit on top and stay clickable.
     .sort((a, b) => boxArea(b.c.box) - boxArea(a.c.box));
 
-  // Each suggestion's number sits on its box's top-left corner. Boxes that share a corner
-  // (the same object found twice, a box inside another) have their markers step to the right.
-  const placed: { x: number; y: number }[] = [];
-  const markerSpots = page.candidates.map((c) => {
-    if (!isValidBox(c.box)) return null;
-    let x = c.box[0];
-    const y = c.box[1];
-    while (placed.some((p) => Math.abs(p.x - x) < 0.05 && Math.abs(p.y - y) < 0.07)) x += 0.055;
-    placed.push({ x, y });
-    return { x, y };
-  });
-
   const label =
     mode === 'point'
       ? 'Page. Click the object to choose it.'
@@ -284,24 +271,6 @@ export function PageSurface({
 
             {(mode === 'point' || mode === 'refine') && point && <Marker point={point} testId="tap-marker" />}
             {sent?.point && <Marker point={sent.point} testId="sent-marker" dashed />}
-
-            {/* Numbers only on the page (names on small or nested boxes overlap); the list beside the page has the names. */}
-            {mode === 'suggestions' && (
-              <div className="pointer-events-none absolute inset-0" aria-hidden>
-                {markerSpots.map(
-                  (s, i) =>
-                    s && (
-                      <span
-                        key={`${i}:${page.candidates[i]!.mask_hash}`}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 ${highlight !== null && highlight !== i ? 'opacity-40' : ''}`}
-                        style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }}
-                      >
-                        <SubjectMarker index={i} className={page.selected === i ? 'ring-2 ring-white' : ''} />
-                      </span>
-                    ),
-                )}
-              </div>
-            )}
           </div>
         )}
         {busyLabel && (
