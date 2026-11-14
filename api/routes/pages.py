@@ -1,12 +1,16 @@
 """Page and subject routes."""
+import io
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 from bson import ObjectId
 from fastapi import APIRouter, BackgroundTasks, HTTPException
+from PIL import Image, ImageChops
 from pydantic import BaseModel, model_validator
 
 from api import coords, db, images, jobs, modules, views
+from contracts.hashing import hash_bytes
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -15,10 +19,12 @@ CUTOUT_FAILED = "The cut-out could not be made. Try again or draw an outline."
 
 
 class SubjectBody(BaseModel):
-    """One of three shapes: a candidate, a click, or a label with an outline."""
+    """One of four shapes: a candidate, several candidates shown together, a click, or a label
+    with an outline."""
     model_config = {"extra": "forbid"}
 
     candidate: int | None = None
+    candidates: list[int] | None = None
     point: tuple[float, float] | None = None
     label: str | None = None
     outline: list[tuple[float, float]] | None = None
@@ -27,10 +33,13 @@ class SubjectBody(BaseModel):
     def exactly_one_shape(self):
         by_candidate = self.candidate is not None
         by_point = self.point is not None
+        by_several = self.candidates is not None
         by_outline = self.label is not None and self.outline is not None
         partial_outline = (self.label is not None) != (self.outline is not None)
-        if partial_outline or [by_candidate, by_point, by_outline].count(True) != 1:
-            raise ValueError("send a candidate, a point, or a label with an outline")
+        if partial_outline or [by_candidate, by_several, by_point, by_outline].count(True) != 1:
+            raise ValueError("send a candidate, several candidates, a point, or a label with an outline")
+        if by_several and (len(self.candidates) < 2 or len(set(self.candidates)) != len(self.candidates)):
+            raise ValueError("showing subjects together needs at least 2 different candidates")
         if by_outline and (not self.label.strip() or len(self.outline) < 3):
             raise ValueError("an outline needs a label and at least 3 points")
         return self
@@ -80,6 +89,29 @@ def _cutout(page: dict, make) -> dict:
         raise HTTPException(502, CUTOUT_FAILED)
 
 
+def _together(page: dict, indexes: list[int]) -> dict:
+    """One candidate that shows several together: their masks joined into one new mask file.
+    Still only copied artwork; the parts keep their places on the page."""
+    parts = [page["candidates"][i] for i in indexes]
+    mask = Image.open(parts[0]["mask_path"]).convert("L")
+    for part in parts[1:]:
+        mask = ImageChops.lighter(mask, Image.open(part["mask_path"]).convert("L"))
+    buffer = io.BytesIO()
+    mask.save(buffer, "PNG")
+    mask_hash = hash_bytes(buffer.getvalue())
+    path = jobs.book_dir(page["book_id"]) / "masks" / f"{Path(page['image_path']).stem}_{mask_hash}.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_bytes(buffer.getvalue())
+    labels = list(dict.fromkeys(part["label"] for part in parts))
+    boxes = [part["box"] for part in parts]
+    return {"label": " and ".join(labels),
+            "synonyms": list(dict.fromkeys([*labels, *(s for part in parts for s in part["synonyms"])])),
+            "box": (min(b[0] for b in boxes), min(b[1] for b in boxes),
+                    max(b[2] for b in boxes), max(b[3] for b in boxes)),
+            "confidence": 1.0, "mask_path": str(path), "mask_hash": mask_hash, "source": "manual"}
+
+
 def _pixels(point, page: dict) -> tuple[float, float]:
     try:
         return coords.to_pixels(point, page["width"], page["height"])
@@ -112,7 +144,11 @@ def set_subject(page_id: str, body: SubjectBody):
         return views.page_json(select(page, body.candidate))
 
     image_path = page["image_path"]
-    if body.point is not None:
+    if body.candidates is not None:
+        if not all(0 <= i < len(candidates) for i in body.candidates):
+            raise HTTPException(422, "That candidate does not exist.")
+        found = _together(page, body.candidates)
+    elif body.point is not None:
         x, y = _pixels(body.point, page)
         found = _cutout(page, lambda out_dir: modules.pipeline.segment_at_point(image_path, x, y, out_dir))
     else:

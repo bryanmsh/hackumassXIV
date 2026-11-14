@@ -234,3 +234,33 @@ def test_an_outline_never_renames_an_automatic_candidate(monkeypatch):
         update={"mask_hash": auto["mask_hash"]}))
     r = subject(page, {"label": "something else", "outline": OUTLINE}).json()
     assert r["candidates"][0]["label"] == auto["label"] and r["candidates"][0]["source"] == "auto"
+
+
+def test_several_candidates_together_become_one_subject():
+    page = upload()["pages"][0]
+    first, second = page["candidates"][:2]
+    r = client.post(f"/api/pages/{page['id']}/subject", json={"candidates": [0, 1]})
+    assert r.status_code == 200
+    body = r.json()
+    made = body["candidates"][body["selected"]]
+    assert (made["label"], made["source"], body["confirmed"]) == (f"{first['label']} and {second['label']}", "manual", False)
+    assert body["subject_hash"] == made["mask_hash"] and made["mask_hash"] not in (first["mask_hash"], second["mask_hash"])
+    assert made["box"] == [min(first["box"][0], second["box"][0]), min(first["box"][1], second["box"][1]),
+                           max(first["box"][2], second["box"][2]), max(first["box"][3], second["box"][3])]
+    stored = db.pages.find_one({"_id": ObjectId(page["id"])})
+    masks = [Image.open(c["mask_path"]).convert("L") for c in stored["candidates"]]
+    joined = masks[body["selected"]]
+    for x, y in [(c["box"][0] + c["box"][2], c["box"][1] + c["box"][3]) for c in stored["candidates"][:2]]:
+        assert joined.getpixel((int(x / 2), int(y / 2))) == 255  # the centre of each part is kept
+    assert joined.histogram()[255] <= masks[0].histogram()[255] + masks[1].histogram()[255]
+    # sending the same set again adds nothing, and the page still renders
+    again = client.post(f"/api/pages/{page['id']}/subject", json={"candidates": [1, 0]}).json()
+    assert len(again["candidates"]) == len(body["candidates"]) and again["selected"] == body["selected"]
+    assert client.get(f"/api/pages/{page['id']}/overlay").status_code == 200
+
+
+def test_together_refuses_bad_requests():
+    page = upload()["pages"][0]
+    for bad in ({"candidates": [0]}, {"candidates": [0, 0]}, {"candidates": [0, 1], "candidate": 0}):
+        assert client.post(f"/api/pages/{page['id']}/subject", json=bad).status_code == 422
+    assert client.post(f"/api/pages/{page['id']}/subject", json={"candidates": [0, 9]}).status_code == 422

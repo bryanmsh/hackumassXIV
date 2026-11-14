@@ -76,6 +76,20 @@ describe('Subject editor', () => {
     expect(screen.getByRole('button', { name: /Current subject beehive/ })).toBeInTheDocument();
   });
 
+  it('ticking two suggestions and Show together sends {candidates: [...]} and selects the joined subject', async () => {
+    const { user } = await openPage(3);
+    const bodies = captureSubjectBodies();
+    expect(screen.queryByRole('button', { name: /Show these/ })).not.toBeInTheDocument();
+    const boxes = screen.getAllByRole('checkbox', { name: /^Include / });
+    await user.click(boxes[1]!);
+    expect(screen.getByText(/Tick one more/)).toBeInTheDocument();
+    await user.click(boxes[0]!);
+    await user.click(screen.getByRole('button', { name: 'Show these 2 together' }));
+    expect(await screen.findByText(/together\. Check the highlight/)).toBeInTheDocument();
+    expect(bodies).toEqual([{ candidates: [0, 1] }]);
+    expect(screen.getAllByText(/ and beehive|beehive and /).length).toBeGreaterThan(0);
+  });
+
   it('tap the object: the 0-1 spot inside the drawn image is sent only after Cut out', async () => {
     const { user, frame } = await openPage(3);
     const bodies = captureSubjectBodies();

@@ -106,6 +106,7 @@ function Editor({
   const [sent, setSent] = useState<Sent>(null);
   const [showSent, setShowSent] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  const [together, setTogether] = useState<number[]>([]);
   const action = useAction();
 
   const processing = page.state === 'processing';
@@ -126,6 +127,20 @@ function Editor({
   function pickCandidate(i: number) {
     const name = page.candidates[i]?.label || 'that subject';
     void submit('candidate', { candidate: i }, () => setSent(null), `Subject changed to “${name}”. Check the highlight, then confirm.`);
+  }
+
+  function showTogether() {
+    const picked = [...together].sort((a, b) => a - b);
+    const names = picked.map((i) => page.candidates[i]?.label || 'object').join(' and ');
+    void submit(
+      'together',
+      { candidates: picked },
+      () => {
+        setSent(null);
+        setTogether([]);
+      },
+      `Now showing ${names} together. Check the highlight covers each one, then confirm.`,
+    );
   }
 
   function sendPoint() {
@@ -270,10 +285,20 @@ function Editor({
                 <p className="text-slate-700">No suggestions for this page. Tap the object, or draw an outline around it.</p>
               ) : (
                 <>
-                  <p className="text-slate-700">Tap a box on the page, or a name here.</p>
+                  <p className="text-slate-700">
+                    Tap a box on the page, or a name here. When the story needs more than one, tick each and show them together.
+                  </p>
                   <ul className="space-y-2">
                     {page.candidates.map((c, i) => (
-                      <li key={`${i}:${c.mask_hash}`}>
+                      <li key={`${i}:${c.mask_hash}`} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="size-6 shrink-0"
+                          aria-label={`Include ${c.label || 'this object'}`}
+                          disabled={busy || processing}
+                          checked={together.includes(i)}
+                          onChange={(e) => setTogether((t) => (e.target.checked ? [...t, i] : t.filter((x) => x !== i)))}
+                        />
                         <button
                           type="button"
                           aria-pressed={page.selected === i}
@@ -294,6 +319,12 @@ function Editor({
                       </li>
                     ))}
                   </ul>
+                  {together.length >= 2 && (
+                    <Button variant="primary" disabled={busy || processing} onClick={showTogether}>
+                      {action.pending === 'together' ? 'Joining…' : `Show these ${together.length} together`}
+                    </Button>
+                  )}
+                  {together.length === 1 && <p className="text-sm text-slate-600">Tick one more to show them together.</p>}
                 </>
               )}
             </div>
