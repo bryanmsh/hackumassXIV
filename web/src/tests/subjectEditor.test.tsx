@@ -90,26 +90,72 @@ describe('Subject editor', () => {
     expect(screen.getAllByText(/ and beehive|beehive and /).length).toBeGreaterThan(0);
   });
 
-  it('tap the object: the 0-1 spot inside the drawn image is sent only after Cut out', async () => {
+  it('tick boxes have a 44 px target and clear when the subject changes; joined subjects say "made by teacher"', async () => {
+    const { user } = await openPage(3);
+    const boxes = screen.getAllByRole('checkbox', { name: /^Include / });
+    expect(boxes[0]!.closest('label')).toHaveClass('size-11');
+    await user.click(boxes[0]!);
+    await user.click(boxes[1]!);
+    expect(screen.getByRole('button', { name: 'Show these 2 together' })).toBeInTheDocument();
+    // Picking a single suggestion instead changes the subject and drops the ticks.
+    await user.click(screen.getByRole('button', { name: /^Pick nest/ }));
+    await screen.findByText(/Subject changed to “nest”/);
+    expect(screen.getAllByRole('checkbox', { name: /^Include / }).every((b) => !(b as HTMLInputElement).checked)).toBe(true);
+    expect(screen.queryByRole('button', { name: /Show these/ })).not.toBeInTheDocument();
+    // Joining two shows "made by teacher", never "outlined by teacher".
+    const again = screen.getAllByRole('checkbox', { name: /^Include / });
+    await user.click(again[0]!);
+    await user.click(again[1]!);
+    await user.click(screen.getByRole('button', { name: 'Show these 2 together' }));
+    await screen.findByText(/together\. Check the highlight/);
+    expect(screen.getAllByText(/made by teacher/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/outlined by teacher/)).not.toBeInTheDocument();
+  });
+
+  it('add a missing part: sends {refine_point} for the current subject, which keeps its name', async () => {
+    const { user, frame } = await openPage(1); // page 1 has a selected subject (weaver bird)
+    const bodies = captureSubjectBodies();
+    await user.click(screen.getByRole('button', { name: 'Add a missing part' }));
+    expect(screen.getByText(/that the cut-out missed/)).toHaveTextContent('weaver bird');
+    expect(screen.getByRole('button', { name: 'Add this part' })).toBeDisabled();
+    fireEvent.click(frame, at([0.7, 0.3]));
+    await user.click(screen.getByRole('button', { name: 'Add this part' }));
+    expect(await screen.findByText(/Added the part you clicked/)).toBeInTheDocument();
+    expect(bodies).toEqual([{ refine_point: [0.7, 0.3] }]);
+    expect(screen.getByText(/Current subject/).closest('section')).toHaveTextContent('weaver bird');
+    expect(screen.getByTestId('sent-marker')).toBeInTheDocument();
+  });
+
+  it('add a missing part needs a subject first; switching tools clears the spot', async () => {
+    const { user, frame } = await openPage(3); // nothing selected yet
+    await user.click(screen.getByRole('button', { name: 'Add a missing part' }));
+    expect(screen.getByText('Pick a subject first. Then this adds any part the cut-out missed.')).toBeInTheDocument();
+    fireEvent.click(frame, at([0.5, 0.5]));
+    expect(screen.getByRole('button', { name: 'Add this part' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Click the object' }));
+    expect(screen.queryByTestId('tap-marker')).not.toBeInTheDocument();
+  });
+
+  it('click the object: the 0-1 spot inside the drawn image is sent only after Cut out', async () => {
     const { user, frame } = await openPage(3);
     const bodies = captureSubjectBodies();
-    await user.click(screen.getByRole('button', { name: 'Tap the object' }));
+    await user.click(screen.getByRole('button', { name: 'Click the object' }));
     fireEvent.click(frame, at([0.25, 0.4]));
     expect(screen.getByTestId('tap-marker')).toHaveStyle({ left: '25%', top: '40%' });
     expect(bodies).toHaveLength(0);
 
     await user.click(screen.getByRole('button', { name: 'Cut out the object here' }));
-    expect(await screen.findByText(/Cut out where you tapped/)).toBeInTheDocument();
+    expect(await screen.findByText(/Cut out where you clicked/)).toBeInTheDocument();
     expect(bodies).toEqual([{ point: [0.25, 0.4] }]);
-    expect(screen.getByText(/picked by tapping/)).toBeInTheDocument();
+    expect(screen.getByText(/picked by clicking/)).toBeInTheDocument();
     expect(screen.getByTestId('sent-marker')).toBeInTheDocument();
   });
 
-  it('a tap on the letterboxing outside the image is not accepted', async () => {
+  it('a click on the letterboxing outside the image is not accepted', async () => {
     const { user, frame } = await openPage(3);
-    await user.click(screen.getByRole('button', { name: 'Tap the object' }));
+    await user.click(screen.getByRole('button', { name: 'Click the object' }));
     fireEvent.click(frame, { clientX: FRAME.left - 5, clientY: FRAME.top + 100 });
-    expect(screen.getByRole('alert')).toHaveTextContent('Tap on the picture itself.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Click on the picture itself.');
     expect(screen.queryByTestId('tap-marker')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cut out the object here' })).toBeDisabled();
   });
@@ -140,7 +186,7 @@ describe('Subject editor', () => {
       expect(Math.abs(Math.hypot(x - 0.6, y - 0.55) - 0.2)).toBeLessThan(0.01);
     }
     expect(body.outline[0]).not.toEqual(body.outline[body.outline.length - 1]);
-    expect(screen.getByText(/outlined by teacher/)).toBeInTheDocument();
+    expect(screen.getByText(/made by teacher/)).toBeInTheDocument();
     expect(screen.getByTestId('sent-outline')).toBeInTheDocument();
   });
 
@@ -197,7 +243,7 @@ describe('Subject editor', () => {
 
   it('a failed cut-out shows the server error and suggests the outline', async () => {
     const { user, frame } = await openPage(3);
-    await user.click(screen.getByRole('button', { name: 'Tap the object' }));
+    await user.click(screen.getByRole('button', { name: 'Click the object' }));
     fireEvent.click(frame, at([0.5, 0.5]));
     scenarios.networkErrorNext = true;
     await user.click(screen.getByRole('button', { name: 'Cut out the object here' }));

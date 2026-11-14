@@ -12,7 +12,7 @@ const STATE_ORDER: PageState[] = ['processing', 'ready', 'needs_subject', 'no_cl
 /** Square colors for the per-page strip. Text labels are always alongside. */
 const SQUARE_TONE: Record<PageState, string> = {
   processing: 'bg-sky-100 text-sky-900 ring-sky-300',
-  ready: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
+  ready: 'bg-white text-slate-800 ring-slate-400',
   needs_subject: 'bg-amber-100 text-amber-950 ring-amber-300',
   no_clear_subject: 'bg-amber-100 text-amber-950 ring-amber-300',
   failed: 'bg-rose-100 text-rose-900 ring-rose-300',

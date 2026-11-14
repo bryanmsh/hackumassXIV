@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { api } from '../../api';
 import { useAction } from '../../hooks/useAction';
 import type { Page } from '../../types/api';
-import { PAGE_STATE_HINT, formatConfidence } from '../../utils/display';
+import { PAGE_STATE_HINT, formatConfidence, sourceLabel } from '../../utils/display';
 import { secondLookText } from '../../utils/secondLook';
 import { OverlayImage } from '../books/OverlayImage';
 import { Button } from '../ui/Button';
@@ -15,11 +15,6 @@ const FLAG_TEXT: Record<string, string> = {
   low_quality: 'The artwork is low resolution; the cut-out may look rough.',
 };
 
-function sourceText(source: string): string | null {
-  if (source === 'manual') return 'outlined by teacher';
-  if (source === 'click') return 'picked by click';
-  return null;
-}
 
 /**
  * One page in Subject review: the original page with the subject highlighted,
@@ -73,9 +68,9 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
             <>
               Subject: <span className="font-semibold">{selected.label || 'Unlabeled'}</span>
               {selected.source === 'auto' ? (
-                <span className="text-slate-600"> · AI confidence {formatConfidence(selected.confidence)}</span>
+                <span className="text-slate-600"> · the AI’s guess, confidence {formatConfidence(selected.confidence)}</span>
               ) : (
-                <span className="text-slate-600"> · {sourceText(selected.source)}</span>
+                <span className="text-slate-600"> · {sourceLabel(selected.source)}</span>
               )}
             </>
           ) : (
@@ -92,8 +87,8 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
           </p>
         ))}
         {page.second_look && page.confirmed && (
-          <p className="text-sm text-slate-700" title={secondLookText(page.second_look).raw ?? undefined}>
-            Second look: {secondLookText(page.second_look).text}
+          <p className="text-sm text-slate-700">
+            Second look: {secondLookText(page.second_look)}
           </p>
         )}
 
@@ -103,7 +98,7 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
               {page.candidates.length > 1 ? 'Choose the subject' : 'Suggested subject'}
             </legend>
             {page.candidates.length > 1 && (
-              <p className="text-sm text-slate-700">Tap more than one to show them together. Tap again to take one out.</p>
+              <p className="text-sm text-slate-700">Click more than one to show them together. Click again to take one out.</p>
             )}
             <div className="mt-1 flex flex-wrap gap-2">
               {page.candidates.map((c, i) => {
@@ -123,10 +118,10 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
                         : 'bg-white text-slate-900 ring-slate-300 hover:bg-slate-100 disabled:opacity-60'
                     }`}
                   >
-                    {isSel && <span aria-hidden>✓</span>}
+                    {isSel && <span aria-hidden>●</span>}
                     {c.label || 'Unlabeled'}
                     {c.source === 'auto' && <span className={isSel ? 'text-sky-100' : 'text-slate-600'}>{formatConfidence(c.confidence)}</span>}
-                    {c.source !== 'auto' && <span className={isSel ? 'text-sky-100' : 'text-slate-600'}>({sourceText(c.source)})</span>}
+                    {c.source !== 'auto' && <span className={isSel ? 'text-sky-100' : 'text-slate-600'}>({sourceLabel(c.source)})</span>}
                   </button>
                 );
               })}

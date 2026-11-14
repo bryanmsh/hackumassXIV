@@ -5,3 +5,13 @@ numpy
 pillow
 pydantic>=2,<3
 pytest
+
+# PyTorch segmenter (SEGMENTER=sam2 or edgetam), see pipeline/sam.py.
+# CPU-only wheels: the "+cpu" pins force pip to take them from the PyTorch CPU index,
+# which keeps the image about 1.5 GB smaller than PyPI's CUDA build. On the GPU box,
+# drop the "+cpu" suffixes and the index line, and torch picks CUDA automatically.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu
+torchvision==0.29.2+cpu
+transformers==5.22.1
+timm==1.0.31

@@ -102,6 +102,9 @@ export function SubjectReviewPage() {
               {undecided.length > 0 && <> · {undecided.length} still need you (confirm a subject or leave the page out)</>}
               {processed < pages.length && <> · {pages.length - processed} processing</>}
             </p>
+            {confirmable.length === 0 && pages.length > 0 && (
+              <p className="text-sm text-slate-600">Confirm all is off: no page has a subject waiting to be confirmed.</p>
+            )}
             <p className="text-slate-700">
               The AI’s confidence is its own guess, not a check that it is right. Look at each highlighted subject before
               you confirm it. Changing a page’s subject means that page needs approval again.

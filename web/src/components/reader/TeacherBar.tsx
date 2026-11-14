@@ -12,6 +12,9 @@ interface Props {
   canNext: boolean;
   onPrev: () => void;
   onNext: () => void;
+  /** The screen is blanked (B): only the background shows until the teacher continues. */
+  blank: boolean;
+  onToggleBlank: () => void;
   onSwitch: (v: ReaderVersion) => void;
   onClose: () => void;
   fullscreen: { supported: boolean; active: boolean; toggle: () => void };
@@ -19,17 +22,18 @@ interface Props {
   checking: boolean;
   /** The last re-check or switch failed; what is shown is still the last approved version. */
   checkError: string | null;
+  /** The current page could not be shown (e.g. 403). Explained here, never in front of the child. */
+  pageProblem: string | null;
 }
 
 const btn = 'min-h-12 rounded-lg px-4 text-base font-semibold disabled:cursor-not-allowed';
 
 /**
- * Teacher-only controls, hidden until the teacher asks for them (T key or a
- * 1-second press in a corner). Lists only versions the server says are fully
+ * Teacher-only controls, hidden until the teacher asks for them (the T key). Lists only versions the server says are fully
  * approved as choices; the rest are greyed "not approved". Approving happens
  * outside the reader.
  */
-export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNext, onSwitch, onClose, fullscreen, checking, checkError }: Props) {
+export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNext, onSwitch, onClose, fullscreen, checking, checkError, pageProblem, blank, onToggleBlank }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
 
@@ -61,6 +65,9 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
             <button type="button" className={`${btn} bg-slate-100 ring-1 ring-slate-300`} disabled={!canNext} onClick={onNext}>
               Next page →
             </button>
+            <button type="button" aria-pressed={blank} className={`${btn} ring-1 ${blank ? 'bg-slate-900 text-white ring-slate-900' : 'bg-slate-100 ring-slate-300'}`} onClick={onToggleBlank}>
+              {blank ? 'Show the page' : 'Blank the screen'}
+            </button>
             {fullscreen.supported && (
               <button type="button" className={`${btn} bg-slate-100 ring-1 ring-slate-300`} onClick={fullscreen.toggle}>
                 {fullscreen.active ? 'Leave full screen' : 'Full screen'}
@@ -72,6 +79,14 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
           </div>
         </div>
 
+        {pageProblem && (
+          <div role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
+            <p>{pageProblem}</p>
+            <Link to={sheetLink} className="font-semibold underline">
+              Leave the reader and open the contact sheet
+            </Link>
+          </div>
+        )}
         {checkError && (
           <p role="alert" className="rounded-lg bg-amber-50 p-3 text-amber-950 ring-1 ring-amber-300">
             Could not check with the server: {checkError}. The pages shown are still the last version the server approved.
@@ -130,7 +145,7 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
         )}
 
         <p className="text-sm text-slate-600">
-          Keys: → or Space next page, ← previous page, T or Esc to hide this bar. A clicker that sends the arrow or Page keys works
+          Keys: → or Space next page, ← previous page, B blank screen on or off, T or Esc to hide this bar. A clicker that sends the arrow or Page keys works
           too.
         </p>
       </div>

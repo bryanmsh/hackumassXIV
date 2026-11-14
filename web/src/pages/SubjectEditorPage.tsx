@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ApiError, api } from '../api';
 import { PageSurface, type EditorMode } from '../components/subjects/PageSurface';
@@ -11,7 +11,7 @@ import { useApi } from '../hooks/useApi';
 import { useBook } from '../hooks/useBook';
 import type { NormPoint, Page } from '../types/api';
 import { OUTLINE_PROBLEM_TEXT, outlineProblem, roundPoint } from '../utils/coordinates';
-import { PAGE_STATE_HINT, formatConfidence } from '../utils/display';
+import { PAGE_STATE_HINT, formatConfidence, sourceLabel } from '../utils/display';
 
 /**
  * Contract 1 has no GET /pages/{id}, so the editor finds the page through its
@@ -72,17 +72,13 @@ function EditorForBook({ bookId, pageId }: { bookId: string; pageId: string }) {
 
 const MODES: { mode: EditorMode; label: string }[] = [
   { mode: 'suggestions', label: 'Suggestions' },
-  { mode: 'point', label: 'Tap the object' },
+  { mode: 'point', label: 'Click the object' },
+  { mode: 'refine', label: 'Add a missing part' },
   { mode: 'outline', label: 'Draw an outline' },
 ];
 
 type Sent = { point?: NormPoint; outline?: NormPoint[] } | null;
 
-function sourceText(source: string): string {
-  if (source === 'manual') return 'outlined by teacher';
-  if (source === 'click') return 'picked by tapping';
-  return 'suggested by the AI';
-}
 
 function Editor({
   page,
@@ -108,6 +104,9 @@ function Editor({
   const [notice, setNotice] = useState<string | null>(null);
   const [together, setTogether] = useState<number[]>([]);
   const action = useAction();
+  // Ticks belong to the subject they were made against: a new subject (picked, tapped,
+  // outlined, joined, or changed elsewhere) or another tool clears them.
+  useEffect(() => setTogether([]), [page.subject_hash, mode]);
 
   const processing = page.state === 'processing';
   const busy = action.pending !== null;
@@ -143,6 +142,21 @@ function Editor({
     );
   }
 
+  function sendRefine() {
+    if (!point) return;
+    const p = roundPoint(point);
+    void submit(
+      'refine',
+      { refine_point: p },
+      () => {
+        setSent({ point: p });
+        setShowSent(true);
+        setPoint(null);
+      },
+      'Added the part you clicked to the cut-out. Check the highlight now covers it, then confirm.',
+    );
+  }
+
   function sendPoint() {
     if (!point) return;
     const p = roundPoint(point);
@@ -154,7 +168,7 @@ function Editor({
         setShowSent(true);
         setPoint(null);
       },
-      'Cut out where you tapped. Check that the highlight covers the object, then confirm. If it missed, draw an outline instead.',
+      'Cut out where you clicked. Check that the highlight covers the object, then confirm. If it missed, draw an outline instead.',
     );
   }
 
@@ -203,7 +217,7 @@ function Editor({
         point={point}
         onPoint={(p, inside) => {
           setPoint(p);
-          setTapHint(inside ? null : 'Tap on the picture itself.');
+          setTapHint(inside ? null : 'Click on the picture itself.');
         }}
         outline={outline}
         onOutline={(pts) => {
@@ -228,7 +242,7 @@ function Editor({
               <span className="font-semibold">{selected.label || 'Unlabeled'}</span>
               <span className="text-slate-600">
                 {' '}
-                · {sourceText(selected.source)}
+                · {sourceLabel(selected.source)}
                 {selected.source === 'auto' && `, confidence ${formatConfidence(selected.confidence)}`}
               </span>
             </p>
@@ -259,7 +273,7 @@ function Editor({
         </section>
 
         <section className="space-y-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200" aria-label="Change the subject">
-          <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1" role="group" aria-label="How to choose">
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" role="group" aria-label="How to choose">
             {MODES.map((m) => (
               <button
                 key={m.mode}
@@ -269,6 +283,7 @@ function Editor({
                   setMode(m.mode);
                   setFormError(null);
                   setTapHint(null);
+                  setPoint(null);
                 }}
                 className={`min-h-11 rounded-md px-2 text-sm font-semibold ${
                   mode === m.mode ? 'bg-white text-sky-900 shadow ring-1 ring-slate-300' : 'text-slate-700 hover:bg-white/60'
@@ -282,23 +297,26 @@ function Editor({
           {mode === 'suggestions' && (
             <div className="space-y-2">
               {page.candidates.length === 0 ? (
-                <p className="text-slate-700">No suggestions for this page. Tap the object, or draw an outline around it.</p>
+                <p className="text-slate-700">No suggestions for this page. Click the object, or draw an outline around it.</p>
               ) : (
                 <>
                   <p className="text-slate-700">
-                    Tap a box on the page, or a name here. When the story needs more than one, tick each and show them together.
+                    Click a box on the page, or a name here. When the story needs more than one, tick each and show them together.
                   </p>
                   <ul className="space-y-2">
                     {page.candidates.map((c, i) => (
                       <li key={`${i}:${c.mask_hash}`} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="size-6 shrink-0"
-                          aria-label={`Include ${c.label || 'this object'}`}
-                          disabled={busy || processing}
-                          checked={together.includes(i)}
-                          onChange={(e) => setTogether((t) => (e.target.checked ? [...t, i] : t.filter((x) => x !== i)))}
-                        />
+                        {/* The whole 44 px square is clickable, not just the box. */}
+                        <label className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-lg hover:bg-slate-100">
+                          <input
+                            type="checkbox"
+                            className="size-6 cursor-pointer"
+                            aria-label={`Include ${c.label || 'this object'}`}
+                            disabled={busy || processing}
+                            checked={together.includes(i)}
+                            onChange={(e) => setTogether((t) => (e.target.checked ? [...t, i] : t.filter((x) => x !== i)))}
+                          />
+                        </label>
                         <button
                           type="button"
                           aria-pressed={page.selected === i}
@@ -309,11 +327,11 @@ function Editor({
                           }`}
                         >
                           <span className="font-semibold">
-                            {page.selected === i && '✓ '}
+                            {page.selected === i && '● '}
                             {c.label || 'Unlabeled'}
                           </span>
                           <span className={page.selected === i ? 'text-sky-100' : 'text-slate-600'}>
-                            {c.source === 'auto' ? formatConfidence(c.confidence) : sourceText(c.source)}
+                            {c.source === 'auto' ? formatConfidence(c.confidence) : sourceLabel(c.source)}
                           </span>
                         </button>
                       </li>
@@ -330,9 +348,37 @@ function Editor({
             </div>
           )}
 
+          {mode === 'refine' && (
+            <div className="space-y-2">
+              {selected ? (
+                <p className="text-slate-700">
+                  Click a part of <span className="font-semibold">{selected.label || 'the subject'}</span> that the cut-out missed, such as
+                  a tail or an ear. It is added to the current cut-out; the subject keeps its name.
+                </p>
+              ) : (
+                <p className="text-slate-700">Pick a subject first. Then this adds any part the cut-out missed.</p>
+              )}
+              {tapHint && (
+                <p role="alert" className="text-amber-900">
+                  {tapHint}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="primary" disabled={!point || !selected || busy || processing} onClick={sendRefine}>
+                  {action.pending === 'refine' ? 'Adding…' : 'Add this part'}
+                </Button>
+                {point && (
+                  <Button disabled={busy} onClick={() => setPoint(null)}>
+                    Clear spot
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           {mode === 'point' && (
             <div className="space-y-2">
-              <p className="text-slate-700">Tap the object on the page. A ring marks the spot; then press Cut out.</p>
+              <p className="text-slate-700">Click the object on the page. A ring marks the spot; then press Cut out.</p>
               {tapHint && (
                 <p role="alert" className="text-amber-900">
                   {tapHint}
@@ -371,7 +417,7 @@ function Editor({
                 />
               </div>
               <p className="text-slate-700">
-                Draw one line around the object with a finger, pen or mouse. Lift to finish; the ends join up. The cut-out
+                Hold the mouse button down and draw one line around the object. Let go to finish; the ends join up. The cut-out
                 follows your line exactly, from the original picture.
               </p>
               {outline.length > 0 && !problem && <p className="text-sm text-slate-600">Outline ready ({outline.length} points).</p>}
@@ -401,7 +447,7 @@ function Editor({
           {action.error && (
             <p role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
               {errorMessage(action.error)}
-              {action.pending === null && mode === 'point' && ' You can draw an outline instead.'}
+              {action.pending === null && (mode === 'point' || mode === 'refine') && ' You can draw an outline instead.'}
             </p>
           )}
           {notice && (

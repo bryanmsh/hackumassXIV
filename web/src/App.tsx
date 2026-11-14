@@ -1,7 +1,6 @@
 import { Route, Routes } from 'react-router';
 import { AppShell } from './components/ui/AppShell';
 import { ContactSheetPage } from './pages/ContactSheetPage';
-import { GestureTestPage } from './pages/GestureTestPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProfilesPage } from './pages/ProfilesPage';
@@ -23,8 +22,6 @@ export function App() {
       </Route>
       {/* The Reader is full screen and child-facing: no teacher chrome. */}
       <Route path="read/:bookId" element={<ReaderPage />} />
-      {/* Hour-4 device check of Reader gestures. No data, no API calls. */}
-      <Route path="gesture-test" element={<GestureTestPage />} />
     </Routes>
   );
 }

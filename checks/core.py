@@ -12,7 +12,8 @@ from render.core import Rendered, compose, load_mask, original_layout, ring_arou
 
 COVERAGE_MIN = 0.001  # real picture-book animals can be well under 1% of the page
 COVERAGE_MAX = 0.60
-LARGEST_REGION_MIN = 0.90
+SPECK_MAX = 0.001  # a piece under this share of the page is a stray speck, not a subject
+SPECK_SHARE_MAX = 0.10  # several whole subjects are fine; specks may hold at most this much of the cut-out
 CANNY_LOW, CANNY_HIGH = 100, 200
 BACKGROUND_GROW_PX = 6
 PLAIN_BACKGROUND_MAX = 0.005
@@ -43,19 +44,21 @@ def check_fidelity(mask: np.ndarray) -> LocalCheck:
     if count == 0:
         return _check("fail", 0.0, "The cut-out is empty.")
     n, _, stats, _ = cv2.connectedComponentsWithStats(on.astype(np.uint8), connectivity=8)
-    largest = stats[1:, cv2.CC_STAT_AREA].max() / count
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    specks = areas[areas < SPECK_MAX * total]
+    speck_share = specks.sum() / count
     pieces = n - 1
     problems = []
     if coverage < COVERAGE_MIN:
         problems.append(f"covers only {coverage:.2%} of the page (at least {COVERAGE_MIN:.1%} expected)")
     if coverage > COVERAGE_MAX:
         problems.append(f"covers {coverage:.1%} of the page (at most {COVERAGE_MAX:.0%} expected)")
-    if largest < LARGEST_REGION_MIN:
-        problems.append(f"is in {pieces} pieces; the largest holds only {largest:.0%} of it")
+    elif speck_share > SPECK_SHARE_MAX:
+        problems.append(f"has {len(specks)} stray specks holding {speck_share:.0%} of it")
     if problems:
         return _check("fail", coverage, "The cut-out " + " and ".join(problems) + ".")
-    return _check("pass", coverage, f"The cut-out covers {coverage:.1%} of the page, "
-                                    f"{largest:.0%} of it in one piece.")
+    shape = "in one piece" if pieces == 1 else f"in {pieces} pieces"
+    return _check("pass", coverage, f"The cut-out covers {coverage:.1%} of the page, {shape}.")
 
 
 def check_page_edge(mask: np.ndarray) -> LocalCheck:
