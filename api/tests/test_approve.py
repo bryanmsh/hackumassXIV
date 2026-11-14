@@ -1,5 +1,5 @@
 from api import db
-from api.tests.helpers import EX, client, confirmed_book, make_profile, upload
+from api.tests.helpers import EX, approve_all, client, confirmed_book, make_profile, upload
 
 send = lambda book, p, rows, level=1, decision="approve": client.post(
     f"/api/books/{book['id']}/approve", json={
@@ -35,15 +35,16 @@ def test_the_newest_decision_wins():
 def test_stale_version_is_refused_and_not_recorded():
     book, p = confirmed_book(), make_profile()
     second = book["pages"][1]["id"]                       # needs_subject: give it a subject and confirm it
-    client.post(f"/api/pages/{second}/subject", json={"candidate": 0})
-    client.post(f"/api/pages/{second}/confirm")
+    assert client.post(f"/api/pages/{second}/subject", json={"candidate": 0}).status_code == 200
+    assert client.post(f"/api/pages/{second}/confirm").status_code == 200
     first, other = [r for r in rows(book, p) if r["version"]]
-    client.post(f"/api/pages/{first['page_id']}/subject", json={"candidate": 1})
-    client.post(f"/api/pages/{first['page_id']}/confirm")
+    assert client.post(f"/api/pages/{first['page_id']}/subject", json={"candidate": 1}).status_code == 200
+    assert client.post(f"/api/pages/{first['page_id']}/confirm").status_code == 200
     r = send(book, p, [first, other])
     assert r.status_code == 409 and r.json()["detail"] == "look again"
     assert r.json()["changed"] == [{"page_id": first["page_id"], "sent": first["version"],
                                     "current": rows(book, p)[0]["version"]}]
+    assert r.json()["changed"][0]["current"] not in (None, first["version"])
     assert [a["page_id"] for a in r.json()["recorded"]] == [other["page_id"]]
     assert db.approvals.count_documents({}) == 1
 
@@ -62,6 +63,16 @@ def test_pages_without_a_version_cannot_be_approved():
             {"page_id": other["id"], "version": "000000000000"}]               # another book
     r = send(book, p, fake)
     assert r.status_code == 409 and [c["current"] for c in r.json()["changed"]] == [None, None]
+    assert db.approvals.count_documents({}) == 0
+
+
+def test_a_page_of_another_book_cannot_be_approved():
+    book, p = confirmed_book(), make_profile()
+    elsewhere = confirmed_book()
+    stranger = rows(elsewhere, p)[0]
+    assert stranger["version"]                             # a real token, valid in its own book
+    r = send(book, p, [stranger])
+    assert r.status_code == 409 and r.json()["changed"][0]["current"] is None
     assert db.approvals.count_documents({}) == 0
 
 
@@ -90,3 +101,8 @@ def test_bad_approve_bodies_are_refused():
     assert send(book, {"id": "not-an-id"}, [row]).status_code == 404
     assert client.post("/api/books/65a000000000000000000009/approve", json={
         "profile_id": p["id"], "level": 1, "pages": []}).status_code == 404
+
+
+def test_approve_all_approves_every_page_with_a_version():
+    r = approve_all(confirmed_book(), make_profile())
+    assert r.status_code == 200 and len(r.json()["approvals"]) == 1
