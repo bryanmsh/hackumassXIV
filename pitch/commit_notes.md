@@ -2,6 +2,22 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Checkpoint 1 step list and word-for-word demo script (hours 7 and 10)
+
+**What changed**
+- `pitch/checkpoint1_steps.md`: 11 steps for checkpoint 1 on the live site, with who clicks, where, what to expect, and a column for what broke. Uses Thomas's real button names (Choose a PDF, Upload, Leave out, Suggestions, Tap the object, Draw an outline) and the real Animal Homes results.
+- `pitch/demo_script.md`: rewritten word for word. About 4 minutes, Kevin speaks and Thomas drives. Adds the reset step before every judge (`python -m api.tools.reset_demo <book id>`), keyboard-only reader (the spec is now desktop and laptop only), wording rules from `PRODUCT.md`, and what to do if something breaks.
+- Merged `origin/main` into `kevin` first (spec: desktop only; `PRODUCT.md`; the fixture PDF).
+
+**Why some choices**
+- Hard page: Animal Homes page 2 (hornbill, beehive, nest at equal confidence), proposed from the real run. The book has 5 pages, not the spec's 6.
+- No page was pre-selected on the real run, so the script says so as the "honest" moment instead of hiding it.
+
+**Still open**
+- Confirm the demo book and hard page with Bryan (hour 10), and the picks for pages 3 to 5.
+- Check that Thomas's Profiles has size, position and text controls; if not, Leo is Cut-out, centered, text off.
+- Time it at the first rehearsal.
+
 ## Fidelity check: minimum cut-out size 1% -> 0.1% of the page
 
 **What changed**
