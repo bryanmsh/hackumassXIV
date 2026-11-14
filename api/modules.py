@@ -36,6 +36,7 @@ def load(pipeline: str, render: str):
         import render as render_module
         display = SimpleNamespace(
             render=render_module.render, overlay=render_module.overlay,
+            overlay_palette=render_module.overlay_palette,
             RENDER_VERSION=render_module.RENDER_VERSION,
             run_checks=checks.run_checks, second_look=checks.second_look)
     else:

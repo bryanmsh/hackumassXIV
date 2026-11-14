@@ -135,6 +135,11 @@ def overlay(view_path, mask_path) -> bytes:
     return _encode(view_path, "webp")
 
 
+def overlay_palette(view_path, mask_paths, selected, fmt="webp") -> bytes:
+    """Returns the page unchanged."""
+    return _encode(view_path, fmt)
+
+
 def run_checks(image_path, view_path, mask_path, settings, level, text) -> CheckResult:
     ok = CheckItem(status="pass", value=None, detail="stub")
     return CheckResult(fidelity=ok, page_edge=ok, background=ok, contrast=ok, size=ok)

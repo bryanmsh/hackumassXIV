@@ -124,5 +124,7 @@ def test_display_functions_return_contract_types(assets, book_dir, level):
     assert isinstance(checks, CheckResult), "run_checks must return a CheckResult"
     shown = Image.open(io.BytesIO(modules.display.overlay(a.view_path, c.mask_path)))
     assert shown.format == "WEBP", "overlay must return WebP bytes"
+    palette = Image.open(io.BytesIO(modules.display.overlay_palette(a.view_path, [c.mask_path], 0)))
+    assert palette.format == "WEBP", "overlay_palette must return WebP bytes"
     assert isinstance(modules.display.RENDER_VERSION, str), "RENDER_VERSION must be a string"
     assert modules.display.RENDER_VERSION, "RENDER_VERSION must not be empty"
