@@ -2,6 +2,19 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Merge main (Bryan's pipeline, Andrew's API, Thomas's web) and demo script for the new subject rules
+
+**What changed**
+- Merged `origin/main` into `kevin`. Bryan's branch had nothing beyond `main`. Brought in: up to 5 subjects per page; combined cut-out offered but **not pre-selected** (9e09be4, Thomas with Bryan's OK); Andrew's credits autofill stand-in, re-approve tool, render-version approval tests; Thomas's custom colors and readability fixes. PR #20 (fidelity and email) is in `main`.
+- `pitch/demo_script.md` steps 3 to 5 and `pitch/checkpoint1_steps.md`: page 2 arrives Needs subject with the combined option offered; the teacher picks the hornbill alone.
+
+**Tested**
+- 55 tests pass in `render`, `checks` and `tests` (the reader tests run against Andrew's latest API).
+
+**Still open**
+- Bryan's `pipeline/credits.py` has not landed; Andrew's upload keeps the teacher's credits until it does.
+- The demo book is now the 16-page edition; page numbers in the script are still for the 5-page one.
+
 ## Fidelity check accepts combined cut-outs; demo script for pre-selected pages
 
 **What changed**
