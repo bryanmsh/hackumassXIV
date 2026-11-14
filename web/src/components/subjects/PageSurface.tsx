@@ -12,8 +12,10 @@ import {
   type Rect,
 } from '../../utils/coordinates';
 import { formatConfidence } from '../../utils/display';
+import { subjectNumber, subjectTone } from '../../utils/subjectColors';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
+import { SubjectMarker } from './SubjectMarker';
 
 export type EditorMode = 'suggestions' | 'point' | 'refine' | 'outline';
 
@@ -35,6 +37,11 @@ interface Props {
   sent: { point?: NormPoint; outline?: NormPoint[] } | null;
   /** Largest height the page may take, in vh. */
   maxHeightVh?: number;
+  /** The suggestion the teacher is pointing at, on the page or in the list; the others dim. */
+  highlight?: number | null;
+  onHighlight?: (index: number | null) => void;
+  /** Shown over the page while the server makes a cut-out; clicks wait meanwhile. */
+  busyLabel?: string | null;
 }
 
 const polyPoints = (pts: NormPoint[]) => pts.map(([x, y]) => `${x},${y}`).join(' ');
@@ -56,6 +63,9 @@ export function PageSurface({
   onOutline,
   sent,
   maxHeightVh = 70,
+  highlight = null,
+  onHighlight,
+  busyLabel = null,
 }: Props) {
   const frameRef = useRef<HTMLDivElement>(null);
   const stroke = useRef<{ id: number; points: NormPoint[] } | null>(null);
@@ -161,6 +171,18 @@ export function PageSurface({
     // Bigger boxes first, so smaller ones sit on top and stay clickable.
     .sort((a, b) => boxArea(b.c.box) - boxArea(a.c.box));
 
+  // Each suggestion's number sits on its box's top-left corner. Boxes that share a corner
+  // (the same object found twice, a box inside another) have their markers step to the right.
+  const placed: { x: number; y: number }[] = [];
+  const markerSpots = page.candidates.map((c) => {
+    if (!isValidBox(c.box)) return null;
+    let x = c.box[0];
+    const y = c.box[1];
+    while (placed.some((p) => Math.abs(p.x - x) < 0.05 && Math.abs(p.y - y) < 0.07)) x += 0.055;
+    placed.push({ x, y });
+    return { x, y };
+  });
+
   const label =
     mode === 'point'
       ? 'Page. Click the object to choose it.'
@@ -219,7 +241,18 @@ export function PageSurface({
             onPointerCancel={endStroke}
           >
             {mode === 'suggestions' &&
-              boxes.map(({ c, i }) => <CandidateBox key={`${i}:${c.mask_hash}`} c={c} selected={page.selected === i} disabled={disabled} onPick={() => onPickCandidate(i)} />)}
+              boxes.map(({ c, i }) => (
+                <CandidateBox
+                  key={`${i}:${c.mask_hash}`}
+                  c={c}
+                  index={i}
+                  selected={page.selected === i}
+                  dimmed={highlight !== null && highlight !== i}
+                  disabled={disabled}
+                  onPick={() => onPickCandidate(i)}
+                  onHighlight={onHighlight}
+                />
+              ))}
 
             <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
               {sent?.outline && sent.outline.length >= 3 && (
@@ -251,6 +284,31 @@ export function PageSurface({
 
             {(mode === 'point' || mode === 'refine') && point && <Marker point={point} testId="tap-marker" />}
             {sent?.point && <Marker point={sent.point} testId="sent-marker" dashed />}
+
+            {/* Numbers only on the page (names on small or nested boxes overlap); the list beside the page has the names. */}
+            {mode === 'suggestions' && (
+              <div className="pointer-events-none absolute inset-0" aria-hidden>
+                {markerSpots.map(
+                  (s, i) =>
+                    s && (
+                      <span
+                        key={`${i}:${page.candidates[i]!.mask_hash}`}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 ${highlight !== null && highlight !== i ? 'opacity-40' : ''}`}
+                        style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }}
+                      >
+                        <SubjectMarker index={i} className={page.selected === i ? 'ring-2 ring-white' : ''} />
+                      </span>
+                    ),
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {busyLabel && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/50" data-testid="surface-busy">
+            <span role="status" className="rounded-lg bg-white px-4 py-2 font-semibold text-slate-900 shadow ring-1 ring-slate-300">
+              {busyLabel}
+            </span>
           </div>
         )}
       </div>
@@ -281,35 +339,46 @@ function Marker({ point: [x, y], testId, dashed = false }: { point: NormPoint; t
   );
 }
 
-function CandidateBox({ c, selected, disabled, onPick }: { c: Candidate; selected: boolean; disabled: boolean; onPick: () => void }) {
+function CandidateBox({
+  c,
+  index,
+  selected,
+  dimmed,
+  disabled,
+  onPick,
+  onHighlight,
+}: {
+  c: Candidate;
+  index: number;
+  selected: boolean;
+  dimmed: boolean;
+  disabled: boolean;
+  onPick: () => void;
+  onHighlight?: (index: number | null) => void;
+}) {
   const name = c.label || 'Unlabeled';
+  const tone = subjectTone(index);
   const conf = c.source === 'auto' ? `, the AI’s guess with confidence ${formatConfidence(c.confidence)}` : '';
   return (
     <button
       type="button"
       disabled={disabled || selected}
       aria-pressed={selected}
-      aria-label={`${selected ? 'Current subject' : 'Pick'} ${name}${conf}`}
+      aria-label={`${selected ? 'Current subject' : 'Pick'} ${name}, number ${subjectNumber(index)}${conf}`}
       onClick={(e) => {
         e.stopPropagation();
         onPick();
       }}
-      className={`absolute rounded-sm text-left disabled:cursor-default ${
-        selected
-          ? 'border-4 border-sky-600 shadow-[0_0_0_2px_#fff]'
-          : 'border-[3px] border-dashed border-white shadow-[0_0_0_2px_rgba(0,0,0,0.7)] hover:border-sky-300'
-      }`}
+      onMouseEnter={() => onHighlight?.(index)}
+      onMouseLeave={() => onHighlight?.(null)}
+      onFocus={() => onHighlight?.(index)}
+      onBlur={() => onHighlight?.(null)}
+      // The box takes the suggestion's colour, with a white edge so it shows on any artwork.
+      className={`absolute rounded-sm text-left shadow-[0_0_0_2px_#fff] disabled:cursor-default ${tone.border} ${
+        selected ? 'border-4' : 'border-[3px] border-dashed hover:border-solid'
+      } ${dimmed ? 'opacity-40' : ''}`}
       style={boxToPercent(c.box)}
     >
-      <span
-        className={`absolute left-0 top-0 max-w-full truncate rounded-br px-1.5 py-0.5 text-sm font-semibold ${
-          selected ? 'bg-sky-600 text-white' : 'bg-black/75 text-white'
-        }`}
-      >
-        {selected && '● '}
-        {name}
-        {c.source === 'auto' && ` ${formatConfidence(c.confidence)}`}
-      </span>
     </button>
   );
 }

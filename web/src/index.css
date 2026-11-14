@@ -2,6 +2,27 @@
 
 @theme {
   --font-sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  /*
+   * Subject marker colours, in detection order: blue, orange, purple, pink, teal, yellow.
+   * No green (green reads as "correct"). Each marker also carries its number, so the
+   * colours never work alone. Teacher screens only; never part of a child's display.
+   */
+  --color-subject-1: #1d4ed8;
+  --color-subject-2: #c2410c;
+  --color-subject-3: #6d28d9;
+  --color-subject-4: #be185d;
+  --color-subject-5: #0f766e;
+  --color-subject-6: #eab308;
+}
+
+:root {
+  /* The same six tokens under the names the design brief uses. */
+  --subject-1: var(--color-subject-1);
+  --subject-2: var(--color-subject-2);
+  --subject-3: var(--color-subject-3);
+  --subject-4: var(--color-subject-4);
+  --subject-5: var(--color-subject-5);
+  --subject-6: var(--color-subject-6);
 }
 
 @layer base {

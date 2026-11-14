@@ -10,9 +10,11 @@ import { useAction } from '../hooks/useAction';
 import { useApi } from '../hooks/useApi';
 import { useBook } from '../hooks/useBook';
 import type { NormPoint, Page } from '../types/api';
-import { OUTLINE_PROBLEM_TEXT, outlineProblem, roundPoint } from '../utils/coordinates';
+import { SubjectMarker } from '../components/subjects/SubjectMarker';
+import { OUTLINE_PROBLEM_TEXT, outlineBox, outlineProblem, roundPoint, sameBox } from '../utils/coordinates';
 import { PAGE_STATE_HINT, formatConfidence, sourceLabel } from '../utils/display';
 import { plainReason } from '../utils/secondLook';
+import { subjectTone } from '../utils/subjectColors';
 
 /**
  * Contract 1 has no GET /pages/{id}, so the editor finds the page through its
@@ -80,6 +82,24 @@ const MODES: { mode: EditorMode; label: string }[] = [
 
 type Sent = { point?: NormPoint; outline?: NormPoint[] } | null;
 
+/** What the last saved outline became, so the teacher can fall back to her own drawing or redraw. */
+interface OutlineResult {
+  label: string;
+  outline: NormPoint[];
+  /** The server tightened the drawing to the object (its box moved). */
+  tightened: boolean;
+  /** The subject this belongs to; a change made elsewhere drops the offer. */
+  hash: string | null;
+}
+
+/** What the page shows over the picture while the server works. */
+const BUSY_LABEL: Record<string, string> = {
+  outline: 'Finding the object’s edges…',
+  'outline-raw': 'Cutting out along your outline…',
+  point: 'Cutting out…',
+  refine: 'Adding the part…',
+};
+
 
 function Editor({
   page,
@@ -104,6 +124,8 @@ function Editor({
   const [showSent, setShowSent] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [together, setTogether] = useState<number[]>([]);
+  const [highlight, setHighlight] = useState<number | null>(null);
+  const [outlineResult, setOutlineResult] = useState<OutlineResult | null>(null);
   const action = useAction();
   // Ticks belong to the subject they were made against: a new subject (picked, tapped,
   // outlined, joined, or changed elsewhere) or another tool clears them.
@@ -173,7 +195,7 @@ function Editor({
     );
   }
 
-  function sendOutline() {
+  async function sendOutline() {
     const name = label.trim();
     if (!name) {
       setFormError('Type what the object is, for example “frog”.');
@@ -186,17 +208,62 @@ function Editor({
       return;
     }
     setFormError(null);
-    void submit(
-      'outline',
-      { label: name, outline: pts },
-      () => {
-        setSent({ outline: pts });
-        setShowSent(true);
-        setOutline([]);
-        setLabel('');
-      },
-      `“${name}” cut out along your outline. The dashed line shows what you drew; check it matches the highlight, then confirm.`,
+    setNotice(null);
+    // The drawing is a hint: the cut-out tool may tighten it to the object (tidy). A server
+    // without that option answers 422, and then the drawing is used exactly as it is.
+    let tidyTried = true;
+    const updated = await action.run('outline', async (s) => {
+      try {
+        return await api.setSubject(page.id, { label: name, outline: pts, tidy: true }, s);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 422) {
+          tidyTried = false;
+          return api.setSubject(page.id, { label: name, outline: pts }, s);
+        }
+        throw err;
+      }
+    });
+    if (!updated) return;
+    const chosen = updated.selected !== null ? updated.candidates[updated.selected] : undefined;
+    const tightened = tidyTried && chosen !== undefined && !sameBox(chosen.box, outlineBox(pts));
+    setSent({ outline: pts });
+    setShowSent(true);
+    setOutline([]);
+    setLabel('');
+    setOutlineResult({ label: name, outline: pts, tightened, hash: updated.subject_hash });
+    onUpdated(updated);
+    setNotice(
+      tightened
+        ? `The cut-out tool tightened your outline to “${name}”. The dashed line is what you drew; check that the highlight hugs the object, then confirm.`
+        : tidyTried
+          ? `Couldn’t find the object’s edges. Using your outline for “${name}” as drawn. Check the highlight, then confirm.`
+          : `“${name}” cut out along your outline. The dashed line shows what you drew; check it matches the highlight, then confirm.`,
     );
+  }
+
+  /** Back to exactly what the teacher drew, with no tightening. */
+  async function useMyOutline() {
+    const r = outlineResult;
+    if (!r) return;
+    setNotice(null);
+    const updated = await action.run('outline-raw', (s) => api.setSubject(page.id, { label: r.label, outline: r.outline }, s));
+    if (!updated) return;
+    setSent({ outline: r.outline });
+    setShowSent(true);
+    setOutlineResult({ ...r, tightened: false, hash: updated.subject_hash });
+    onUpdated(updated);
+    setNotice(`Using your outline for “${r.label}” exactly as drawn. Check the highlight, then confirm.`);
+  }
+
+  function redraw() {
+    const r = outlineResult;
+    setMode('outline');
+    setOutline([]);
+    setLabel(r?.label ?? '');
+    setSent(null);
+    setOutlineResult(null);
+    setNotice(null);
+    setFormError(null);
   }
 
   async function confirm() {
@@ -226,6 +293,9 @@ function Editor({
           setFormError(null);
         }}
         sent={showSent ? sent : null}
+        highlight={highlight}
+        onHighlight={setHighlight}
+        busyLabel={action.pending ? (BUSY_LABEL[action.pending] ?? null) : null}
       />
 
       <aside className="space-y-4">
@@ -302,7 +372,8 @@ function Editor({
               ) : (
                 <>
                   <p className="text-slate-700">
-                    Click a box on the page, or a name here. When the story needs more than one, tick each and show them together.
+                    Each suggestion has a number and colour, the same on the page and here. Click a box on the page, or a name here.
+                    When the story needs more than one, tick each and show them together.
                   </p>
                   <ul className="space-y-2">
                     {page.candidates.map((c, i) => (
@@ -323,15 +394,22 @@ function Editor({
                           aria-pressed={page.selected === i}
                           disabled={busy || processing || page.selected === i}
                           onClick={() => pickCandidate(i)}
-                          className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left ring-1 ring-inset disabled:cursor-default ${
-                            page.selected === i ? 'bg-sky-700 text-white ring-sky-800' : 'bg-white ring-slate-300 hover:bg-slate-50 disabled:opacity-60'
-                          }`}
+                          onMouseEnter={() => setHighlight(i)}
+                          onMouseLeave={() => setHighlight(null)}
+                          onFocus={() => setHighlight(i)}
+                          onBlur={() => setHighlight(null)}
+                          className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left ring-inset disabled:cursor-default ${
+                            page.selected === i
+                              ? `${subjectTone(i).tint} font-semibold ring-2 ${subjectTone(i).ring}`
+                              : 'bg-white ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-60'
+                          } ${highlight !== null && highlight !== i ? 'opacity-50' : ''}`}
                         >
-                          <span className="font-semibold">
+                          <SubjectMarker index={i} size="sm" />
+                          <span className={`min-w-0 flex-1 truncate ${page.selected === i ? '' : 'font-medium'}`}>
                             {page.selected === i && '● '}
                             {c.label || 'Unlabeled'}
                           </span>
-                          <span className={page.selected === i ? 'text-sky-100' : 'text-slate-600'}>
+                          <span className="shrink-0 text-sm text-slate-600">
                             {c.source === 'auto' ? formatConfidence(c.confidence) : sourceLabel(c.source)}
                           </span>
                         </button>
@@ -455,6 +533,18 @@ function Editor({
             <p role="status" className="rounded-lg bg-emerald-50 p-3 text-emerald-950 ring-1 ring-emerald-200">
               {notice}
             </p>
+          )}
+          {outlineResult && outlineResult.hash === page.subject_hash && (
+            <div className="flex flex-wrap gap-2">
+              {outlineResult.tightened && (
+                <Button disabled={busy} onClick={() => void useMyOutline()}>
+                  {action.pending === 'outline-raw' ? 'Saving…' : 'Use my outline'}
+                </Button>
+              )}
+              <Button variant="ghost" disabled={busy} onClick={redraw}>
+                Redraw
+              </Button>
+            </div>
           )}
           {sent && (
             <label className="flex min-h-11 items-center gap-2 text-sm">
