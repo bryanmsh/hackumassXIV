@@ -10,7 +10,7 @@ from render._types import LocalCheck, LocalCheckResult, coerce_settings, to_cont
 from render.color import contrast_ratio, luminance_map, ratio_from_luminance
 from render.core import Rendered, compose, load_mask, original_layout, ring_around, shows_text
 
-COVERAGE_MIN = 0.01
+COVERAGE_MIN = 0.001  # real picture-book animals can be well under 1% of the page
 COVERAGE_MAX = 0.60
 LARGEST_REGION_MIN = 0.90
 CANNY_LOW, CANNY_HIGH = 100, 200
@@ -47,7 +47,7 @@ def check_fidelity(mask: np.ndarray) -> LocalCheck:
     pieces = n - 1
     problems = []
     if coverage < COVERAGE_MIN:
-        problems.append(f"covers only {coverage:.1%} of the page (at least {COVERAGE_MIN:.0%} expected)")
+        problems.append(f"covers only {coverage:.2%} of the page (at least {COVERAGE_MIN:.1%} expected)")
     if coverage > COVERAGE_MAX:
         problems.append(f"covers {coverage:.1%} of the page (at most {COVERAGE_MAX:.0%} expected)")
     if largest < LARGEST_REGION_MIN:
