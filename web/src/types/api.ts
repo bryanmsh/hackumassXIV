@@ -130,7 +130,8 @@ export type SubjectRequest =
   /** Several suggestions shown together as one subject. At least 2 different indexes. */
   | { candidates: number[] }
   | { point: NormPoint }
-  | { label: string; outline: NormPoint[] }
+  /** `tidy` (P1, additive) lets the cut-out tool tighten the drawn shape to the object; the server keeps the drawing when it cannot. */
+  | { label: string; outline: NormPoint[]; tidy?: boolean }
   /** Phase 2: add the part the current cut-out missed, at this spot. The subject keeps its label. */
   | { refine_point: NormPoint };
 
