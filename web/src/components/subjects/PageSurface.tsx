@@ -102,7 +102,7 @@ export function PageSurface({
     onPoint(inside ? p : null, inside);
   }
 
-  // ----- Outline mode (Pointer Events: mouse, pen and finger) -----
+  // ----- Outline mode (Pointer Events: mouse or trackpad; pen and touch also work) -----
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (mode !== 'outline' || disabled || !e.isPrimary || stroke.current) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -163,7 +163,7 @@ export function PageSurface({
 
   const label =
     mode === 'point'
-      ? 'Page. Tap the object to choose it.'
+      ? 'Page. Click the object to choose it.'
       : mode === 'outline'
         ? 'Page. Draw a line around the object.'
         : 'Page with suggested subjects.';
@@ -281,7 +281,7 @@ function Marker({ point: [x, y], testId, dashed = false }: { point: NormPoint; t
 
 function CandidateBox({ c, selected, disabled, onPick }: { c: Candidate; selected: boolean; disabled: boolean; onPick: () => void }) {
   const name = c.label || 'Unlabeled';
-  const conf = c.source === 'auto' ? `, AI confidence ${formatConfidence(c.confidence)}` : '';
+  const conf = c.source === 'auto' ? `, the AI’s guess with confidence ${formatConfidence(c.confidence)}` : '';
   return (
     <button
       type="button"
@@ -304,7 +304,7 @@ function CandidateBox({ c, selected, disabled, onPick }: { c: Candidate; selecte
           selected ? 'bg-sky-600 text-white' : 'bg-black/75 text-white'
         }`}
       >
-        {selected && '✓ '}
+        {selected && '● '}
         {name}
         {c.source === 'auto' && ` ${formatConfidence(c.confidence)}`}
       </span>

@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { api } from '../../api';
 import { useImageBlob } from '../../hooks/useImageBlob';
 import type { Decision, Level, SheetPage } from '../../types/api';
-import { levelName } from '../../utils/display';
+import { levelName, sourceLabel } from '../../utils/display';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
 import { Badge } from '../ui/StatusBadge';
@@ -87,8 +87,7 @@ export function SheetPageCard({
         {page.label && (
           <p>
             <span className="font-semibold">{page.label}</span>
-            {page.source === 'manual' && <span className="text-slate-600"> · outlined by teacher</span>}
-            {page.source === 'click' && <span className="text-slate-600"> · picked by tapping</span>}
+            {page.source && page.source !== 'auto' && <span className="text-slate-600"> · {sourceLabel(page.source)}</span>}
           </p>
         )}
 

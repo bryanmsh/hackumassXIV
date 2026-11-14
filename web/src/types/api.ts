@@ -223,7 +223,7 @@ export interface SheetPage {
   confirmed: boolean;
   omitted: boolean;
   label: string | null;
-  /** "manual" pages are shown as "outlined by teacher". */
+  /** Shown in words by utils/display.ts sourceLabel ("made by teacher" for manual). */
   source: CandidateSource | null;
   checks: CheckResult | null;
   second_look: SecondLook | null;
