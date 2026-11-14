@@ -22,6 +22,7 @@ export function SubjectReviewPage() {
   const [asking, setAsking] = useState(false);
   const rerun = useAction();
   const [askingRerun, setAskingRerun] = useState(false);
+  const [rerunNotice, setRerunNotice] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   function changed(pages: Page[]) {
@@ -50,7 +51,7 @@ export function SubjectReviewPage() {
     setAskingRerun(false);
     if (updated) {
       changed(updated);
-      setNotice(
+      setRerunNotice(
         updated.length === 0
           ? 'No pages to ask about.'
           : `Asking the AI again about ${updated.length} ${updated.length === 1 ? 'page' : 'pages'}. New suggestions appear as each page finishes.`,
@@ -75,21 +76,10 @@ export function SubjectReviewPage() {
               disabled={confirmable.length === 0 || confirmAll.pending !== null}
               onClick={() => {
                 setNotice(null);
-                setAskingRerun(false);
                 setAsking(true);
               }}
             >
               Confirm all…
-            </Button>
-            <Button
-              disabled={rerunnable.length === 0 || rerun.pending !== null}
-              onClick={() => {
-                setNotice(null);
-                setAsking(false);
-                setAskingRerun(true);
-              }}
-            >
-              Ask the AI again…
             </Button>
             <Link
               to={`/books/${encodeURIComponent(id)}/approve`}
@@ -150,31 +140,6 @@ export function SubjectReviewPage() {
               </div>
             </div>
           )}
-          {askingRerun && (
-            <div role="dialog" aria-modal="false" aria-labelledby="rerun-h" className="mb-5 rounded-xl bg-sky-50 p-4 ring-1 ring-sky-300">
-              <h2 id="rerun-h" className="text-lg font-bold">
-                Ask the AI again about {rerunnable.length} {rerunnable.length === 1 ? 'page' : 'pages'}?
-              </h2>
-              <p className="mt-1">
-                Pages {rerunnable.map((p) => p.number).join(', ')} will be sent to the outside AI service again. Its answers
-                can differ each time. New suggestions are added to the ones already there, and the subject on each of
-                these pages becomes the AI’s new guess. Pages you have confirmed or left out are not changed.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="primary" disabled={rerun.pending !== null} onClick={() => void doRerun()}>
-                  {rerun.pending ? 'Asking…' : `Ask about ${rerunnable.length}`}
-                </Button>
-                <Button disabled={rerun.pending !== null} onClick={() => setAskingRerun(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-          {rerun.error && (
-            <p role="alert" className="mb-5 rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
-              Could not ask the AI again: {errorMessage(rerun.error)}
-            </p>
-          )}
           {confirmAll.error && (
             <p role="alert" className="mb-5 rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
               Confirm all failed: {errorMessage(confirmAll.error)}
@@ -194,6 +159,60 @@ export function SubjectReviewPage() {
                 <SubjectPageCard key={p.id} page={p} onChanged={changed} />
               ))}
             </ul>
+          )}
+
+          {pages.length > 0 && (
+            <section className="mt-8 space-y-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200" aria-labelledby="rerun-section-h">
+              <h2 id="rerun-section-h" className="text-lg font-bold">
+                Missing something?
+              </h2>
+              <p className="text-slate-700">
+                The AI’s suggestions can differ each time it looks at a page. Asking again adds new suggestions to choose
+                from.
+              </p>
+              {!askingRerun && (
+                <Button
+                  disabled={rerunnable.length === 0 || rerun.pending !== null}
+                  onClick={() => {
+                    setRerunNotice(null);
+                    setAskingRerun(true);
+                  }}
+                >
+                  Ask the AI again…
+                </Button>
+              )}
+              {rerunnable.length === 0 && <p className="text-sm text-slate-600">Every page is still processing or left out.</p>}
+              {askingRerun && (
+                <div role="dialog" aria-modal="false" aria-labelledby="rerun-h" className="rounded-xl bg-sky-50 p-4 ring-1 ring-sky-300">
+                  <h3 id="rerun-h" className="text-lg font-bold">
+                    Ask the AI again about {rerunnable.length} {rerunnable.length === 1 ? 'page' : 'pages'}?
+                  </h3>
+                  <p className="mt-1">
+                    Pages {rerunnable.map((p) => p.number).join(', ')} will be sent to the outside AI service again. New
+                    suggestions are added to the ones already there. Pages you have confirmed keep their subject and stay
+                    confirmed. On the other pages, the subject becomes the AI’s new guess.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="primary" disabled={rerun.pending !== null} onClick={() => void doRerun()}>
+                      {rerun.pending ? 'Asking…' : `Ask about ${rerunnable.length}`}
+                    </Button>
+                    <Button disabled={rerun.pending !== null} onClick={() => setAskingRerun(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {rerun.error && (
+                <p role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
+                  Could not ask the AI again: {errorMessage(rerun.error)}
+                </p>
+              )}
+              {rerunNotice && (
+                <p role="status" className="rounded-lg bg-emerald-50 p-3 text-emerald-950 ring-1 ring-emerald-200">
+                  {rerunNotice}
+                </p>
+              )}
+            </section>
           )}
         </>
       )}

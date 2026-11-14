@@ -381,7 +381,7 @@ export function retryPage(p: MockPage, force: boolean, now: number = Date.now())
 
 /** Process a settled-but-unconfirmed page again; it resolves to the same outcome after 2 seconds. */
 export function rerunPage(p: MockPage, now: number = Date.now()): boolean {
-  if (p.confirmed || p.omitted || p.state === 'processing') return false;
+  if (p.omitted || p.state === 'processing') return false;
   p.state = 'processing';
   p.reason = null;
   p.resolveAt = now + 2000;

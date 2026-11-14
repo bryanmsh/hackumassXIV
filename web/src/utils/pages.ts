@@ -33,9 +33,9 @@ export function confirmablePages(pages: Page[]): Page[] {
   return pages.filter((p) => p.selected !== null && !p.confirmed && !p.omitted && p.state !== 'processing');
 }
 
-/** Pages "Ask the AI again" would process: not confirmed, not left out, not processing. */
+/** Pages "Ask the AI again" would process: not left out, not processing. Confirmed pages are included. */
 export function rerunnablePages(pages: Page[]): Page[] {
-  return pages.filter((p) => !p.confirmed && !p.omitted && p.state !== 'processing');
+  return pages.filter((p) => !p.omitted && p.state !== 'processing');
 }
 
 /** Pages that still need the teacher: neither confirmed nor left out. */

@@ -228,7 +228,7 @@ export function createApiClient(base: string = API_BASE) {
 
     confirmAll: (bookId: string, signal?: AbortSignal) =>
       json<Page[]>('POST', `/books/${seg(bookId)}/confirm-all`, { signal }),
-    /** Ask the AI again about every page not confirmed, left out or processing. Returns those pages. */
+    /** Ask the AI again about every page not left out or processing. Returns those pages. */
     rerunBook: (bookId: string, signal?: AbortSignal) =>
       json<Page[]>('POST', `/books/${seg(bookId)}/rerun`, { signal }),
 

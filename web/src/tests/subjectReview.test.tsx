@@ -123,7 +123,7 @@ describe('Subject review', () => {
     expect(screen.getByRole('button', { name: 'Confirm all…' })).toBeDisabled();
   });
 
-  it('Ask the AI again asks first, then processes only pages not confirmed or left out', async () => {
+  it('Ask the AI again asks first; a confirmed page is asked about too and stays confirmed', async () => {
     const { user, demo } = await open();
     await user.click(card(1).getByRole('button', { name: 'Confirm' }));
     expect(await card(1).findByText('Confirmed')).toBeInTheDocument();
@@ -131,14 +131,15 @@ describe('Subject review', () => {
     await user.click(screen.getByRole('button', { name: 'Ask the AI again…' }));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent('outside AI service');
-    expect(dialog).not.toHaveTextContent('Pages 1,');
+    expect(dialog).toHaveTextContent('Pages 1,');
+    expect(dialog).toHaveTextContent('keep their subject and stay confirmed');
     expect(calls).toHaveLength(0);
 
     await user.click(within(dialog).getByRole('button', { name: /^Ask about \d+$/ }));
     expect(await screen.findByText(/Asking the AI again about \d+ pages?\./)).toBeInTheDocument();
     expect(calls[0]).toEqual({ path: `/api/books/${demo.id}/rerun`, body: null });
+    expect(await card(1).findByText('Processing')).toBeInTheDocument();
     expect(card(1).getByText('Confirmed')).toBeInTheDocument();
-    expect(card(1).queryByText('Processing')).not.toBeInTheDocument();
     expect(await card(2).findByText('Processing')).toBeInTheDocument();
   });
 
