@@ -74,3 +74,8 @@ def test_checks_and_second_look_return_contract_types(assets, tmp_path):
     assert isinstance(checks, CheckResult) and checks.fidelity.status == "pass"
     look = stubs.second_look(assets[0].image_path, c.mask_path, "rabbit", ["bunny"])
     assert isinstance(look, SecondLook) and (look.status, look.answer) == ("pass", "rabbit")
+
+
+def test_read_credits_finds_none():
+    assert stubs.read_credits("ignored.pdf") == dict.fromkeys(
+        ("author", "illustrator", "publisher", "source", "license"))

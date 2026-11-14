@@ -52,6 +52,15 @@ def check_mask(c, a, book_dir):
     assert 0 <= y0 < y1 <= a.height, "boxes are master pixels: y0 < y1 inside the page height"
 
 
+def test_read_credits_gives_five_text_or_empty_values_and_never_raises(assets, book_dir):
+    not_a_pdf = book_dir / "not_a_pdf.pdf"
+    not_a_pdf.write_bytes(b"hello")
+    for path in (book_dir / "source.pdf", not_a_pdf, book_dir / "missing.pdf"):
+        credits = modules.pipeline.read_credits(path)
+        assert set(credits) == {"author", "illustrator", "publisher", "source", "license"}
+        assert all(value is None or isinstance(value, str) for value in credits.values())
+
+
 def test_rasterize_follows_contract_3(assets, book_dir):
     for a in assets:
         assert Path(a.image_path).resolve() == (book_dir / "pages" / f"{a.page_number}.png").resolve(), \

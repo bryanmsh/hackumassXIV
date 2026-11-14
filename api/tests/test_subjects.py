@@ -42,6 +42,18 @@ def test_outline_lands_where_it_was_drawn():
     assert mask.getpixel((900, 500)) == 255 and mask.getpixel((2000, 1500)) == 0
 
 
+def test_an_outline_is_tidied_only_when_the_teacher_asks(monkeypatch):
+    calls = []
+    real = modules.pipeline.mask_from_outline
+    monkeypatch.setattr(modules.pipeline, "mask_from_outline",
+                        lambda path, label, points, out, tidy: calls.append(tidy) or real(path, label, points, out, tidy))
+    page = upload()["pages"][2]
+    assert subject(page, {"label": "frog", "outline": OUTLINE}).status_code == 200
+    assert subject(page, {"label": "frog", "outline": OUTLINE, "tidy": False}).status_code == 200
+    assert subject(page, {"label": "frog", "outline": OUTLINE, "tidy": True}).status_code == 200
+    assert calls == [False, False, True]
+
+
 def test_reselecting_an_earlier_subject_restores_its_hash():
     page = upload()["pages"][0]
     first = page["subject_hash"]
@@ -59,7 +71,8 @@ def test_changing_the_subject_clears_the_confirmation():
 @pytest.mark.parametrize("body", [
     {}, {"candidate": 0, "point": [0.5, 0.5]}, {"candidate": 9}, {"candidate": -1},
     {"outline": OUTLINE}, {"label": " ", "outline": OUTLINE},
-    {"label": "frog", "outline": OUTLINE[:2]}, {"refine_point": [0.5]}])
+    {"label": "frog", "outline": OUTLINE[:2]}, {"refine_point": [0.5]},
+    {"candidate": 0, "tidy": True}, {"point": [0.5, 0.5], "tidy": True}])   # tidy is for outlines only
 def test_bad_subject_bodies_are_refused(body):
     assert subject(upload()["pages"][0], body).status_code == 422
 

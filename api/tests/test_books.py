@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from api import db, jobs, modules, settings
 from api.tests.helpers import EX, client, make_pdf, upload
@@ -54,6 +55,52 @@ def test_bad_credits_json_is_refused():
     r = client.post("/api/books", files={"file": ("b.pdf", make_pdf(1), "application/pdf")},
                     data={"credits": "{not json"})
     assert r.status_code == 422
+
+
+NO_CREDITS = {"author": None, "illustrator": None, "publisher": None, "source": None, "license": None}
+IN_PDF = {"author": "P. Author", "illustrator": "P. Illustrator", "publisher": "P. Press",
+          "source": "https://example.org/book", "license": "CC BY 4.0"}
+
+
+def pdf_names(monkeypatch, **found) -> list:
+    """Stand in for the pipeline's credits reader: the uploaded PDF names these credits.
+    Returns the list of (file name, bytes) it was asked to read."""
+    read = []
+
+    def read_credits(pdf_path):
+        read.append((Path(pdf_path).name, Path(pdf_path).read_bytes()))
+        return {**NO_CREDITS, **found}
+    monkeypatch.setattr(modules.pipeline, "read_credits", read_credits)
+    return read
+
+
+def upload_credits(pdf: bytes, typed: dict | None = None) -> dict:
+    data = {"credits": json.dumps(typed)} if typed is not None else {}
+    r = client.post("/api/books", files={"file": ("b.pdf", pdf, "application/pdf")}, data=data)
+    assert r.status_code == 200, r.text
+    return client.get(f"/api/books/{r.json()['book_id']}").json()["credits"]
+
+
+def test_upload_with_no_credits_fills_all_five_from_the_pdf(monkeypatch):
+    read = pdf_names(monkeypatch, **IN_PDF)
+    pdf = make_pdf(1)
+    assert upload_credits(pdf) == IN_PDF
+    assert read == [("source.pdf", pdf)]             # read once, from the saved upload
+
+
+def test_a_typed_author_is_kept_when_the_pdf_names_another(monkeypatch):
+    pdf_names(monkeypatch, **IN_PDF)
+    assert upload_credits(make_pdf(1), {"author": "A. Author"}) == {**IN_PDF, "author": "A. Author"}
+
+
+def test_a_blank_typed_credit_is_filled_from_the_pdf(monkeypatch):
+    pdf_names(monkeypatch, **IN_PDF)
+    assert upload_credits(make_pdf(1), {"author": "  ", "publisher": ""}) == IN_PDF
+
+
+def test_a_pdf_with_no_credits_leaves_them_null(monkeypatch):
+    pdf_names(monkeypatch)
+    assert upload_credits(make_pdf(1)) == NO_CREDITS
 
 
 def test_pages_are_processing_while_the_pipeline_runs(monkeypatch):

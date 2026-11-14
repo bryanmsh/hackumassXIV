@@ -8,7 +8,7 @@ from bson import ObjectId
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ValidationError
 
-from api import db, jobs, settings, views
+from api import db, jobs, modules, settings, views
 
 router = APIRouter(prefix="/api")
 
@@ -41,6 +41,15 @@ def _find_book(book_id: str) -> dict:
     return book
 
 
+def _fill_credits(typed: Credits, found: dict) -> dict:
+    """The teacher's typed value always wins. The PDF fills only what was left empty or blank."""
+    credits = {}
+    for key in CREDIT_KEYS:
+        value = getattr(typed, key)
+        credits[key] = value if value and value.strip() else found.get(key) or value
+    return credits
+
+
 @router.post("/books")
 def upload_book(file: UploadFile, background: BackgroundTasks, title: str | None = Form(None),
                 credits: str | None = Form(None)):
@@ -70,9 +79,10 @@ def upload_book(file: UploadFile, background: BackgroundTasks, title: str | None
     directory = jobs.book_dir(book_id)
     directory.mkdir(parents=True)
     (directory / "source.pdf").write_bytes(data)
+    found = modules.pipeline.read_credits(directory / "source.pdf")
     db.books.insert_one({
         "_id": book_id, "title": title or Path(file.filename or "").stem or "Untitled",
-        "credits": {key: getattr(given, key) for key in CREDIT_KEYS},
+        "credits": _fill_credits(given, found),
         "state": "ingesting", "page_count": 0, "created_at": datetime.now(timezone.utc)})
     background.add_task(jobs.ingest_book, book_id)
     return {"book_id": str(book_id), "state": "ingesting"}
