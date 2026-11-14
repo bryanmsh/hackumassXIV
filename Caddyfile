@@ -1,0 +1,25 @@
+# The whole site sits behind one username and password, so a stranger with the URL
+# cannot upload PDFs and spend the Gemini key. HTTPS is automatic for a real host name.
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	basic_auth {
+		{$SITE_USER} {$SITE_PASSWORD_HASH}
+	}
+
+	# The API allows 50 MB uploads; stop anything much larger before it gets there.
+	request_body {
+		max_size 55MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# The built web app. Unknown paths get index.html so in-app links survive a reload.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
