@@ -6,8 +6,18 @@ services:
     env_file: .env
     environment:
       DATA_DIR: /app/data
+      MONGODB_URI: mongodb://mongo:27017/mirai
     volumes:
       - ./data:/app/data # pages, masks and pre-processed books survive a restart
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  # The database. No ports are published: only the api container can reach it.
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo_data:/data/db
     restart: unless-stopped
 
   caddy:
@@ -31,5 +41,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  mongo_data:
   caddy_data:
   caddy_config:

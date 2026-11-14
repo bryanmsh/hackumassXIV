@@ -24,7 +24,7 @@ Copy `.env.example` and fill it in on the server. It is never committed.
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | The key and the Flash model name |
 | `SEGMENTER` | `grabcut` until the PyTorch segmenter is added |
 | `PIPELINE`, `RENDER` | `stub` or `real`. Start on `stub`; switch one at a time |
-| `MONGODB_URI` | The Atlas connection string, once the API uses the database |
+| `MONGODB_URI` | Leave as is; Compose points the API at its own `mongo` container (data in the `mongo_data` volume) |
 | `DATA_DIR` | Leave as is; Compose sets `/app/data` inside the container |
 
 Keep the password free of `$` characters, or wrap it in single quotes: Compose reads `$` as a variable.
