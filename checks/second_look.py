@@ -12,7 +12,7 @@ from typing import Iterable, List, Optional, Set
 from render._types import LocalSecondLook, to_contract_second_look
 from render.core import compose, encode
 
-DEFAULT_MODEL = "gemini-flash-latest"
+DEFAULT_MODEL = "gemini-3.8-flash"
 TIMEOUT_MS = 20_000
 PROMPT = ("Name the main object in this picture in one to three words. "
           "Reply with only those words, no punctuation.")

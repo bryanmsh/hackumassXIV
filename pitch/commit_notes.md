@@ -2,6 +2,19 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Second look: default model gemini-3.8-flash
+
+**What changed**
+- `checks/second_look.py`: the default model is now `gemini-3.8-flash`. The old placeholder `gemini-flash-latest` returns 404 for our key, and `gemini-2.5-flash` is closed to new users. `SECOND_LOOK_MODEL` or `GEMINI_MODEL` still override it.
+
+**Verified**
+- Real Gemini call with the team key: the bird page answered "red bird" and the rabbit page "rabbit", both pass, about 4 to 5 s each.
+- With a wrong model name it returned a warning and did not crash, as intended.
+
+**Still open**
+- Bryan picks the team's `GEMINI_MODEL` for subject choosing; if it differs, the second look follows it.
+- Open a pull request to get this onto `main`.
+
 ## Merge main into kevin; match Andrew's contract types
 
 **What changed**
