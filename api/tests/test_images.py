@@ -1,3 +1,5 @@
+import pytest
+
 from api import db, modules
 from api.tests.helpers import client, upload
 
@@ -14,6 +16,34 @@ def test_overlay_calls_the_display_with_the_selected_mask(monkeypatch):
     page = upload()["pages"][0]
     assert is_webp(client.get(f"/api/pages/{page['id']}/overlay"))
     assert calls[0].endswith(f"1_{page['subject_hash']}.png")
+
+
+def test_overlay_without_palette_never_calls_overlay_palette(monkeypatch):
+    monkeypatch.setattr(modules.display, "overlay_palette",
+                        lambda *a, **k: pytest.fail("overlay_palette called without ?palette"), raising=False)
+    page = upload()["pages"][0]
+    assert is_webp(client.get(f"/api/pages/{page['id']}/overlay"))
+
+
+def test_overlay_palette_gets_every_candidate_mask_and_the_selected_index(monkeypatch):
+    calls = []
+    real = modules.display.overlay_palette
+    monkeypatch.setattr(modules.display, "overlay_palette",
+                        lambda v, masks, sel: calls.append((v, masks, sel)) or real(v, masks, sel))
+    monkeypatch.setattr(modules.display, "overlay",
+                        lambda *a: pytest.fail("overlay called with ?palette=1"))
+    page = upload()["pages"][0]
+    stored = db.pages.find_one({"_id": db.oid(page["id"])})
+    assert is_webp(client.get(f"/api/pages/{page['id']}/overlay?palette=1"))
+    view, masks, selected = calls[0]
+    assert view == stored["view_path"]
+    assert masks == [c["mask_path"] for c in stored["candidates"]]
+    assert selected == stored["selected"]
+
+
+def test_overlay_palette_works_on_a_page_with_nothing_selected():
+    page = upload()["pages"][1]          # needs_subject, nothing selected
+    assert is_webp(client.get(f"/api/pages/{page['id']}/overlay?palette=1"))
 
 
 def test_overlay_without_a_subject_is_the_plain_page():
