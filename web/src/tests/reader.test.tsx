@@ -161,6 +161,27 @@ describe('Reader', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
+  it('B blanks the screen (background only) until the teacher presses B again or turns a page', async () => {
+    const { backup, maya } = await fixtures();
+    openReader(backup.id, maya);
+    await pageImg(1);
+    await key('b');
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveClass('sr-only'); // nothing visible in front of the child
+    await key('b');
+    await pageImg(1);
+    await key('B');
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    await key('ArrowRight'); // continuing shows the next page
+    await pageImg(2);
+    await key('b');
+    await key('t');
+    const bar = await screen.findByRole('dialog', { name: 'Teacher controls' });
+    const user = userEvent.setup();
+    await user.click(within(bar).getByRole('button', { name: 'Show the page' }));
+    await pageImg(2);
+  });
+
   it('T opens the teacher bar; only fully approved versions can be chosen; Esc closes it', async () => {
     const { backup, maya } = await fixtures();
     openReader(backup.id, maya);

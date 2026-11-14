@@ -114,6 +114,54 @@ describe('Child profiles', () => {
     );
   });
 
+  it('size, position and text controls are saved and previewed', async () => {
+    const user = openProfiles();
+    const calls = captureWrites();
+    const [, leo] = await api.listProfiles();
+    await user.click(await screen.findByRole('button', { name: 'Edit Leo' }));
+    expect(screen.getByRole('radio', { name: /Medium/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Center' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Show the text below the picture' })).not.toBeChecked();
+
+    await user.click(screen.getByRole('radio', { name: /Large/ }));
+    await user.click(screen.getByRole('radio', { name: 'Left' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Show the text below the picture' }));
+    await waitFor(() => {
+      const last = writesTo(calls, 'POST', '/api/preview').at(-1)?.body as { settings: Record<string, string> } | undefined;
+      expect(last?.settings).toEqual(expect.objectContaining({ size: 'large', position: 'left', text_mode: 'below' }));
+    });
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByText('Leo’s profile was saved.');
+    const patch = writesTo(calls, 'PATCH', `/api/profiles/${leo!.id}`)[0]?.body as { settings: Record<string, string> };
+    expect(patch.settings).toEqual({ ...leo!.settings, size: 'large', position: 'left', text_mode: 'below' });
+    const card = within((await screen.findByRole('heading', { name: 'Leo' })).closest('li')!);
+    expect(card.getByText(/Large · Left · text below the picture/)).toBeInTheDocument();
+  });
+
+  it('a custom colour can be added, made main, warns on low contrast, and is saved as hex', async () => {
+    const user = openProfiles();
+    const calls = captureWrites();
+    await user.click(await screen.findByRole('button', { name: 'New child profile' }));
+    await user.type(screen.getByLabelText('First name'), 'Ana');
+    await user.click(screen.getByRole('radio', { name: /Cut-out/ }));
+    const hex = screen.getByLabelText('Hex code');
+    await user.clear(hex);
+    await user.type(hex, '12ab');
+    expect(screen.getByRole('button', { name: 'Add this color' })).toBeDisabled();
+    await user.clear(hex);
+    await user.type(hex, '#F5E6A3');
+    await user.click(screen.getByRole('button', { name: 'Add this color' }));
+    expect(within(screen.getByRole('list', { name: 'Custom colors chosen' })).getByText('Custom #F5E6A3')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Make Custom #F5E6A3 main' }));
+    await user.click(screen.getByRole('radio', { name: /White/ }));
+    expect(screen.getByText(/Custom #F5E6A3 on white has a contrast of/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('To keep these colors, say why'), 'Her favourite');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    await screen.findByText('Ana’s profile was created.');
+    const body = writesTo(calls, 'POST', '/api/profiles')[0]?.body as { settings: { colors: string[] } };
+    expect(body.settings.colors).toEqual(['#F5E6A3', '#E53935']);
+  });
+
   it('editing Leo keeps his other settings and says approvals will need redoing', async () => {
     const user = openProfiles();
     const calls = captureWrites();

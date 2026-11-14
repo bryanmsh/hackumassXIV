@@ -44,11 +44,11 @@ export function ChecksList({ checks, level }: { checks: CheckResult | null; leve
       {rows.map(({ key, item }) => (
         <li key={key} className="flex items-start gap-2 text-sm">
           {item ? (
-            <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ring-1 ring-inset ${CHECK_TONE[item.status]}`}>
+            <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-sm font-bold ring-1 ring-inset ${CHECK_TONE[item.status]}`}>
               {STATUS_TEXT[item.status]}
             </span>
           ) : (
-            <span className="inline-flex shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600 ring-1 ring-inset ring-slate-300">
+            <span className="inline-flex shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-sm font-bold text-slate-600 ring-1 ring-inset ring-slate-300">
               Not checked
             </span>
           )}

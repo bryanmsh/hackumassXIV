@@ -101,13 +101,14 @@ dropped. That is the segmenter's limit, not the finding step.
 
 ## What gets pre-selected
 
-Almost every page comes back Ready with a selection; the teacher is asked only when nothing
-is reasonably sure. The teacher still confirms or changes every page.
+A page about one thing comes back Ready with its top candidate selected. A page with several
+main subjects offers a combined cut-out but does not pre-select it: the subject is what the
+story is about, and that is the teacher's call. The teacher still confirms or changes every page.
 
 | Page | Pre-selected | State |
 | --- | --- | --- |
 | About one thing (`single`) | The top candidate, if its confidence is 0.5 or more | Ready |
-| Several main subjects, or a scene | One **combined cut-out** of every candidate at 0.5 or more, added after the single ones (for example "rabbit and rat") | Ready |
+| Several main subjects, or a scene | Nothing. One **combined cut-out** of every candidate at 0.5 or more is added after the single ones (for example "rabbit and rat"), one click away | Needs subject |
 | Candidates found, none at 0.5 | Nothing | Needs subject |
 | No candidates, or no usable cut-out | Nothing | No clear subject |
 | The first choice had no usable cut-out | Nothing | Needs subject |

@@ -62,6 +62,12 @@ describe('profile form rules', () => {
     expect(validateDraft(draftFrom())).toMatchObject({ name: expect.any(String), level: expect.any(String) });
   });
 
+  it('size, position and text come from the controls; outline stays as stored', () => {
+    const d = { ...draftFrom(), name: 'Sam', level: 2 as const, size: 'large' as const, position: 'left' as const, textMode: 'below' as const };
+    const body = inputFrom(d);
+    expect(body.settings).toEqual({ ...DEFAULT_SETTINGS, size: 'large', position: 'left', text_mode: 'below' });
+  });
+
   it('saving keeps size, position, text and outline exactly as stored', () => {
     const leo: Profile = {
       id: 'p2',

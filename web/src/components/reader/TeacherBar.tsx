@@ -12,6 +12,9 @@ interface Props {
   canNext: boolean;
   onPrev: () => void;
   onNext: () => void;
+  /** The screen is blanked (B): only the background shows until the teacher continues. */
+  blank: boolean;
+  onToggleBlank: () => void;
   onSwitch: (v: ReaderVersion) => void;
   onClose: () => void;
   fullscreen: { supported: boolean; active: boolean; toggle: () => void };
@@ -30,7 +33,7 @@ const btn = 'min-h-12 rounded-lg px-4 text-base font-semibold disabled:cursor-no
  * approved as choices; the rest are greyed "not approved". Approving happens
  * outside the reader.
  */
-export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNext, onSwitch, onClose, fullscreen, checking, checkError, pageProblem }: Props) {
+export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNext, onSwitch, onClose, fullscreen, checking, checkError, pageProblem, blank, onToggleBlank }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
 
@@ -52,7 +55,7 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
             <h2 className="text-xl font-bold">{manifest.title}</h2>
             <p className="text-slate-700">
               {current ? `${current.profile_name} · ${levelName(manifest.level as Level)}` : levelName(manifest.level as Level)} · {position}
-              {checking && <span className="ml-2 text-sm text-slate-500">checking approvals…</span>}
+              {checking && <span className="ml-2 text-sm text-slate-600">checking approvals…</span>}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -61,6 +64,9 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
             </button>
             <button type="button" className={`${btn} bg-slate-100 ring-1 ring-slate-300`} disabled={!canNext} onClick={onNext}>
               Next page →
+            </button>
+            <button type="button" aria-pressed={blank} className={`${btn} ring-1 ${blank ? 'bg-slate-900 text-white ring-slate-900' : 'bg-slate-100 ring-slate-300'}`} onClick={onToggleBlank}>
+              {blank ? 'Show the page' : 'Blank the screen'}
             </button>
             {fullscreen.supported && (
               <button type="button" className={`${btn} bg-slate-100 ring-1 ring-slate-300`} onClick={fullscreen.toggle}>
@@ -107,7 +113,7 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
                         ? 'bg-sky-700 text-white ring-sky-800'
                         : v.fully_approved
                           ? 'bg-white ring-slate-300 hover:bg-slate-50'
-                          : 'bg-slate-100 text-slate-400 ring-slate-200'
+                          : 'bg-slate-100 text-slate-600 ring-slate-200'
                     }`}
                   >
                     {label}
@@ -139,7 +145,7 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
         )}
 
         <p className="text-sm text-slate-600">
-          Keys: → or Space next page, ← previous page, T or Esc to hide this bar. A clicker that sends the arrow or Page keys works
+          Keys: → or Space next page, ← previous page, B blank screen on or off, T or Esc to hide this bar. A clicker that sends the arrow or Page keys works
           too.
         </p>
       </div>

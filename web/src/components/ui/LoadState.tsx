@@ -17,13 +17,10 @@ export function errorMessage(error: unknown): string {
 }
 
 export function ErrorPanel({ error, onRetry, title = 'Could not load this' }: { error: unknown; onRetry?: () => void; title?: string }) {
-  const status = error instanceof ApiError && error.status ? ` (HTTP ${error.status})` : '';
+  // Never a status code in front of a teacher: the message below says what happened.
   return (
     <div role="alert" className="my-6 rounded-xl bg-rose-50 p-5 ring-1 ring-rose-200">
-      <p className="font-semibold text-rose-900">
-        {title}
-        {status}
-      </p>
+      <p className="font-semibold text-rose-900">{title}</p>
       <p className="mt-1 text-rose-900">{errorMessage(error)}</p>
       {onRetry && (
         <Button className="mt-4" onClick={onRetry}>
