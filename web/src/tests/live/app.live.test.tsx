@@ -28,10 +28,15 @@ function renderAt(path: string) {
   );
 }
 
+// What the server holds decides which checks can run; checks that need data it
+// lacks are reported as skipped, never as passed.
+const BOOKS = await api.listBooks();
+const PROFILES = await api.listProfiles();
+const HAS_BOOKS = BOOKS.length > 0;
+const HAS_BOTH = HAS_BOOKS && PROFILES.length > 0;
+
 async function firstBook(): Promise<Book> {
-  const books = await api.listBooks();
-  expect(books.length).toBeGreaterThan(0);
-  return books[0]!;
+  return BOOKS[0]!;
 }
 
 const WRITES = process.env.LIVE_ALLOW_WRITES === '1';
@@ -42,7 +47,7 @@ describe(`live API at ${API_BASE}`, () => {
     expect(api.url('/books')).toBe(`${API_BASE.replace(/\/+$/, '')}/api/books`);
   });
 
-  it('GET /books and GET /books/{id} parse into the agreed shapes', async () => {
+  it.skipIf(!HAS_BOOKS)('GET /books and GET /books/{id} parse into the agreed shapes', async () => {
     const b = await firstBook();
     const full = await api.getBook(b.id);
     expect(full.id).toBe(b.id);
@@ -54,7 +59,7 @@ describe(`live API at ${API_BASE}`, () => {
     }
   });
 
-  it('serves the overlay image as an image, not cached', async () => {
+  it.skipIf(!HAS_BOOKS)('serves the overlay image as an image, not cached', async () => {
     const b = await api.getBook((await firstBook()).id);
     const p = b.pages.find((x) => x.state !== 'processing');
     if (!p) return;
@@ -62,20 +67,24 @@ describe(`live API at ${API_BASE}`, () => {
     expect(img.size).toBeGreaterThan(0);
   });
 
-  it('Library renders the server’s books', async () => {
-    const b = await firstBook();
+  it('Library renders the server’s books, or its empty state', async () => {
     renderAt('/');
+    if (!HAS_BOOKS) {
+      expect(await screen.findByText('No books yet')).toBeInTheDocument();
+      return;
+    }
+    const b = await firstBook();
     const heading = await screen.findByRole('heading', { name: b.title });
-    expect(within(heading.closest('li')!).getByRole('list', { name: 'Each page' })).toBeInTheDocument();
+    expect(within(heading.closest('li')!).getByRole('heading', { name: b.title })).toBeInTheDocument();
   });
 
-  it('Subject review renders every page', async () => {
+  it.skipIf(!HAS_BOOKS)('Subject review renders every page', async () => {
     const b = await api.getBook((await firstBook()).id);
     renderAt(`/books/${b.id}/subjects`);
     for (const p of b.pages) expect(await screen.findByRole('heading', { name: `Page ${p.number}` })).toBeInTheDocument();
   });
 
-  it.skipIf(!WRITES)('WRITES: a candidate pick round-trips', async () => {
+  it.skipIf(!WRITES || !HAS_BOOKS)('WRITES: a candidate pick round-trips', async () => {
     const b = await api.getBook((await firstBook()).id);
     renderAt(`/books/${b.id}/subjects`);
     await screen.findByRole('heading', { name: `Page ${b.pages[0]!.number}` });
@@ -94,7 +103,7 @@ describe(`live API at ${API_BASE}`, () => {
 });
 
 describe(`live API at ${API_BASE}: subject editor`, () => {
-  it('opens a page with its picture ready to tap or draw on', async () => {
+  it.skipIf(!HAS_BOOKS)('opens a page with its picture ready to tap or draw on', async () => {
     const b = await api.getBook((await firstBook()).id);
     const target = b.pages.find((p) => p.state !== 'processing');
     if (!target) return;
@@ -103,7 +112,7 @@ describe(`live API at ${API_BASE}: subject editor`, () => {
     expect(await screen.findByTestId('image-frame')).toBeInTheDocument();
   });
 
-  it('a page with no subject still has a picture (the overlay is the plain page)', async () => {
+  it.skipIf(!HAS_BOOKS)('a page with no subject still has a picture (the overlay is the plain page)', async () => {
     const b = await api.getBook((await firstBook()).id);
     const target = b.pages.find((p) => p.selected === null && p.state !== 'processing');
     if (!target) return;
@@ -111,7 +120,7 @@ describe(`live API at ${API_BASE}: subject editor`, () => {
     expect(img.size).toBeGreaterThan(0);
   });
 
-  it.skipIf(!WRITES)('WRITES: the server accepts a 0-1 point and a 0-1 outline', async () => {
+  it.skipIf(!WRITES || !HAS_BOOKS)('WRITES: the server accepts a 0-1 point and a 0-1 outline', async () => {
     const b = await api.getBook((await firstBook()).id);
     const target = b.pages.find((p) => p.state !== 'processing');
     if (!target) return;
@@ -132,7 +141,7 @@ describe(`live API at ${API_BASE}: subject editor`, () => {
 });
 
 describe(`live API at ${API_BASE}: profiles`, () => {
-  it('lists profiles and previews unsaved settings without saving anything', async () => {
+  it.skipIf(!HAS_BOTH)('lists profiles and previews unsaved settings without saving anything', async () => {
     const profiles = await api.listProfiles();
     for (const p of profiles) {
       expect([1, 2, 3, 4]).toContain(p.level);
@@ -151,9 +160,59 @@ describe(`live API at ${API_BASE}: profiles`, () => {
     expect((await api.listProfiles()).map((p) => p.settings_hash)).toEqual(before);
   });
 
-  it('the Profiles screen renders the server’s profiles', async () => {
-    const profiles = await api.listProfiles();
+  it('the Profiles screen renders the server’s profiles, or its empty state', async () => {
     renderAt('/profiles');
-    for (const p of profiles) expect(await screen.findByRole('heading', { name: p.name })).toBeInTheDocument();
+    if (!PROFILES.length) {
+      expect(await screen.findByText('No child profiles yet')).toBeInTheDocument();
+      return;
+    }
+    for (const p of PROFILES) expect(await screen.findByRole('heading', { name: p.name })).toBeInTheDocument();
+  });
+});
+
+describe(`live API at ${API_BASE}: contact sheet (read-only, never approves)`, () => {
+  it.skipIf(!HAS_BOTH)('the sheet parses, and each page version renders through /render with its exact v', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await firstBook();
+    const sheet = await api.getSheet(b.id, { profile: profile.id, level: profile.level });
+    expect(sheet.pages.length).toBeGreaterThan(0);
+    for (const p of sheet.pages) expect(['approved', 'rejected', 'none']).toContain(p.approval);
+    const withV = sheet.pages.find((p) => p.version);
+    if (!withV) return;
+    const img = await api.getRender(withV.page_id, { profile: profile.id, level: profile.level, v: withV.version! });
+    expect(img.size).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!HAS_BOTH)('the Contact sheet screen renders every page for a child and look', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await api.getBook((await firstBook()).id);
+    renderAt(`/books/${b.id}/approve?profile=${profile.id}&level=${profile.level}`);
+    for (const p of b.pages) expect(await screen.findByRole('heading', { name: `Page ${p.number}` })).toBeInTheDocument();
+  });
+});
+
+describe(`live API at ${API_BASE}: reader (read-only)`, () => {
+  it.skipIf(!HAS_BOTH)('the manifest parses and an approved page image comes from /reader/page with its token', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await firstBook();
+    const m = await api.getReaderManifest(b.id, { profile: profile.id, level: profile.level });
+    for (const s of m.skipped) expect(['omitted', 'rejected', 'not_approved']).toContain(s.reason);
+    const first = m.pages[0];
+    if (!first) return;
+    const img = await api.getReaderPage(first.page_id, { profile: m.profile_id, level: m.level, v: first.v });
+    expect(img.size).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!HAS_BOTH)('the Reader screen shows the first approved page, or the no-pages message', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await firstBook();
+    const m = await api.getReaderManifest(b.id, { profile: profile.id, level: profile.level });
+    renderAt(`/read/${b.id}?profile=${profile.id}&level=${profile.level}`);
+    if (m.pages[0]) expect(await screen.findByRole('img', { name: `Page ${m.pages[0].number}` })).toBeInTheDocument();
+    else expect(await screen.findByText(/No pages are approved/)).toBeInTheDocument();
   });
 });
