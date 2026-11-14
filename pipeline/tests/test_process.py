@@ -212,13 +212,14 @@ def read(candidate):
     return cv2.imread(candidate.mask_path, cv2.IMREAD_UNCHANGED)
 
 
-def test_several_subjects_are_pre_selected_as_one_combined_cut_out(asset, tmp_path, gemini):
+def test_several_subjects_are_offered_as_one_combined_cut_out_but_not_pre_selected(asset, tmp_path, gemini):
     gemini(answer(subject("ball", 0.8), subject("cat", 0.6, box=(0, 0, 200, 200), synonyms=["kitten", "animal"]),
                   page_kind="several"))
     result = process_page(asset, tmp_path)
-    assert (result.state, result.page_kind, result.reason) == ("ready", "several", None)
+    # The teacher decides what a page with several subjects is about; the group is one click away.
+    assert (result.state, result.page_kind, result.reason) == ("needs_subject", "several", "The page has several subjects")
     assert [c.label for c in result.candidates] == ["ball", "cat", "ball and cat"]  # singles first, then the group
-    assert result.selected == 2
+    assert result.selected is None
     ball, cat, group = result.candidates
     assert np.array_equal(read(group), read(ball) | read(cat))  # every subject, exactly as cut
     assert group.source == "auto"
@@ -244,7 +245,7 @@ def test_weak_candidates_stay_out_of_the_combined_cut_out(asset, tmp_path, gemin
                   subject("stone", 0.3, box=(800, 800, 1000, 1000)), page_kind="scene"))
     result = process_page(asset, tmp_path)
     assert [c.label for c in result.candidates] == ["ball", "cat", "stone", "ball and cat"]
-    assert (result.state, result.selected) == ("ready", 3)
+    assert (result.state, result.selected) == ("needs_subject", None)
     stone, group = result.candidates[2], result.candidates[3]
     assert not (read(stone) & read(group)).any()
 

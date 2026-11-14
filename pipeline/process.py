@@ -30,10 +30,10 @@ def gemini_box_to_pixels(box_2d, width, height) -> tuple[float, float, float, fl
 def decide_state(page_kind, candidates: list[Candidate]) -> tuple[str, list[int], str | None]:
     """(state, members, reason). `members` are the candidates to pre-select, by position.
 
-    Almost every page comes back Ready: the teacher is asked only when nothing was found
-    or nothing is reasonably sure. A page about one thing selects its top candidate. A page
-    with several main subjects, or a scene, selects every reasonably sure one together.
-    The teacher still confirms or changes every page.
+    A page about one thing selects its top candidate. A page with several main subjects, or a
+    scene, lists every reasonably sure one as `members`: process_page offers them as one combined
+    cut-out but does not pre-select it, so the teacher decides what the page is about. The teacher
+    is asked when nothing was found, nothing is reasonably sure, or there are several subjects.
     """
     if not candidates:
         return "no_clear_subject", [], "No subject was found on this page"
@@ -141,11 +141,12 @@ def process_page(asset, out_dir, force=False) -> PageResult:
         if len(members) == 1:
             selected = members[0]
         elif members:
-            # Several main subjects: add one cut-out of all of them, after the single ones,
-            # and pre-select it. The teacher can still switch to any single subject.
+            # Several main subjects: offer one cut-out of all of them, after the single ones,
+            # but do not pre-select it. The subject is what the story is about, and that is the
+            # teacher's call; the combined option is one click away.
             candidates.append(_group([candidates[i] for i in members], [masks[i] for i in members],
                                      asset.image_path, out_dir))
-            selected = len(candidates) - 1
+            state, reason = "needs_subject", "The page has several subjects"
         return _result(state, answer.page_kind, candidates, selected, reason)
     except Exception as error:
         return _result("failed", reason=_reason(error))
