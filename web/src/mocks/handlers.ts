@@ -81,6 +81,15 @@ function levelFrom(url: URL): Level | null {
   return isLevel(n) ? n : null;
 }
 
+/** What the mock's PDF reader "finds" in any uploaded book (the Animal Homes credits). */
+export const PDF_CREDITS: Credits = {
+  author: 'Ashwitha Jayakumar',
+  illustrator: 'Nafisa Nandini Crishna',
+  publisher: 'Pratham Books',
+  source: 'StoryWeaver',
+  license: 'CC BY 4.0',
+};
+
 function parseCredits(raw: FormDataEntryValue | null): Credits | 'invalid' {
   const empty: Credits = { author: null, illustrator: null, publisher: null, source: null, license: null };
   if (raw === null || raw === '') return empty;
@@ -122,8 +131,12 @@ export const handlers = [
         db.scenarios.uploadTooManyPagesNext = false;
         return fail(422, 'The PDF has 34 pages. Mirai supports up to 30.');
       }
-      const credits = parseCredits(form.get('credits'));
-      if (credits === 'invalid') return fail(422, 'Credits must be a JSON object.');
+      const typed = parseCredits(form.get('credits'));
+      if (typed === 'invalid') return fail(422, 'Credits must be a JSON object.');
+      // The real API reads the credits out of the PDF at upload; what the teacher typed wins.
+      // The mock "finds" the Animal Homes credits in every PDF.
+      const credits: Credits = { ...typed };
+      for (const key of Object.keys(PDF_CREDITS) as (keyof Credits)[]) credits[key] = typed[key] ?? PDF_CREDITS[key];
       const rawTitle = form.get('title');
       const title =
         typeof rawTitle === 'string' && rawTitle.trim() ? rawTitle.trim() : file.name.replace(/\.pdf$/i, '');

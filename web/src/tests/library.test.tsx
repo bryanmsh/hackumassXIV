@@ -140,6 +140,52 @@ describe('Library', () => {
     expect(sent[0]!.title).toBeNull();
   });
 
+  it('an upload with blank credits shows the credits read from the PDF, on the book card', async () => {
+    const user = renderLibrary();
+    await user.upload(fileInput(), pdf('owl.pdf'));
+    await user.click(screen.getByRole('button', { name: 'Upload book' }));
+    const card = within((await screen.findByRole('heading', { name: 'owl' })).closest('li')!);
+    const credits = within(card.getByRole('region', { name: 'Credits of owl' }));
+    expect(credits.getByText('Ashwitha Jayakumar')).toBeInTheDocument();
+    expect(credits.getByText('Nafisa Nandini Crishna')).toBeInTheDocument();
+    expect(credits.getByText('Pratham Books')).toBeInTheDocument();
+    expect(credits.getByText('StoryWeaver')).toBeInTheDocument();
+    expect(credits.getByText('CC BY 4.0')).toBeInTheDocument();
+    expect(credits.queryByText('Not found')).not.toBeInTheDocument();
+    // The upload form says where blank credits come from.
+    expect(screen.getByText(/Leave blank to read them from the PDF/)).toBeInTheDocument();
+  });
+
+  it('Edit credits saves all five through PATCH /books/{id} {credits}; a blank shows “Not found”', async () => {
+    const user = renderLibrary();
+    await user.upload(fileInput(), pdf('owl.pdf'));
+    await user.click(screen.getByRole('button', { name: 'Upload book' }));
+    const li = (await screen.findByRole('heading', { name: 'owl' })).closest('li')!;
+    const card = within(li);
+    const bodies: unknown[] = [];
+    server.use(
+      http.patch('*/api/books/:id', async ({ request }) => {
+        bodies.push(await request.clone().json());
+        return undefined;
+      }),
+    );
+    await user.click(card.getByRole('button', { name: 'Edit credits of owl' }));
+    const form = within(card.getByRole('form', { name: 'Edit credits of owl' }));
+    expect(form.getByLabelText('Author')).toHaveValue('Ashwitha Jayakumar');
+    await user.clear(form.getByLabelText('Illustrator'));
+    await user.clear(form.getByLabelText('Author'));
+    await user.type(form.getByLabelText('Author'), 'R. Writer');
+    await user.click(form.getByRole('button', { name: 'Save credits' }));
+    expect(await card.findByText('Credits saved.')).toBeInTheDocument();
+    expect(bodies).toEqual([
+      { credits: { author: 'R. Writer', illustrator: null, publisher: 'Pratham Books', source: 'StoryWeaver', license: 'CC BY 4.0' } },
+    ]);
+    const credits = within(card.getByRole('region', { name: 'Credits of owl' }));
+    expect(credits.getByText('R. Writer')).toBeInTheDocument();
+    expect(credits.getByText('Not found')).toBeInTheDocument();
+    expect(credits.getByText(/Type anything marked/)).toBeInTheDocument();
+  });
+
   it('shows a retry when the list cannot load', async () => {
     scenarios.networkErrorNext = true;
     const user = renderLibrary();

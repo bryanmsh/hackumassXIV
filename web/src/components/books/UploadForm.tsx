@@ -125,6 +125,7 @@ export function UploadForm({ onUploaded }: { onUploaded: (res: UploadBookRespons
       <fieldset className="mt-4">
         <legend className="font-semibold">Credits</legend>
         <p className="text-slate-600">Shown on the last page of the reader, with a note that the pages were adapted.</p>
+        <p className="text-slate-600">Leave blank to read them from the PDF. You can check and change them after upload.</p>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {CREDIT_FIELDS.map(({ key, label, hint }) => (
             <div key={key}>
