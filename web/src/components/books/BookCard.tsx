@@ -46,25 +46,58 @@ export function BookCard({ book: initial, onDeleted }: { book: Book; onDeleted?:
   const omitted = book.pages.filter((p) => p.omitted).length;
 
   return (
-    <li className="flex flex-col rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <li className="flex flex-col gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      {/* Title and state. Delete sits up here, quiet and far from the main action below. */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <h2 className="break-words text-xl font-bold">{book.title}</h2>
+          {book.state === 'ingesting' && <Badge tone={PAGE_STATE_TONE.processing}>Reading PDF</Badge>}
+          {book.state === 'failed' && <Badge tone={PAGE_STATE_TONE.failed}>Failed</Badge>}
         </div>
-        {book.state === 'ingesting' && <Badge tone={PAGE_STATE_TONE.processing}>Reading PDF</Badge>}
-        {book.state === 'failed' && <Badge tone={PAGE_STATE_TONE.failed}>Failed</Badge>}
+        {onDeleted && !askingDelete && (
+          <Button
+            variant="ghost"
+            className="-me-2 -mt-1 shrink-0 text-rose-800 hover:bg-rose-50"
+            onClick={() => setAskingDelete(true)}
+            aria-label={`Delete ${book.title}…`}
+          >
+            Delete…
+          </Button>
+        )}
       </div>
 
-      <BookCredits book={book} onSaved={refresh} />
+      {askingDelete && (
+        <div role="dialog" aria-modal="false" aria-labelledby={`${book.id}-del-h`} className="rounded-xl bg-rose-50 p-4 ring-1 ring-rose-300">
+          <h3 id={`${book.id}-del-h`} className="text-lg font-bold text-rose-950">
+            Delete “{book.title}”?
+          </h3>
+          <p className="mt-1 text-rose-950">
+            Its pages, subjects, checks and approvals for every child go with it. This cannot be undone.
+          </p>
+          {removal.error && (
+            <p role="alert" className="mt-2 rounded-lg bg-white p-2 text-rose-900 ring-1 ring-rose-200">
+              Not deleted: {errorMessage(removal.error)}
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="danger" disabled={removal.pending !== null} onClick={() => void doDelete()}>
+              {removal.pending ? 'Deleting…' : `Delete ${book.title}`}
+            </Button>
+            <Button disabled={removal.pending !== null} onClick={() => setAskingDelete(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
-      {book.state === 'ingesting' && <p className="mt-3 text-slate-700">Reading the PDF and making the page images…</p>}
+      {book.state === 'ingesting' && <p className="text-slate-700">Reading the PDF and making the page images…</p>}
       {book.state === 'failed' && (
-        <p className="mt-3 text-rose-900">The server could not read this PDF. Check the file and upload it again.</p>
+        <p className="text-rose-900">The server could not read this PDF. Check the file and upload it again.</p>
       )}
 
       {book.state === 'ready' && (
-        <>
-          <div className="mt-3">
+        <section aria-label={`${book.title}: pages`} className="space-y-3">
+          <div>
             <div className="flex flex-wrap justify-between gap-2 text-slate-800">
               <span>
                 {processed === total ? `All ${total} pages processed` : `Processing: ${processed} of ${total} pages done`}
@@ -85,7 +118,7 @@ export function BookCard({ book: initial, onDeleted }: { book: Book; onDeleted?:
             </div>
           </div>
 
-          <ul className="mt-3 flex flex-wrap gap-2" aria-label="Pages by state">
+          <ul className="flex flex-wrap gap-2" aria-label="Pages by state">
             {STATE_ORDER.filter((s) => counts[s] > 0).map((s) => (
               <li key={s}>
                 <Badge tone={PAGE_STATE_TONE[s]}>
@@ -95,7 +128,7 @@ export function BookCard({ book: initial, onDeleted }: { book: Book; onDeleted?:
             ))}
           </ul>
 
-          <ol className="mt-3 flex flex-wrap gap-1" aria-label="Each page">
+          <ol className="flex flex-wrap gap-1" aria-label="Each page">
             {book.pages.map((p) => (
               <li
                 key={p.id}
@@ -112,16 +145,16 @@ export function BookCard({ book: initial, onDeleted }: { book: Book; onDeleted?:
               </li>
             ))}
           </ol>
-        </>
+        </section>
       )}
 
       {polling && !error && (
-        <p className="mt-3 text-sm text-slate-600" role="status">
+        <p className="text-sm text-slate-600" role="status">
           Updating every 2 seconds while pages are processed.
         </p>
       )}
       {error && (
-        <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-amber-950 ring-1 ring-amber-200">
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-amber-950 ring-1 ring-amber-200">
           <span>
             {polling ? 'Could not update; trying again.' : 'Updates stopped.'} {errorMessage(error)}
           </span>
@@ -129,55 +162,24 @@ export function BookCard({ book: initial, onDeleted }: { book: Book; onDeleted?:
         </div>
       )}
 
-      {askingDelete && (
-        <div role="dialog" aria-modal="false" aria-labelledby={`${book.id}-del-h`} className="mt-4 rounded-xl bg-rose-50 p-4 ring-1 ring-rose-300">
-          <h3 id={`${book.id}-del-h`} className="text-lg font-bold text-rose-950">
-            Delete “{book.title}”?
-          </h3>
-          <p className="mt-1 text-rose-950">
-            Its pages, subjects, checks and approvals for every child go with it. This cannot be undone.
-          </p>
-          {removal.error && (
-            <p role="alert" className="mt-2 rounded-lg bg-white p-2 text-rose-900 ring-1 ring-rose-200">
-              Not deleted: {errorMessage(removal.error)}
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="danger" disabled={removal.pending !== null}
-              onClick={() => void doDelete()}
-            >
-              {removal.pending ? 'Deleting…' : `Delete ${book.title}`}
-            </Button>
-            <Button disabled={removal.pending !== null} onClick={() => setAskingDelete(false)}>
-              Cancel
-            </Button>
-          </div>
+      <BookCredits book={book} onSaved={refresh} />
+
+      {book.state === 'ready' && (
+        <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-200 pt-4">
+          <Link
+            to={`/books/${encodeURIComponent(book.id)}/subjects`}
+            className="inline-flex min-h-11 items-center rounded-lg bg-sky-700 px-4 font-semibold text-white hover:bg-sky-800"
+          >
+            Review subjects
+          </Link>
+          <Link
+            to={`/books/${encodeURIComponent(book.id)}/approve`}
+            className="inline-flex min-h-11 items-center rounded-lg px-4 font-semibold text-sky-800 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
+          >
+            Contact sheets
+          </Link>
         </div>
       )}
-
-      <div className="mt-auto flex flex-wrap gap-2 pt-4">
-        {book.state === 'ready' ? (
-          <>
-            <Link
-              to={`/books/${encodeURIComponent(book.id)}/subjects`}
-              className="inline-flex min-h-11 items-center rounded-lg bg-sky-700 px-4 font-semibold text-white hover:bg-sky-800"
-            >
-              Review subjects
-            </Link>
-            <Link
-              to={`/books/${encodeURIComponent(book.id)}/approve`}
-              className="inline-flex min-h-11 items-center rounded-lg px-4 font-semibold text-sky-800 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
-            >
-              Contact sheets
-            </Link>
-          </>
-        ) : null}
-        {onDeleted && !askingDelete && (
-          <Button variant="danger" className="ms-auto" onClick={() => setAskingDelete(true)} aria-label={`Delete ${book.title}…`}>
-            Delete book…
-          </Button>
-        )}
-      </div>
     </li>
   );
 }
