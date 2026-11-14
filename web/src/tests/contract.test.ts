@@ -48,8 +48,7 @@ describe('Contract 1 mock coverage', () => {
   });
 
   it('upload route exists and returns a book id', async () => {
-    // jsdom's FormData cannot be serialized by Node fetch, so stub the transport here
-    // and only assert the client's call shape. Upload UI tests come with D2.
+    // Client call shape only; the full upload through the mock is in library.test.tsx.
     const bodies: string[] = [];
     server.use(
       http.post('*/api/books', ({ request }) => {

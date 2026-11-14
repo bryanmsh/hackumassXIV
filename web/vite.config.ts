@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defineConfig, loadEnv } from 'vite';
+import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -22,6 +23,8 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: 'jsdom',
       setupFiles: ['./src/tests/setup.ts'],
+      // Live-server smoke tests run only via `npm run test:live`.
+      exclude: [...configDefaults.exclude, 'src/tests/live/**'],
       css: false,
       restoreMocks: true,
     },

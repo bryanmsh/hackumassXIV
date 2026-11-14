@@ -1,12 +1,9 @@
 /**
  * Contract 1 (HTTP API) types for the Mirai web app.
  *
- * ⚠️ PROVISIONAL. These shapes follow the frozen Contract 1 route table and the
- * Contract 2 Pydantic models in "Product and technical spec.md", but the exact
- * JSON (field names, nesting, error bodies) has NOT yet been agreed with Andrew.
- * Every guess that the spec does not pin down is marked `PROVISIONAL:` below.
- * When the agreed example file lands, update this file first; the client,
- * mocks and screens all type-check against it.
+ * Source of truth: contracts/examples.json (Andrew's agreed request/response
+ * example for every route). tests/examples.test.ts checks these shapes and the
+ * mocks against that file. Anything still unconfirmed is marked `PROVISIONAL:`.
  *
  * Coordinates: every position crossing HTTP is a fraction in [0, 1] of the
  * original page, origin top-left, x across, y down (FINAL build plan). The API
@@ -15,7 +12,7 @@
 
 // ---------- Shared primitives ----------
 
-/** Fractional point [x, y], each in [0, 1]. PROVISIONAL: array vs {x, y}. */
+/** Fractional point [x, y], each in [0, 1]. */
 export type NormPoint = [x: number, y: number];
 
 /** Fractional box [x0, y0, x1, y1], each in [0, 1], x0 < x1, y0 < y1. */
@@ -31,7 +28,7 @@ export type HexColor = string;
 
 export type BookState = 'ingesting' | 'ready' | 'failed';
 
-/** PROVISIONAL: lowercase snake_case, matching Contract 2 PageResult.state plus "processing". */
+/** Lowercase snake_case, as in contracts/examples.json `_enums["page.state"]`. */
 export type PageState =
   | 'processing'
   | 'ready'
@@ -80,19 +77,22 @@ export interface Page {
   id: string;
   book_id: string;
   number: number;
+  /** Master image size in px. Only the aspect ratio matters to the browser; positions stay 0-1. */
+  width: number;
+  height: number;
   state: PageState;
   reason: string | null;
   flags: PageFlag[];
   page_kind: PageKind | null;
   candidates: Candidate[];
-  /** PROVISIONAL: index into `candidates`, as in Contract 2 PageResult.selected. */
+  /** Index into `candidates`, as in Contract 2 PageResult.selected. */
   selected: number | null;
   subject_hash: string | null;
   confirmed: boolean;
   omitted: boolean;
   second_look: SecondLook | null;
-  /** Page text from the PDF text layer, when present. PROVISIONAL: may be omitted. */
-  text?: string | null;
+  /** Page text from the PDF text layer; "" when there is none. */
+  text: string;
 }
 
 export interface Book {
@@ -205,11 +205,11 @@ export interface CheckResult {
   background: CheckItem | null;
   contrast: CheckItem;
   size: CheckItem;
-  /** Only when text is shown. PROVISIONAL: null vs omitted. */
+  /** Only when text is shown; null otherwise. */
   text_contrast: CheckItem | null;
 }
 
-/** PROVISIONAL representation of the current approval state of one page version. */
+/** Current approval state of one page version for the chosen child and look. */
 export type ApprovalState = 'approved' | 'rejected' | 'none';
 
 export interface SheetPage {
@@ -234,6 +234,8 @@ export interface Sheet {
   book_id: string;
   profile_id: string;
   level: Level;
+  /** Kevin's RENDER_VERSION, for display only. Never used to build tokens. */
+  render_version: string;
   pages: SheetPage[];
 }
 
@@ -254,7 +256,7 @@ export interface ApprovalRecord {
   at: string;
 }
 
-/** PROVISIONAL 409 body: matching pages are recorded, changed pages are not. */
+/** 409 body: matching pages are recorded, changed pages are not. */
 export interface ApproveConflictBody {
   detail: string;
   changed: { page_id: string; sent: string; current: string | null }[];
@@ -280,7 +282,6 @@ export interface ReaderPage {
   image_url: string;
 }
 
-/** PROVISIONAL reasons. */
 export type SkipReason = 'omitted' | 'rejected' | 'not_approved';
 
 export interface SkippedPage {
@@ -304,7 +305,7 @@ export interface ReaderManifest {
   pages: ReaderPage[];
   skipped: SkippedPage[];
   credits: Credits;
-  /** PROVISIONAL: adaptation notice text for the credits screen. */
+  /** Adaptation notice text for the credits screen. */
   adaptation_note: string;
   versions: ReaderVersion[];
 }

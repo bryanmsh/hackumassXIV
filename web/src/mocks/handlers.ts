@@ -1,6 +1,6 @@
 /**
  * ⚠️ MOCK HANDLERS — one per Contract 1 route, backed by the stateful mock db.
- * Shapes are PROPOSED (see src/types/api.ts) until the agreed examples land.
+ * Shapes follow contracts/examples.json (checked by tests/examples.test.ts).
  * Patterns start with `*` so they match whatever origin the client uses.
  */
 import { delay, http, HttpResponse, type HttpResponseResolver } from 'msw';

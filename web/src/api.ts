@@ -217,7 +217,7 @@ export function createApiClient(base: string = API_BASE) {
     uploadBook: (input: UploadBookInput, signal?: AbortSignal) => {
       const form = new FormData();
       form.append('file', input.file, input.file.name);
-      // PROVISIONAL: title as its own field, credits as one JSON-encoded field.
+      // As agreed in contracts/examples.json: title as its own field, credits as one JSON string.
       if (input.title?.trim()) form.append('title', input.title.trim());
       if (input.credits) form.append('credits', JSON.stringify(input.credits));
       return json<UploadBookResponse>('POST', '/books', { body: { form }, signal });
