@@ -19,7 +19,7 @@ def _reset(page: dict) -> dict:
     wanted = page["auto_subject_hash"]
     selected = next((i for i, c in enumerate(candidates) if c["mask_hash"] == wanted), None)
     return {"candidates": candidates, "selected": selected,
-            "subject_hash": wanted,
+            "subject_hash": wanted if selected is not None else None,
             "state": page["auto_state"], "reason": page["auto_reason"],
             "confirmed": False, "omitted": False, "second_look": None}
 
@@ -39,8 +39,15 @@ def main(argv: list[str]) -> int:
         if page.get("auto_state") is None:
             print(f"page {page['number']}: not processed yet, left as it is")
             continue
+        if page["state"] == "processing":
+            print(f"page {page['number']}: still processing, left as it is")
+            continue
         fields = _reset(page)
-        db.pages.update_one({"_id": page["_id"]}, {"$set": fields})
+        # Conditional, so a retry that starts after the read is not overwritten.
+        if db.pages.update_one({"_id": page["_id"], "state": {"$ne": "processing"}},
+                               {"$set": fields}).matched_count == 0:
+            print(f"page {page['number']}: still processing, left as it is")
+            continue
         label = fields["candidates"][fields["selected"]]["label"] if fields["selected"] is not None else "none"
         print(f"page {page['number']}: {fields['state']}, {label}")
     removed = db.approvals.delete_many({"page_id": {"$in": [p["_id"] for p in pages]}}).deleted_count
