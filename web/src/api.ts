@@ -217,7 +217,7 @@ export function createApiClient(base: string = API_BASE) {
     uploadBook: (input: UploadBookInput, signal?: AbortSignal) => {
       const form = new FormData();
       form.append('file', input.file, input.file.name);
-      // PROVISIONAL: title as its own field, credits as one JSON-encoded field.
+      // As agreed in contracts/examples.json: title as its own field, credits as one JSON string.
       if (input.title?.trim()) form.append('title', input.title.trim());
       if (input.credits) form.append('credits', JSON.stringify(input.credits));
       return json<UploadBookResponse>('POST', '/books', { body: { form }, signal });
@@ -228,6 +228,9 @@ export function createApiClient(base: string = API_BASE) {
 
     confirmAll: (bookId: string, signal?: AbortSignal) =>
       json<Page[]>('POST', `/books/${seg(bookId)}/confirm-all`, { signal }),
+    /** Ask the AI again about every page not left out or processing. Returns those pages. */
+    rerunBook: (bookId: string, signal?: AbortSignal) =>
+      json<Page[]>('POST', `/books/${seg(bookId)}/rerun`, { signal }),
 
     // ----- Pages -----
     retryPage: (pageId: string, input: RetryInput = {}, signal?: AbortSignal) =>

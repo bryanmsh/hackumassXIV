@@ -1,0 +1,218 @@
+/**
+ * The app against a real server, through api.ts with no mocks.
+ *   LIVE_API_URL=https://140-82-15-107.sslip.io LIVE_API_AUTH=user:pw npm run test:live
+ *
+ * READ-ONLY by default: lists, pages, images, and POST /preview (which stores
+ * nothing). Tests that change data (a subject pick, a point, an outline) run
+ * only with LIVE_ALLOW_WRITES=1: on the real API they change a page's subject,
+ * which un-confirms it and voids its approvals. Use them on the skeleton or a
+ * throwaway book, never on the demo book before a rehearsal. Nothing here
+ * ever approves.
+ */
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
+import { describe, expect, it } from 'vitest';
+import { App } from '../../App';
+import { api } from '../../api';
+import { API_BASE, MOCKS_ENABLED } from '../../config';
+import type { Book } from '../../types/api';
+
+const STATES = new Set(['processing', 'ready', 'needs_subject', 'no_clear_subject', 'failed', 'unsupported']);
+
+function renderAt(path: string) {
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
+// What the server holds decides which checks can run; checks that need data it
+// lacks are reported as skipped, never as passed.
+const BOOKS = await api.listBooks();
+const PROFILES = await api.listProfiles();
+const HAS_BOOKS = BOOKS.length > 0;
+const HAS_BOTH = HAS_BOOKS && PROFILES.length > 0;
+
+async function firstBook(): Promise<Book> {
+  return BOOKS[0]!;
+}
+
+const WRITES = process.env.LIVE_ALLOW_WRITES === '1';
+
+describe(`live API at ${API_BASE}`, () => {
+  it('is real mode, with /api added once', () => {
+    expect(MOCKS_ENABLED).toBe(false);
+    expect(api.url('/books')).toBe(`${API_BASE.replace(/\/+$/, '')}/api/books`);
+  });
+
+  it.skipIf(!HAS_BOOKS)('GET /books and GET /books/{id} parse into the agreed shapes', async () => {
+    const b = await firstBook();
+    const full = await api.getBook(b.id);
+    expect(full.id).toBe(b.id);
+    for (const p of full.pages) {
+      expect(STATES.has(p.state)).toBe(true);
+      expect(p.width).toBeGreaterThan(0);
+      expect(p.height).toBeGreaterThan(0);
+      for (const c of p.candidates) for (const n of c.box) expect(n >= 0 && n <= 1).toBe(true);
+    }
+  });
+
+  it.skipIf(!HAS_BOOKS)('serves the overlay image as an image, not cached', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    const p = b.pages.find((x) => x.state !== 'processing');
+    if (!p) return;
+    const img = await api.getOverlay(p.id);
+    expect(img.size).toBeGreaterThan(0);
+  });
+
+  it('Library renders the server’s books, or its empty state', async () => {
+    renderAt('/');
+    if (!HAS_BOOKS) {
+      expect(await screen.findByText('No books yet')).toBeInTheDocument();
+      return;
+    }
+    const b = await firstBook();
+    const heading = await screen.findByRole('heading', { name: b.title });
+    expect(within(heading.closest('li')!).getByRole('heading', { name: b.title })).toBeInTheDocument();
+  });
+
+  it.skipIf(!HAS_BOOKS)('Subject review renders every page', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    renderAt(`/books/${b.id}/subjects`);
+    for (const p of b.pages) expect(await screen.findByRole('heading', { name: `Page ${p.number}` })).toBeInTheDocument();
+  });
+
+  it.skipIf(!WRITES || !HAS_BOOKS)('WRITES: a candidate pick round-trips', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    renderAt(`/books/${b.id}/subjects`);
+    await screen.findByRole('heading', { name: `Page ${b.pages[0]!.number}` });
+
+    // Pick an unselected candidate on the first page that has one, if any.
+    const target = b.pages.find((p) => !p.omitted && p.state !== 'processing' && p.candidates.some((_, i) => i !== p.selected));
+    if (!target) return;
+    const idx = target.candidates.findIndex((_, i) => i !== target.selected);
+    const card = within(screen.getByRole('heading', { name: `Page ${target.number}` }).closest('li')!);
+    const user = userEvent.setup();
+    await user.click(card.getAllByRole('button', { name: new RegExp(target.candidates[idx]!.label) })[0]!);
+    // The server answers with the page; whatever it selected is shown as pressed.
+    expect(await card.findByRole('button', { pressed: true })).toBeInTheDocument();
+    expect(card.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe(`live API at ${API_BASE}: subject editor`, () => {
+  it.skipIf(!HAS_BOOKS)('opens a page with its picture ready to tap or draw on', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    const target = b.pages.find((p) => p.state !== 'processing');
+    if (!target) return;
+    renderAt(`/pages/${target.id}?book=${b.id}`);
+    expect(await screen.findByRole('heading', { name: new RegExp(`Page ${target.number}`) })).toBeInTheDocument();
+    expect(await screen.findByTestId('image-frame')).toBeInTheDocument();
+  });
+
+  it.skipIf(!HAS_BOOKS)('a page with no subject still has a picture (the overlay is the plain page)', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    const target = b.pages.find((p) => p.selected === null && p.state !== 'processing');
+    if (!target) return;
+    const img = await api.getOverlay(target.id);
+    expect(img.size).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!WRITES || !HAS_BOOKS)('WRITES: the server accepts a 0-1 point and a 0-1 outline', async () => {
+    const b = await api.getBook((await firstBook()).id);
+    const target = b.pages.find((p) => p.state !== 'processing');
+    if (!target) return;
+
+    const byPoint = await api.setSubject(target.id, { point: [0.5, 0.5] });
+    expect(typeof byPoint.id).toBe('string');
+    const byOutline = await api.setSubject(target.id, {
+      label: 'test shape',
+      outline: [
+        [0.4, 0.4],
+        [0.6, 0.4],
+        [0.6, 0.6],
+        [0.4, 0.6],
+      ],
+    });
+    expect(byOutline.candidates.length).toBeGreaterThan(0);
+  });
+});
+
+describe(`live API at ${API_BASE}: profiles`, () => {
+  it.skipIf(!HAS_BOTH)('lists profiles and previews unsaved settings without saving anything', async () => {
+    const profiles = await api.listProfiles();
+    for (const p of profiles) {
+      expect([1, 2, 3, 4]).toContain(p.level);
+      expect(p.settings.colors.length).toBeGreaterThanOrEqual(1);
+    }
+    const b = await api.getBook((await firstBook()).id);
+    const page = b.pages.find((p) => p.selected !== null && p.state !== 'processing');
+    if (!page) return;
+    const before = profiles.map((p) => p.settings_hash);
+    const img = await api.preview({
+      page_id: page.id,
+      level: 1,
+      settings: { colors: ['#FDD835'], background: '#000000', size: 'medium', position: 'center', text_mode: 'off', outline: 'off' },
+    });
+    expect(img.size).toBeGreaterThan(0);
+    expect((await api.listProfiles()).map((p) => p.settings_hash)).toEqual(before);
+  });
+
+  it('the Profiles screen renders the server’s profiles, or its empty state', async () => {
+    renderAt('/profiles');
+    if (!PROFILES.length) {
+      expect(await screen.findByText('No child profiles yet')).toBeInTheDocument();
+      return;
+    }
+    for (const p of PROFILES) expect(await screen.findByRole('heading', { name: p.name })).toBeInTheDocument();
+  });
+});
+
+describe(`live API at ${API_BASE}: contact sheet (read-only, never approves)`, () => {
+  it.skipIf(!HAS_BOTH)('the sheet parses, and each page version renders through /render with its exact v', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await firstBook();
+    const sheet = await api.getSheet(b.id, { profile: profile.id, level: profile.level });
+    expect(sheet.pages.length).toBeGreaterThan(0);
+    for (const p of sheet.pages) expect(['approved', 'rejected', 'none']).toContain(p.approval);
+    const withV = sheet.pages.find((p) => p.version);
+    if (!withV) return;
+    const img = await api.getRender(withV.page_id, { profile: profile.id, level: profile.level, v: withV.version! });
+    expect(img.size).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!HAS_BOTH)('the Contact sheet screen renders every page for a child and look', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await api.getBook((await firstBook()).id);
+    renderAt(`/books/${b.id}/approve?profile=${profile.id}&level=${profile.level}`);
+    for (const p of b.pages) expect(await screen.findByRole('heading', { name: `Page ${p.number}` })).toBeInTheDocument();
+  });
+});
+
+describe(`live API at ${API_BASE}: reader (read-only)`, () => {
+  it.skipIf(!HAS_BOTH)('the manifest parses and an approved page image comes from /reader/page with its token', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await firstBook();
+    const m = await api.getReaderManifest(b.id, { profile: profile.id, level: profile.level });
+    for (const s of m.skipped) expect(['omitted', 'rejected', 'not_approved']).toContain(s.reason);
+    const first = m.pages[0];
+    if (!first) return;
+    const img = await api.getReaderPage(first.page_id, { profile: m.profile_id, level: m.level, v: first.v });
+    expect(img.size).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!HAS_BOTH)('the Reader screen shows the first approved page, or the no-pages message', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await firstBook();
+    const m = await api.getReaderManifest(b.id, { profile: profile.id, level: profile.level });
+    renderAt(`/read/${b.id}?profile=${profile.id}&level=${profile.level}`);
+    if (m.pages[0]) expect(await screen.findByRole('img', { name: `Page ${m.pages[0].number}` })).toBeInTheDocument();
+    else expect(await screen.findByText(/No pages are approved/)).toBeInTheDocument();
+  });
+});

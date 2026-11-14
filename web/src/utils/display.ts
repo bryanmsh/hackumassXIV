@@ -28,15 +28,14 @@ export const SWATCHES: readonly { name: string; hex: string }[] = [
 ];
 
 /**
- * Background choices. Black and white are unambiguous.
- * ⚠️ PROVISIONAL: the spec does not freeze dark gray / navy hex codes.
- * Confirm with Andrew before profiles are persisted on the live server.
+ * Background choices. The spec names four but gives no hex codes; Andrew
+ * confirmed these values are the definition (Kevin's checks use #001F3F too).
  */
-export const BACKGROUNDS: readonly { name: string; hex: string; provisional: boolean }[] = [
-  { name: 'Black', hex: '#000000', provisional: false },
-  { name: 'Dark gray', hex: '#333333', provisional: true },
-  { name: 'Navy', hex: '#001F3F', provisional: true },
-  { name: 'White', hex: '#FFFFFF', provisional: false },
+export const BACKGROUNDS: readonly { name: string; hex: string }[] = [
+  { name: 'Black', hex: '#000000' },
+  { name: 'Dark gray', hex: '#333333' },
+  { name: 'Navy', hex: '#001F3F' },
+  { name: 'White', hex: '#FFFFFF' },
 ];
 
 /** Defaults for the P1 fields, sent until their controls ship after checkpoint 2. */
@@ -60,7 +59,7 @@ export const PAGE_STATE_LABEL: Record<PageState, string> = {
 
 export const PAGE_STATE_HINT: Record<PageState, string> = {
   processing: 'Work in progress. Review other pages meanwhile.',
-  ready: 'Subject chosen with high confidence. Confirm or change it.',
+  ready: 'The AI suggested a subject. Check it, then confirm or change it.',
   needs_subject: 'The app is unsure which object matters. Pick one.',
   no_clear_subject: 'A scene, a crowd or several equal characters. Pick one or leave the page out.',
   failed: 'Retry, label and outline it by hand, or leave the page out.',
@@ -70,7 +69,8 @@ export const PAGE_STATE_HINT: Record<PageState, string> = {
 /** Tailwind classes per page state. Calm colors; never the only signal (labels are always shown). */
 export const PAGE_STATE_TONE: Record<PageState, string> = {
   processing: 'bg-sky-50 text-sky-800 ring-sky-200',
-  ready: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+  // Neutral, not emerald: Ready is the AI's suggestion, not a correct answer. Confirmed is emerald.
+  ready: 'bg-white text-slate-800 ring-slate-400',
   needs_subject: 'bg-amber-50 text-amber-900 ring-amber-200',
   no_clear_subject: 'bg-amber-50 text-amber-900 ring-amber-200',
   failed: 'bg-rose-50 text-rose-800 ring-rose-200',
@@ -91,4 +91,15 @@ export const CHECK_TONE: Record<CheckStatus, string> = {
 
 export function formatConfidence(c: number): string {
   return c.toFixed(2);
+}
+
+/**
+ * Where a subject came from, in words. "manual" covers both a teacher's drawn
+ * outline and suggestions the teacher joined together, so it reads "made by
+ * teacher" (never "outlined", which is untrue for a joined subject).
+ */
+export function sourceLabel(source: string): string {
+  if (source === 'manual') return 'made by teacher';
+  if (source === 'click') return 'picked by clicking';
+  return 'suggested by the AI';
 }

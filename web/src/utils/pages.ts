@@ -22,3 +22,23 @@ export function selectedLabel(page: Page): string | null {
   if (page.selected === null) return null;
   return page.candidates[page.selected]?.label ?? null;
 }
+
+/** Pages that are no longer Processing (whatever state they ended in). */
+export function processedCount(pages: Page[]): number {
+  return pages.filter((p) => p.state !== 'processing').length;
+}
+
+/** Pages "Confirm all" would change: a subject is chosen, not yet confirmed, not left out, not processing. */
+export function confirmablePages(pages: Page[]): Page[] {
+  return pages.filter((p) => p.selected !== null && !p.confirmed && !p.omitted && p.state !== 'processing');
+}
+
+/** Pages "Ask the AI again" would process: not left out, not processing. Confirmed pages are included. */
+export function rerunnablePages(pages: Page[]): Page[] {
+  return pages.filter((p) => !p.omitted && p.state !== 'processing');
+}
+
+/** Pages that still need the teacher: neither confirmed nor left out. */
+export function undecidedPages(pages: Page[]): Page[] {
+  return pages.filter((p) => !p.confirmed && !p.omitted);
+}

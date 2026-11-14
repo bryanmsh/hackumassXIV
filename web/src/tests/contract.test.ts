@@ -48,8 +48,7 @@ describe('Contract 1 mock coverage', () => {
   });
 
   it('upload route exists and returns a book id', async () => {
-    // jsdom's FormData cannot be serialized by Node fetch, so stub the transport here
-    // and only assert the client's call shape. Upload UI tests come with D2.
+    // Client call shape only; the full upload through the mock is in library.test.tsx.
     const bodies: string[] = [];
     server.use(
       http.post('*/api/books', ({ request }) => {
@@ -191,9 +190,15 @@ describe('Contract 1 mock coverage', () => {
 
     const wrongV = await api.getReaderPage(first.page_id, { profile: maya!.id, level: 1, v: '000000000000' }).catch((e: unknown) => e);
     expect((wrongV as ApiError).status).toBe(403);
+    expect((wrongV as ApiError).body).toEqual({ detail: 'not approved' });
     const otherLook = await api.getReaderPage(first.page_id, { profile: maya!.id, level: 2, v: first.v }).catch((e: unknown) => e);
     expect((otherLook as ApiError).status).toBe(403);
-    await expect(api.getReaderManifest(backup.id, { profile: leo!.id, level: 2 })).rejects.toMatchObject({ status: 403 });
+    // Not approved for Leo: 200 with a partial (here empty) manifest, never page images.
+    const partial = await api.getReaderManifest(backup.id, { profile: leo!.id, level: 2 });
+    expect(partial.pages).toEqual([]);
+    expect(new Set(partial.skipped.map((s) => s.reason))).toEqual(new Set(['not_approved']));
+    await expect(api.getReaderManifest(backup.id, { profile: 'pr_unknown', level: 1 })).rejects.toMatchObject({ status: 404 });
+    await expect(api.getReaderManifest('bk_unknown', { profile: maya!.id, level: 1 })).rejects.toMatchObject({ status: 404 });
 
     // Profile edit invalidates the approval: same v is now refused.
     await api.updateProfile(maya!.id, { settings: { ...maya!.settings, background: '#FFFFFF' } });
@@ -201,7 +206,10 @@ describe('Contract 1 mock coverage', () => {
     expect((afterEdit as ApiError).status).toBe(403);
     // Switching back restores it.
     await api.updateProfile(maya!.id, { settings: maya!.settings });
-    await expect(api.getReaderPage(first.page_id, { profile: maya!.id, level: 1, v: first.v })).resolves.toBeInstanceOf(Blob);
+    // Size and type, not `instanceof Blob`: which Blob class fetch returns under jsdom differs by Node version.
+    const restored = await api.getReaderPage(first.page_id, { profile: maya!.id, level: 1, v: first.v });
+    expect(restored.size).toBeGreaterThan(0);
+    expect(restored.type).toMatch(/^image\//);
   });
 
   it('eval summary (P1) has a mock', async () => {

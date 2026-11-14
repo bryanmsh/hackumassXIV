@@ -1,5 +1,5 @@
 /**
- * ⚠️ MOCK FIXTURES — proposed shapes only, NOT the Andrew–Thomas agreed examples.
+ * ⚠️ MOCK FIXTURES — fake data in the agreed shapes (contracts/examples.json).
  * Book titles, credits and children are placeholders. Children are fictional.
  */
 import type { Candidate, Credits, NormPoint, PageFlag, PageKind, PageState } from '../../types/api';
