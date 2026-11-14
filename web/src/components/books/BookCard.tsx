@@ -6,6 +6,7 @@ import { countByState, processedCount } from '../../utils/pages';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
 import { Badge } from '../ui/StatusBadge';
+import { BookCredits } from './BookCredits';
 
 const STATE_ORDER: PageState[] = ['processing', 'ready', 'needs_subject', 'no_clear_subject', 'failed', 'unsupported'];
 
@@ -27,18 +28,18 @@ export function BookCard({ book: initial }: { book: Book }) {
   const processed = processedCount(book.pages);
   const confirmed = book.pages.filter((p) => p.confirmed).length;
   const omitted = book.pages.filter((p) => p.omitted).length;
-  const credits = [book.credits.author, book.credits.illustrator].filter(Boolean).join(' · ');
 
   return (
     <li className="flex flex-col rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="break-words text-xl font-bold">{book.title}</h2>
-          {credits && <p className="text-slate-600">{credits}</p>}
         </div>
         {book.state === 'ingesting' && <Badge tone={PAGE_STATE_TONE.processing}>Reading PDF</Badge>}
         {book.state === 'failed' && <Badge tone={PAGE_STATE_TONE.failed}>Failed</Badge>}
       </div>
+
+      <BookCredits book={book} onSaved={refresh} />
 
       {book.state === 'ingesting' && <p className="mt-3 text-slate-700">Reading the PDF and making the page images…</p>}
       {book.state === 'failed' && (
