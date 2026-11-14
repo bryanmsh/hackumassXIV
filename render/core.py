@@ -1,0 +1,362 @@
+"""Pure compositing for the four display levels.
+
+Images and settings in, pixels out. No network, no database, no stored
+state beyond an in-process cache of decoded files keyed by path, mtime and
+size, so a changed file is always re-read.
+"""
+from __future__ import annotations
+
+import io
+import os
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+
+from ._types import LocalSettings, coerce_settings
+from .color import RGB, hex_to_rgb, text_color_for
+
+RENDER_VERSION = "b1"
+
+CANVAS_LONG = 1600
+TEXT_BAND = 0.16
+TEXT_SIZE = 0.06
+SIZE_FRACTION = {"small": 0.40, "medium": 0.60, "large": 0.80}
+POSITIONS = {
+    "center": (0.5, 0.5),
+    "left": (0.3, 0.5),
+    "right": (0.7, 0.5),
+    "upper": (0.5, 0.3),
+    "lower": (0.5, 0.7),
+}
+EDGE_MARGIN = 0.04
+OUTLINE_PX = {"off": 0, "thin": 4, "thick": 8}
+SOFTEN_SIGMA = 1.0  # about a 2 px edge blur
+FADE_SATURATION = 0.20
+FADE_PAGE_WEIGHT = 0.30
+TINT_FLOOR = 0.35
+
+FONT_DIR = Path(__file__).resolve().parent / "fonts"
+_SATURATION_LUT = np.rint(np.arange(256) * FADE_SATURATION).astype(np.uint8)
+
+
+@dataclass
+class Rendered:
+    rgb: np.ndarray  # H x W x 3, uint8
+    subject: np.ndarray  # H x W bool, the subject as placed on the canvas
+    outline: np.ndarray  # H x W bool, ring drawn around the subject (may be empty)
+    outline_px: int
+    picture_height: int  # rows above the text band
+    background: RGB
+    text_color: Optional[RGB]
+    level: int
+    scale: float  # canvas pixels per master pixel for the subject
+    subject_box: Tuple[int, int, int, int]  # x, y, w, h of the mask in master pixels
+    master_size: Tuple[int, int]  # w, h
+    page_rect: Optional[Tuple[int, int, int, int]] = None  # x, y, w, h of the page at levels 3 and 4
+
+
+# --- file loading -----------------------------------------------------------
+
+
+def _key(path) -> Tuple[str, int, int]:
+    p = os.fspath(path)
+    st = os.stat(p)
+    return (p, st.st_mtime_ns, st.st_size)
+
+
+@lru_cache(maxsize=48)
+def _read_rgb(key: Tuple[str, int, int]) -> np.ndarray:
+    data = np.fromfile(key[0], dtype=np.uint8)
+    img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError(f"cannot read image: {key[0]}")
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    rgb.setflags(write=False)
+    return rgb
+
+
+@lru_cache(maxsize=48)
+def _read_mask(key: Tuple[str, int, int]) -> np.ndarray:
+    data = np.fromfile(key[0], dtype=np.uint8)
+    m = cv2.imdecode(data, cv2.IMREAD_GRAYSCALE)
+    if m is None:
+        raise ValueError(f"cannot read mask: {key[0]}")
+    m = np.where(m > 127, 255, 0).astype(np.uint8)
+    m.setflags(write=False)
+    return m
+
+
+def load_rgb(path) -> np.ndarray:
+    return _read_rgb(_key(path))
+
+
+def load_mask(path) -> np.ndarray:
+    return _read_mask(_key(path))
+
+
+@lru_cache(maxsize=8)
+def _font(size: int) -> ImageFont.ImageFont:
+    for name in ("AtkinsonHyperlegible-Regular.ttf",):
+        f = FONT_DIR / name
+        if f.exists():
+            return ImageFont.truetype(str(f), size)
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:  # Pillow < 10.1
+        return ImageFont.load_default()
+
+
+# --- helpers ----------------------------------------------------------------
+
+
+def canvas_size(master_w: int, master_h: int) -> Tuple[int, int]:
+    if master_w >= master_h:
+        return CANVAS_LONG, max(1, round(CANVAS_LONG * master_h / master_w))
+    return max(1, round(CANVAS_LONG * master_w / master_h)), CANVAS_LONG
+
+
+def shows_text(settings: LocalSettings, text: Optional[str]) -> bool:
+    return settings.text_mode == "below" and bool(text and text.strip())
+
+
+def _disk(radius: int) -> np.ndarray:
+    d = 2 * radius + 1
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (d, d))
+
+
+def ring_around(mask: np.ndarray, width: int) -> np.ndarray:
+    if width <= 0:
+        return np.zeros_like(mask, dtype=bool)
+    grown = cv2.dilate(mask.astype(np.uint8), _disk(width)) > 0
+    return grown & ~mask
+
+
+def _soften(hard: np.ndarray) -> np.ndarray:
+    """Soften a hard mask inward only, so nothing outside the mask is shown."""
+    pad = 4
+    padded = cv2.copyMakeBorder(hard.astype(np.float32), pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    a = cv2.GaussianBlur(padded, (0, 0), SOFTEN_SIGMA)[pad:-pad, pad:-pad]
+    a = np.minimum(a, hard.astype(np.float32))
+    a[a > 0.999] = 1.0
+    return a
+
+
+def _blend(fg: np.ndarray, bg: np.ndarray, alpha: np.ndarray) -> np.ndarray:
+    """fg over bg; pixels with alpha 1 are copied from fg unchanged."""
+    out = bg.copy()
+    full = alpha >= 1.0
+    out[full] = fg[full]
+    part = (alpha > 0) & ~full
+    if part.any():
+        a = alpha[part][:, None]
+        mixed = fg[part].astype(np.float32) * a + bg[part].astype(np.float32) * (1.0 - a)
+        out[part] = np.clip(np.rint(mixed), 0, 255).astype(np.uint8)
+    return out
+
+
+def _main_color(s: LocalSettings) -> RGB:
+    return hex_to_rgb(s.colors[0])
+
+
+def _second_color(s: LocalSettings) -> RGB:
+    return hex_to_rgb(s.colors[1] if len(s.colors) > 1 else s.colors[0])
+
+
+def tint(sub: np.ndarray, hard: np.ndarray, color: RGB) -> np.ndarray:
+    """Tint keeping shading: color * (0.35 + 0.65 * value), value stretched to the subject's range."""
+    gray = cv2.cvtColor(sub, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    inside = gray[hard]
+    if inside.size:
+        lo, hi = np.percentile(inside, [2, 98])
+    else:
+        lo, hi = 0.0, 255.0
+    value = np.clip((gray - lo) / max(hi - lo, 1.0), 0.0, 1.0)
+    factor = TINT_FLOOR + (1.0 - TINT_FLOOR) * value
+    out = np.asarray(color, dtype=np.float32)[None, None, :] * factor[..., None]
+    return np.clip(np.rint(out), 0, 255).astype(np.uint8)
+
+
+def subject_placement(box_w: int, box_h: int, canvas_w: int, picture_h: int,
+                      size: str, position: str) -> Tuple[float, int, int, int, int]:
+    """Scale and top-left position of the subject at levels 1 and 2."""
+    target = SIZE_FRACTION[size] * min(canvas_w, picture_h)
+    scale = target / max(box_w, box_h)
+    nw, nh = max(1, round(box_w * scale)), max(1, round(box_h * scale))
+    fx, fy = POSITIONS[position]
+    mx, my = round(EDGE_MARGIN * canvas_w), round(EDGE_MARGIN * picture_h)
+
+    def clamp(start: int, length: int, total: int, margin: int) -> int:
+        lo, hi = margin, total - margin - length
+        if hi < lo:
+            return (total - length) // 2
+        return int(min(max(start, lo), hi))
+
+    left = clamp(round(fx * canvas_w - nw / 2), nw, canvas_w, mx)
+    top = clamp(round(fy * picture_h - nh / 2), nh, picture_h, my)
+    return scale, nw, nh, left, top
+
+
+def resample(crop: np.ndarray, nw: int, nh: int, scale: float) -> np.ndarray:
+    interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
+    return cv2.resize(crop, (nw, nh), interpolation=interp)
+
+
+def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int) -> List[str]:
+    lines: List[str] = []
+    for para in text.split("\n"):
+        words, cur = para.split(), ""
+        for w in words:
+            trial = f"{cur} {w}".strip()
+            if draw.textlength(trial, font=font) <= max_w or not cur:
+                cur = trial
+            else:
+                lines.append(cur)
+                cur = w
+        if cur:
+            lines.append(cur)
+    return lines
+
+
+def draw_text_band(rgb: np.ndarray, top: int, text: str, color: RGB) -> np.ndarray:
+    h, w = rgb.shape[:2]
+    band_h = h - top
+    img = Image.fromarray(rgb)
+    draw = ImageDraw.Draw(img)
+    size = max(10, round(TEXT_SIZE * h))
+    max_w = round(0.92 * w)
+    while True:
+        font = _font(size)
+        lines = _wrap(draw, " ".join(text.split()), font, max_w)
+        line_h = round(size * 1.2)
+        fits = len(lines) * line_h <= 0.9 * band_h and all(
+            draw.textlength(l, font=font) <= max_w for l in lines)
+        if fits or size <= 12:
+            break
+        size = max(12, round(size * 0.9))
+    y = top + (band_h - len(lines) * line_h) / 2
+    for line in lines:
+        lw = draw.textlength(line, font=font)
+        draw.text(((w - lw) / 2, y + (line_h - size) / 2), line, font=font, fill=tuple(color))
+        y += line_h
+    return np.asarray(img)
+
+
+# --- composition ------------------------------------------------------------
+
+
+def compose(image_path, view_path, mask_path, settings, level: int,
+            text: Optional[str] = None) -> Rendered:
+    s = coerce_settings(settings)
+    level = int(level)
+    if level not in (1, 2, 3, 4):
+        raise ValueError(f"level must be 1 to 4, got {level}")
+
+    mask = load_mask(mask_path)
+    mh, mw = mask.shape[:2]
+    W, H = canvas_size(mw, mh)
+    text_on = shows_text(s, text)
+    pic_h = H - round(TEXT_BAND * H) if text_on else H
+    bg = hex_to_rgb(s.background)
+    canvas = np.empty((H, W, 3), dtype=np.uint8)
+    canvas[:] = bg
+    subject = np.zeros((H, W), dtype=bool)
+    bx, by, bw, bh = cv2.boundingRect(mask)
+    outline_px = 0
+    outline_color = _main_color(s)
+    scale = 0.0
+    page_rect = None
+
+    if level in (1, 2):
+        if bw > 0 and bh > 0:
+            master = load_rgb(image_path)
+            if master.shape[:2] != mask.shape[:2]:
+                raise ValueError("mask and master page differ in size")
+            scale, nw, nh, left, top = subject_placement(bw, bh, W, pic_h, s.size, s.position)
+            crop = master[by:by + bh, bx:bx + bw]
+            mcrop = mask[by:by + bh, bx:bx + bw]
+            sub = resample(crop, nw, nh, scale)
+            hard = cv2.resize(mcrop, (nw, nh), interpolation=cv2.INTER_LINEAR) >= 128
+            if level == 1:
+                sub = tint(sub, hard, _main_color(s))
+            subject[top:top + nh, left:left + nw] = hard
+            roi = canvas[top:top + nh, left:left + nw]
+            canvas[top:top + nh, left:left + nw] = _blend(sub, roi, _soften(hard))
+        if level == 2:
+            outline_px = OUTLINE_PX[s.outline]
+            outline_color = _second_color(s)
+    else:
+        view = load_rgb(view_path)
+        vh, vw = view.shape[:2]
+        fit = min(W / vw, pic_h / vh)
+        pw, ph = max(1, round(vw * fit)), max(1, round(vh * fit))
+        px, py = (W - pw) // 2, (pic_h - ph) // 2
+        page_rect = (px, py, pw, ph)
+        page = view if (pw, ph) == (vw, vh) else cv2.resize(view, (pw, ph), interpolation=cv2.INTER_AREA)
+        soft = cv2.resize(mask, (pw, ph), interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
+        hard = soft >= 0.5
+        subject[py:py + ph, px:px + pw] = hard
+        scale = pw / mw
+        if level == 3:
+            hsv = cv2.cvtColor(page, cv2.COLOR_RGB2HSV)
+            hsv[..., 1] = cv2.LUT(hsv[..., 1], _SATURATION_LUT)
+            faded = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+            plain = np.empty_like(faded)
+            plain[:] = bg
+            faded = cv2.addWeighted(faded, FADE_PAGE_WEIGHT, plain, 1 - FADE_PAGE_WEIGHT, 0)
+            alpha = cv2.GaussianBlur(soft, (0, 0), SOFTEN_SIGMA)
+            alpha[alpha > 0.999] = 1.0
+            canvas[py:py + ph, px:px + pw] = _blend(page, faded, alpha)
+            outline_px = OUTLINE_PX[s.outline]
+            outline_color = _second_color(s)
+        else:
+            canvas[py:py + ph, px:px + pw] = page
+            outline_px = OUTLINE_PX["thin"] if s.outline == "thin" else OUTLINE_PX["thick"]
+            outline_color = _main_color(s)
+
+    outline = ring_around(subject, outline_px) if subject.any() else np.zeros_like(subject)
+    if outline.any():
+        canvas[outline] = outline_color
+
+    text_color = None
+    if text_on:
+        text_color = text_color_for(bg)
+        canvas = draw_text_band(canvas, pic_h, text, text_color)
+
+    return Rendered(
+        rgb=canvas, subject=subject, outline=outline, outline_px=outline_px,
+        picture_height=pic_h, background=bg, text_color=text_color, level=level,
+        scale=scale, subject_box=(bx, by, bw, bh), master_size=(mw, mh), page_rect=page_rect,
+    )
+
+
+def original_layout(view_path, canvas_w: int, canvas_h: int, picture_h: int,
+                    background: RGB) -> np.ndarray:
+    """The untouched working copy in the level 3 and 4 layout, for comparisons."""
+    view = load_rgb(view_path)
+    vh, vw = view.shape[:2]
+    fit = min(canvas_w / vw, picture_h / vh)
+    pw, ph = max(1, round(vw * fit)), max(1, round(vh * fit))
+    px, py = (canvas_w - pw) // 2, (picture_h - ph) // 2
+    out = np.empty((canvas_h, canvas_w, 3), dtype=np.uint8)
+    out[:] = background
+    page = view if (pw, ph) == (vw, vh) else cv2.resize(view, (pw, ph), interpolation=cv2.INTER_AREA)
+    out[py:py + ph, px:px + pw] = page
+    return out
+
+
+def encode(rgb: np.ndarray, fmt: str = "webp") -> bytes:
+    fmt = fmt.lower()
+    buf = io.BytesIO()
+    img = Image.fromarray(rgb)
+    if fmt == "webp":
+        img.save(buf, format="WEBP", quality=90, method=0)
+    elif fmt == "png":
+        img.save(buf, format="PNG", compress_level=1)
+    else:
+        raise ValueError(f"unsupported format: {fmt}")
+    return buf.getvalue()
