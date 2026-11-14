@@ -4,5 +4,6 @@ The API imports this package and calls the Contract 2 functions below.
 `out_dir` is always the book folder: files go in out_dir/pages and out_dir/masks.
 """
 from pipeline.ingest import rasterize
+from pipeline.outline import mask_from_outline
 
-__all__ = ["rasterize"]
+__all__ = ["rasterize", "mask_from_outline"]
