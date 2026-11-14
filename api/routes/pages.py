@@ -128,6 +128,9 @@ def set_subject(page_id: str, body: SubjectBody):
     if index is None:
         candidates = [*candidates, found]
         index = len(candidates) - 1
+    elif body.outline is not None and candidates[index]["source"] == "manual":
+        # The same outline sent again with a corrected label. Auto and click candidates keep theirs.
+        candidates = [{**c, "label": found["label"]} if i == index else c for i, c in enumerate(candidates)]
     return views.page_json(select({**page, "candidates": candidates}, index))
 
 
@@ -136,7 +139,11 @@ def confirm_page(page_id: str, background: BackgroundTasks):
     page = _find_page(page_id)
     if page["selected"] is None or page["state"] == "processing":
         raise HTTPException(409, "This page has no subject to confirm.")
-    db.pages.update_one({"_id": page["_id"]}, {"$set": {"confirmed": True}})
+    # Only the subject this route read may be confirmed: a click that landed meanwhile needs its own review.
+    done = db.pages.update_one({"_id": page["_id"], "subject_hash": page["subject_hash"],
+                                "state": {"$ne": "processing"}}, {"$set": {"confirmed": True}})
+    if done.matched_count == 0:
+        raise HTTPException(409, "The subject changed. Look at the page again.")
     if jobs.start_second_look(page):
         background.add_task(jobs.run_second_look, page["_id"], page["subject_hash"])
     return _page_response(page["_id"])

@@ -142,3 +142,18 @@ def test_failure_reason_keeps_words_that_contain_a_relative_data_dir(monkeypatch
     from pathlib import Path
     monkeypatch.setattr(settings, "DATA_DIR", Path("data"))
     assert jobs.failure_reason(RuntimeError("database is down")) == "database is down"
+
+
+def test_failure_reason_hides_a_relative_book_folder(monkeypatch, tmp_path):
+    from pathlib import Path
+    monkeypatch.chdir(tmp_path)                      # a relative data folder lands here, not in the repo
+    monkeypatch.setattr(settings, "DATA_DIR", Path("data"))
+    seen = []
+
+    def lost(asset, out_dir, force=False):
+        seen.append(out_dir)
+        raise FileNotFoundError(f"[Errno 2] No such file or directory: '{out_dir}/pages/3.png'")
+    monkeypatch.setattr(modules.pipeline, "process_page", lost)
+    reason = upload()["pages"][0]["reason"]
+    assert str(seen[0]) == f"data/books/{seen[0].name}"
+    assert f"books/{seen[0].name}" not in reason and "pages/3.png" in reason

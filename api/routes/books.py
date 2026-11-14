@@ -110,7 +110,10 @@ def confirm_all(book_id: str, background: BackgroundTasks):
                              "omitted": False, "confirmed": False}).sort("number", 1)
     done = []
     for page in waiting:
-        db.pages.update_one({"_id": page["_id"]}, {"$set": {"confirmed": True}})
+        written = db.pages.update_one({"_id": page["_id"], "subject_hash": page["subject_hash"],
+                                       "state": {"$ne": "processing"}}, {"$set": {"confirmed": True}})
+        if written.matched_count == 0:               # the subject changed since it was read: not reviewed
+            continue
         if jobs.start_second_look(page):
             background.add_task(jobs.run_second_look, page["_id"], page["subject_hash"])
         done.append(views.page_json(db.pages.find_one({"_id": page["_id"]})))

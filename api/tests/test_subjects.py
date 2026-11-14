@@ -175,3 +175,62 @@ def test_restart_marks_stuck_work_failed():
     pages = client.get(f"/api/books/{book['id']}").json()["pages"]
     assert (pages[0]["state"], pages[0]["reason"]) == ("failed", "interrupted, retry")
     assert pages[1]["state"] == "needs_subject"
+
+
+def _change_subject_in_database(page_id, candidate):
+    """What a slow click's write does: another subject, selected and not confirmed."""
+    stored = db.pages.find_one({"_id": ObjectId(page_id)})
+    db.pages.update_one({"_id": stored["_id"]}, {"$set": {
+        "selected": candidate, "subject_hash": stored["candidates"][candidate]["mask_hash"],
+        "confirmed": False}})
+
+
+def test_confirm_never_lands_on_a_subject_the_teacher_did_not_see(monkeypatch):
+    from api.routes import pages as pages_routes
+    page = upload()["pages"][0]
+    real = pages_routes._find_page
+
+    def read_then_change(page_id):
+        found = real(page_id)
+        _change_subject_in_database(page["id"], 1)       # lands between the read and the write
+        return found
+
+    monkeypatch.setattr(pages_routes, "_find_page", read_then_change)
+    assert client.post(f"/api/pages/{page['id']}/confirm").status_code == 409
+    stored = db.pages.find_one({"_id": ObjectId(page["id"])})
+    assert stored["confirmed"] is False and stored["selected"] == 1
+    assert stored["second_look"] is None
+
+
+def test_confirm_all_skips_a_page_whose_subject_changed_after_it_was_read(monkeypatch):
+    book = upload()
+    real_find = db.pages.find
+
+    def find_then_change(*args, **kwargs):
+        waiting = list(real_find(*args, **kwargs).sort("number", 1))
+        monkeypatch.undo()                               # the change below reads through find too
+        _change_subject_in_database(book["pages"][0]["id"], 1)
+        return type("Waiting", (), {"sort": lambda self, *a: waiting})()
+
+    monkeypatch.setattr(db.pages, "find", find_then_change)
+    assert client.post(f"/api/books/{book['id']}/confirm-all").json() == []
+    stored = db.pages.find_one({"_id": ObjectId(book["pages"][0]["id"])})
+    assert stored["confirmed"] is False and stored["second_look"] is None
+
+
+def test_relabelling_the_same_outline_corrects_the_label():
+    page = upload()["pages"][2]
+    subject(page, {"label": "dgo", "outline": OUTLINE})
+    r = subject(page, {"label": "dog", "outline": OUTLINE}).json()
+    assert len(r["candidates"]) == 1 and r["candidates"][r["selected"]]["label"] == "dog"
+    assert db.pages.find_one({"_id": ObjectId(page["id"])})["candidates"][0]["label"] == "dog"
+
+
+def test_an_outline_never_renames_an_automatic_candidate(monkeypatch):
+    page = upload()["pages"][0]
+    auto = db.pages.find_one({"_id": ObjectId(page["id"])})["candidates"][0]
+    real = modules.pipeline.mask_from_outline
+    monkeypatch.setattr(modules.pipeline, "mask_from_outline", lambda *a: real(*a).model_copy(
+        update={"mask_hash": auto["mask_hash"]}))
+    r = subject(page, {"label": "something else", "outline": OUTLINE}).json()
+    assert r["candidates"][0]["label"] == auto["label"] and r["candidates"][0]["source"] == "auto"

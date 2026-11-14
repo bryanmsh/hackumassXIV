@@ -70,3 +70,12 @@ def test_command_refuses_an_unknown_book(capsys):
     for bad in ("nope", str(ObjectId())):
         assert second_look_tool.main([bad]) == 1
         assert capsys.readouterr().out.strip() == f"No book with id {bad}."
+
+
+def test_start_second_look_says_false_when_the_subject_has_changed():
+    page = upload()["pages"][0]
+    stored = db.pages.find_one({"_id": ObjectId(page["id"])})
+    client.post(f"/api/pages/{page['id']}/subject", json={"candidate": 1})
+    assert jobs.start_second_look(stored) is False
+    assert db.pages.find_one({"_id": stored["_id"]})["second_look"] is None
+    assert jobs.start_second_look(db.pages.find_one({"_id": stored["_id"]})) is True

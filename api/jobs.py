@@ -16,12 +16,15 @@ def book_dir(book_id) -> Path:
     return settings.DATA_DIR / "books" / str(book_id)
 
 
-def failure_reason(error: Exception) -> str:
-    """Error text safe to show a client: the data folder path removed, class name if no text."""
+def failure_reason(error: Exception, book_id=None) -> str:
+    """Error text safe to show a client: the data folder path removed, and the book's folder when
+    the book is known (it is also removed in its relative form). Class name if no text."""
     text = str(error)
     roots = [str(settings.DATA_DIR.resolve())]
     if settings.DATA_DIR.is_absolute():  # a relative one ("data") would mangle ordinary words
         roots.append(str(settings.DATA_DIR))
+    if book_id is not None:
+        roots += [str(book_dir(book_id)), str(book_dir(book_id).resolve())]
     for root in roots:
         text = text.replace(root, "")
     return text.strip() or type(error).__name__
@@ -48,9 +51,9 @@ def apply_result(page: dict, result: PageResult) -> None:
         "auto_state": result.state, "auto_subject_hash": chosen, "auto_reason": result.reason}})
 
 
-def _failed(error: Exception) -> PageResult:
+def _failed(error: Exception, book_id=None) -> PageResult:
     return PageResult(state="failed", page_kind=None, candidates=[], selected=None,
-                      reason=failure_reason(error))
+                      reason=failure_reason(error, book_id))
 
 
 def process_one(page_id: ObjectId, force: bool = False) -> None:
@@ -65,7 +68,7 @@ def process_one(page_id: ObjectId, force: bool = False) -> None:
             result = modules.pipeline.process_page(asset, book_dir(page["book_id"]), force)
         except Exception as error:
             logger.exception("process_page failed for page %s", page_id)
-            result = _failed(error)
+            result = _failed(error, page["book_id"])
         apply_result(page, result)
     except Exception as error:
         logger.exception("processing page %s failed", page_id)
@@ -101,14 +104,15 @@ def ingest_book(book_id: ObjectId) -> None:
 
 
 def start_second_look(page: dict) -> bool:
-    """Mark the second look pending for this page's subject. False if one already exists for it."""
+    """Mark the second look pending for this page's subject. False if one already exists for it,
+    or if the page no longer has that subject."""
     look = page.get("second_look")
     if look and look["subject_hash"] == page["subject_hash"]:
         return False
-    db.pages.update_one({"_id": page["_id"], "subject_hash": page["subject_hash"]}, {"$set": {
+    started = db.pages.update_one({"_id": page["_id"], "subject_hash": page["subject_hash"]}, {"$set": {
         "second_look": {"subject_hash": page["subject_hash"], "status": "pending",
                         "answer": None, "detail": None}}})
-    return True
+    return started.matched_count == 1
 
 
 def run_second_look(page_id: ObjectId, subject_hash: str) -> None:

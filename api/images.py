@@ -45,7 +45,9 @@ def cached_render(page: dict, profile: dict, level: int) -> bytes:
     """render_page for a saved profile, remembering the last 256 pictures by (page, version token).
 
     A page with no version yet is keyed by the token of its selected subject, so a preview of an
-    unconfirmed page is cached too and is never mistaken for an approved version."""
+    unconfirmed page is cached too. That key equals the one the confirmed version will have, which is
+    safe: the same subject, settings, level and render version always give the same bytes. Whether a
+    version is approved is not decided here; the reader checks that itself before it renders."""
     version = versions.current_version(page, profile, level)
     if version is None:
         subject = selected(page)
