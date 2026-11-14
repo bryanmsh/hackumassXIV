@@ -19,6 +19,7 @@
 - **No SAM in training.** Labels come only from people (DUTS) or from transparency (pasted cut-outs).
 - **Box prompts only.** The model handles the automatic cut-out for each Gemini box and the tidy-outline box. Anything with a click stays on SAM 2.1.
 - **Order:** train on DUTS alone, score on 15 hand-labelled pages, then add pasted drawings and score again. The 15 pages are the only measure that counts.
+- **Change, 2026-11-14 (Bryan):** no hand-painted pages. The test set is 100 pages built by `cutout_model/make_testset.py` from one foreground and one background anime-segmentation archive that training never uses (notebook cell 9 records them; cell 11 refuses them for run B). Masks come from the cut-outs' transparency. This measures drawn subjects on drawn scenes, not picture books: say so on any slide. Task 6 Step 6 is replaced by notebook cell 9.
 - **Ship rule:** offer the model to Bryan only if its mean overlap on the 15 pages beats GrabCut's. Switch the server to it only if it is also within 0.05 of SAM 2.1 and the team agrees. Otherwise it stays a slide.
 
 ## Global Constraints
