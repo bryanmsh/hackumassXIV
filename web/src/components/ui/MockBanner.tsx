@@ -30,7 +30,7 @@ export function MockBanner({ compact = false }: { compact?: boolean }) {
     <div className="border-b-4 border-amber-500 bg-amber-300 text-black">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 text-sm sm:px-6">
         <strong className="tracking-wide">MOCK DATA</strong>
-        <span>Not the real server. Response shapes are provisional until agreed with Andrew.</span>
+        <span>Not the real server. Shapes follow contracts/examples.json; data and images are fake.</span>
         {controls && (
           <details className="ml-auto">
             <summary className="cursor-pointer select-none font-semibold underline">Mock scenarios</summary>

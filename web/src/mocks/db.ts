@@ -68,8 +68,6 @@ export function settingsHash(settings: Settings): string {
 // ---------- State ----------
 
 export interface MockPage extends Page {
-  width: number;
-  height: number;
   /** When processing finishes (ms epoch), or null when settled. */
   resolveAt: number | null;
   /** What processing will produce. */
@@ -312,7 +310,7 @@ function appendCandidates(p: MockPage, cands: Candidate[]): void {
 // ---------- Queries ----------
 
 export function publicPage(p: MockPage): Page {
-  const { width: _w, height: _h, resolveAt: _r, outcome: _o, rev: _v, secondLookAt: _s, ...rest } = p;
+  const { resolveAt: _r, outcome: _o, rev: _v, secondLookAt: _s, forced: _f, ...rest } = p;
   return structuredClone(rest);
 }
 
@@ -564,7 +562,7 @@ export function buildSheet(book: MockBook, profile: Profile, level: Level): Shee
         : null,
     };
   });
-  return { book_id: book.id, profile_id: profile.id, level, pages };
+  return { book_id: book.id, profile_id: profile.id, level, render_version: MOCK_RENDER_VERSION, pages };
 }
 
 export type ApproveResult =

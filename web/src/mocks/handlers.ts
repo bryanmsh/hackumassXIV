@@ -1,6 +1,6 @@
 /**
  * ⚠️ MOCK HANDLERS — one per Contract 1 route, backed by the stateful mock db.
- * Shapes are PROPOSED (see src/types/api.ts) until the agreed examples land.
+ * Shapes follow contracts/examples.json (checked by tests/examples.test.ts).
  * Patterns start with `*` so they match whatever origin the client uses.
  */
 import { delay, http, HttpResponse, type HttpResponseResolver } from 'msw';
@@ -365,11 +365,11 @@ export const handlers = [
       const book = db.findBook(param(params.bookId));
       const profile = db.findProfile(url.searchParams.get('profile') ?? '');
       const level = levelFrom(url);
+      // As agreed with Andrew: unknown book or profile is 404; otherwise 200 with a
+      // PARTIAL manifest (only approved pages; the rest in `skipped` with a reason).
       if (!book) return notFound('Book');
-      if (!profile || !level) return fail(422, 'Choose a child and a look.');
-      if (!db.isFullyApproved(book, profile, level)) {
-        return fail(403, 'This child and look is not approved for this book. Approve its contact sheet first.');
-      }
+      if (!profile) return notFound('Profile');
+      if (!level) return fail(422, 'level must be 1, 2, 3 or 4.');
       return HttpResponse.json(db.buildManifest(book, profile, level));
     }),
   ),
@@ -378,17 +378,19 @@ export const handlers = [
     `${API}/reader/page/:pageId`,
     route(({ params, request }) => {
       const url = new URL(request.url);
+      // As agreed with Andrew: every failure on this route is the same 403 body.
+      const refused = () => fail(403, 'not approved');
       if (db.scenarios.readerForbiddenNext) {
         db.scenarios.readerForbiddenNext = false;
-        return fail(403, 'This version is not approved.');
+        return refused();
       }
       const page = db.findPage(param(params.pageId));
       const profile = db.findProfile(url.searchParams.get('profile') ?? '');
       const level = levelFrom(url);
-      if (!page || !profile || !level) return fail(403, 'This version is not approved.');
+      if (!page || !profile || !level) return refused();
       const current = db.currentToken(page, profile, level);
       const ok = current !== null && current === url.searchParams.get('v') && db.approvalState(page, profile, level) === 'approved';
-      if (!ok) return fail(403, 'This version is not approved.');
+      if (!ok) return refused();
       return image(renderSvg(page, profile.settings, level, `reader ${profile.name}`));
     }),
   ),
