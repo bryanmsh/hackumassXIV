@@ -58,7 +58,7 @@ Children with CVI recognize objects far better in simple pictures: one object, l
 
 **P2: nice additions**
 
-- Keep a small group of objects on pages with no single subject.
+- Keep a small group of objects on pages with no single subject. (Built: see the combined cut-out in "Choosing the subject.")
 - Photo of a physical page, and scanned PDFs with no text layer.
 - Print or export as PDF, with credits included.
 - Read-aloud, teacher notes and custom colors.
@@ -89,9 +89,9 @@ The one-second target applies to step 5 only, measured on the demo device.
 | State | Meaning | What the teacher can do |
 | --- | --- | --- |
 | Processing | Work in progress | Review other pages meanwhile |
-| Ready | Subject chosen with high confidence | Confirm or change it |
-| Needs subject | The app is unsure which object matters | Pick one |
-| No clear subject | The page is a scene, a crowd, or several equal characters | Pick one, or leave the page out |
+| Ready | One subject is selected, and the app is reasonably sure of it | Confirm or change it |
+| Needs subject | The app is unsure which object matters, or the page has several subjects | Pick one, or show several together |
+| No clear subject | No subject was found, or none could be cut out | Click the object, outline it by hand, or leave the page out |
 | Failed | A timeout, a bad cut-out or an unreadable page | Retry, label and outline it by hand, or leave the page out |
 | Unsupported | A two-page spread or another layout the app does not handle | Leave the page out, or process it anyway |
 
@@ -103,11 +103,16 @@ The subject is what the story is about on that page, not the largest thing in th
 
 - It reads the picture and the page text together.
 - It decides what kind of page this is: one subject, several subjects, or a scene.
-- It returns up to 3 candidates, each with a label and a confidence from 0 to 1, for example `rabbit, 0.84`.
-- It pre-selects a subject only on a one-subject page, when the label matches a word in the page text and its confidence is clearly ahead (0.7 or higher, and 0.2 above the next).
-- Pages with several subjects become Needs subject. Scenes, and pages with no usable candidate, become No clear subject.
+- It returns every main subject of the page, up to 5 candidates, each with a label and a confidence from 0 to 1, for example `rabbit, 0.84`. A candidate is one person, animal or object, or one tight group of the same kind. The setting (forest, sky, grass) is never a candidate.
+- A candidate counts as sure at a confidence of 0.5 or more.
+- On a one-subject page, the top candidate is pre-selected when it is sure, and the page is Ready.
+- On a page with several subjects, or a scene, a lone sure candidate is pre-selected in the same way. When two or more are sure, nothing is pre-selected: the page becomes Needs subject, and the app adds one more suggestion, a combined cut-out of every sure candidate, so the teacher can show one of them or all of them together.
+- A page where no candidate is sure becomes Needs subject. A page with no candidate, or none that could be cut out, becomes No clear subject.
+- The same page gives the same answer each time it is processed, as far as the AI service allows.
 
-The AI's confidence is self-reported and tends to run high, so it is only a tie-breaker. The page kind and the text match carry the decision. The numbers are tuned on the test pages only, never on the evaluation pages.
+The AI's confidence is self-reported and tends to run high, so 0.5 only screens out weak guesses. It never decides what a page is about when there is more than one answer; the teacher does. The 0.5 value is tuned on the test pages only, never on the evaluation pages.
+
+A combined cut-out puts several objects in front of the child at once. Whether that suits a child is the teacher's decision at subject review and again at approval.
 
 **Subject review (P0)**
 
@@ -117,6 +122,7 @@ The teacher sees every page in a grid, with the chosen subject highlighted on th
 | --- | --- |
 | Confirm | One click per page, or "Confirm all" after scrolling the grid |
 | Pick a different subject | Click another highlighted candidate, or click the object itself on the page |
+| Show several subjects together | Click more than one suggestion, or pick the combined suggestion on a page with several subjects |
 | Fix a cut-out (P1) | Click the missing part, such as a tail or ear, to add it |
 | Leave the page out | Marks the page as omitted |
 | Label and outline by hand | Type what the object is, then draw a rough outline around it on the page |
@@ -186,7 +192,7 @@ Automatic checks and teacher approval are two separate steps, and the app never 
 | Check | What it confirms | Result if it fails |
 | --- | --- | --- |
 | Subject match | The subject is the one the teacher confirmed in subject review | Unconfirmed pages stay out of the reader |
-| Source fidelity | The cut-out is taken from the untouched original through the saved mask, in one whole piece | Flagged, with the cut-out shown over the original |
+| Source fidelity | The cut-out is taken from the untouched original through the saved mask, with no stray specks. A cut-out of several subjects may be in several pieces | Flagged, with the cut-out shown over the original |
 | Page edge | The cut-out does not touch the edge of the page, where the artwork may cut the object off | Warning |
 | Background detail | At levels 1 and 2 the area around the subject is plain. At level 3 background detail is no more than half that of the original | Flagged |
 | Subject visibility | The subject stands out from the background, is not enlarged so far that it looks soft, and at levels 3 and 4 is at least 15% of the page's length so it can be found | Warning |
@@ -264,8 +270,8 @@ The demo is six pages of one book, two children and four levels, built around on
 
 1. Upload six pages of *Animal Homes*, including one deliberately hard page.
 2. Show each page reaching a state.
-3. Show the page where the app chose the wrong subject or could not choose. Page 3 is the likely one: it has a hornbill, a beehive and a nest of equal weight.
-4. The teacher fixes it with one click.
+3. Show the page where the app could not choose on its own: the one with a hornbill, a beehive and a nest of equal weight. It arrives as Needs subject, offering each of the three and all three together.
+4. The teacher picks the hornbill with one click.
 5. Checks rerun, and the teacher approves a contact sheet for Maya and one for Leo.
 6. Read the book, switching between Maya and Leo with no regeneration.
 
@@ -357,7 +363,7 @@ All paths start with `/api` and return JSON unless marked image. Images are WebP
 | `GET /books`, `GET /books/{id}` | None | Title, credits, book state, and each page's state, reason, flags, page kind, candidates, selected subject, `subject_hash`, confirmed, omitted, second-look result |
 | `PATCH /books/{id}` | `title`, `credits` | Book |
 | `POST /pages/{id}/retry` | Optional `{force}` | Page back in Processing. `force` processes an Unsupported page anyway |
-| `POST /pages/{id}/subject` | One of `{candidate}`, `{point}`, `{label, outline}`, or `{refine_point}` (P1) | Page with its new `subject_hash` |
+| `POST /pages/{id}/subject` | One of `{candidate}`, `{candidates}` (two or more shown together), `{point}`, `{label, outline}` with optional `tidy` (P1), or `{refine_point}` (P1) | Page with its new `subject_hash` |
 | `POST /pages/{id}/confirm`, `POST /books/{id}/confirm-all` | None | Updated pages; the second look starts in the background |
 | `POST /pages/{id}/omit` | `{omitted}` | Updated page |
 | `GET /pages/{id}/overlay` | None | Image: cut-out tinted over the original |
@@ -433,17 +439,25 @@ The pipeline turns a PDF into page images, text, subject candidates and masks. I
 
 1. A page flagged `spread` returns Unsupported, unless `force` is set.
 2. Send the working copy and the page text to Gemini with a fixed prompt and a JSON schema.
-3. The schema returns `page_kind` (single, several, scene) and up to 3 candidates: `label`, up to 5 `synonyms` that include the general kind of thing (hornbill: bird), `box`, `confidence`, and a one-line `reason`.
-4. Convert boxes from Gemini's 0 to 1000 scale to master pixels, and cut a mask for each candidate.
-5. Set the state in this order: No clear subject when `page_kind` is scene or there are no candidates. Needs subject when `page_kind` is several, or when the page has text and neither the top label nor its synonyms appear in it. Ready when the top confidence is 0.7 or more and at least 0.2 above the next. Otherwise Needs subject.
-6. Any exception, a 20-second timeout, or a second failed attempt returns Failed with a `reason`. A rate-limit reply waits and retries once. The function never raises.
+3. The schema returns `things_on_page` (everything the model can see, listed before it ranks), `page_kind` (single, several, scene) and up to 5 candidates, most important first: `label`, up to 5 `synonyms` that include the general kind of thing (hornbill: bird), `box`, `confidence`, and a one-line `reason`. The prompt asks for every main subject, one person, animal or object per candidate.
+4. Three guards in code hold even when the model ignores the prompt: drop a candidate whose label is the setting (forest, sky, ground, background), drop a box that holds two or more other candidates, and merge two boxes on the same object (IoU of 0.8 or more).
+5. Convert boxes from Gemini's 0 to 1000 scale to master pixels, and cut a mask for each candidate. A candidate with an empty mask is dropped.
+6. Set the state in this order, where "sure" means a confidence of 0.5 or more:
+   - No clear subject when there are no candidates, or none gave a usable cut-out.
+   - Needs subject when no candidate is sure, or when the model's first choice gave no usable cut-out. The others are never picked silently.
+   - Ready, with the top candidate selected, when `page_kind` is single and that candidate is sure.
+   - When `page_kind` is several or scene: Ready with the one sure candidate selected if there is exactly one. With two or more, append a combined candidate and return Needs subject with nothing selected.
+7. The combined candidate is an ordinary `Candidate`, so no contract changes: its mask is the union of the sure candidates' masks, its label joins their labels ("rabbit and rat"), its synonyms are all of theirs, its confidence is the lowest of theirs, its box surrounds them all, and its `source` is `auto`. It comes after the single candidates.
+8. Any exception, a 20-second timeout, or a second failed attempt returns Failed with a `reason`. A rate-limit reply waits and retries once. The function never raises.
 
-Confidence is the model's own estimate and is not calibrated, so `page_kind` and the text match decide first and confidence only breaks ties. The 0.7 and 0.2 values are tuned on the six test pages, never on the 20 evaluation pages.
+Every Gemini call uses a fixed seed, so the same page is likelier to get the same answer. Each call is capped at 16,384 output tokens, 8,192 thinking tokens and 8,000 characters of page text; an answer cut off by a cap counts as a failed call.
+
+Confidence is the model's own estimate and is not calibrated, so it only screens out weak guesses and never chooses between two sure subjects. The 0.5 value is tuned on the six test pages, never on the 20 evaluation pages.
 
 **Cut-outs**
 
 - Run the segmenter on the master with the candidate's box as the prompt.
-- Clean the mask: keep the largest connected region plus any region at least 5% of its size, and fill holes smaller than 0.1% of the page.
+- Clean the mask: keep the largest connected region plus any region at least 5% of its size, and fill holes smaller than 0.1% of the page. A combined cut-out is not cleaned again, so a small subject beside a large one is kept.
 - Save the mask under its own hash and return the hash in the candidate.
 - `segment_at_point` runs the segmenter with one positive point where the teacher clicked, and asks Gemini to label that crop. If Gemini fails, the label is empty and the teacher types it.
 - `refine_mask` (P1) reruns with the original prompt plus the new point.
@@ -486,7 +500,7 @@ The output canvas is 1,600 px on its longer side, in the page's own proportions.
 
 | Check | Method | Result |
 | --- | --- | --- |
-| `fidelity` | Measure the mask | Fail unless the mask covers 1% to 60% of the page and its largest region holds 90% or more of it |
+| `fidelity` | Measure the mask | Fail unless the mask covers 0.1% to 60% of the page, and stray specks (pieces smaller than 0.1% of the page) hold no more than 10% of it. Several whole pieces pass, and the detail says how many |
 | `page_edge` | Does the mask touch any edge of the page? | Warn if it does: the artwork may cut the object off |
 | `background` | Canny edge detection on the render, counted outside the subject grown by 6 px, and outside the text band | Levels 1 and 2: fail above 0.5% of that area. Level 3: fail above half the original page's value. Level 4: not checked |
 | `contrast` | Contrast ratio between a 6 px band inside the subject's edge and the background next to it | Warn below 3 to 1 |
@@ -519,7 +533,7 @@ The API is the only part that touches the database, and it owns every rule about
 | `pages` | `book_id`, `number`, `image_path`, `view_path`, `text`, `flags`, `state`, `reason`, `page_kind`, `candidates[]`, `selected`, `subject_hash`, `confirmed`, `omitted`, `processing_started_at`, `second_look` {subject\_hash, status, answer} |
 | `profiles` | `name`, `level`, `settings`, `settings_hash`, `contrast_override_note` |
 | `checks` | `page_id`, `subject_hash`, `settings_hash`, `level`, `render_version`, `result` |
-| `approvals` | `page_id`, `profile_id`, `subject_hash`, `settings_hash`, `level`, `render_version`, `decision` (approve, reject), `at` |
+| `approvals` | `page_id`, `profile_id`, `subject_hash`, `settings_hash`, `level`, `render_version`, `decision` (approve, reject), `at`, and `copied_from` on records the re-approve tool wrote |
 | `eval_runs` (P1) | `dataset`, `n`, `counts`, `ran_at` |
 
 **Approval rules**
@@ -553,9 +567,9 @@ The API is the only part that touches the database, and it owns every rule about
 
 **Other rules**
 
-- `POST /pages/{id}/subject` routes to `segment_at_point`, `mask_from_outline` or `refine_mask` by the shape of the body, appends the new candidate and selects it.
+- `POST /pages/{id}/subject` routes to `segment_at_point`, `mask_from_outline` or `refine_mask` by the shape of the body, appends the new candidate and selects it. `tidy` is passed to `mask_from_outline` and is off unless the body sets it, so an outline is used exactly as drawn by default. `{candidates}` joins the chosen masks into one new mask file in the API, with no pipeline call.
 - Renders are cached in memory, up to 256 images, keyed by page and version token.
-- `api/tools/reapprove.py` copies a named book's approvals to a new `RENDER_VERSION`. It is a developer tool for the backup books only, run after someone has looked at the sheets again, and it prints every record it writes.
+- `python -m api.tools.reapprove <book_id> <old_render_version>` copies a named book's approvals to the current `RENDER_VERSION`. For each page, child and level it copies the newest decision, leaves alone any decision already made under the current version, and marks each copy with `copied_from`. It is a developer tool for the backup books only, run after someone has looked at the sheets again, and it prints every record it writes.
 
 ## Implementation: web app (Owner D)
 
