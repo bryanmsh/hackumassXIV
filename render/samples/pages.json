@@ -1,0 +1,20 @@
+{
+  "1": {
+    "text": "A little red bird sat on the branch and sang.",
+    "label": "bird",
+    "synonyms": [
+      "red bird",
+      "robin",
+      "animal"
+    ]
+  },
+  "2": {
+    "text": "The rabbit was hiding under the big tree.",
+    "label": "rabbit",
+    "synonyms": [
+      "bunny",
+      "hare",
+      "animal"
+    ]
+  }
+}
