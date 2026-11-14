@@ -2,6 +2,23 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Merge main into kevin; match Andrew's contract types
+
+**What changed**
+- Merged `origin/main` (Andrew's contracts and stub API, Thomas's web app, the spec and plan docs) into `kevin`.
+- Resolved the one conflict, `render/requirements.txt`: kept Andrew's `pydantic>=2,<3` and added numpy, OpenCV, Pillow and pytest. Same pydantic pin in `checks/requirements.txt`.
+- `run_checks` now returns `background = None` at Outlined and `text_contrast = None` when no text is shown, as `contracts/types.py` and Thomas's web app expect. It used to return a "pass" with an explanation.
+- New tests: results are the real `contracts.types.CheckResult` and `SecondLook`, contract `Settings` are accepted, and `text_contrast` is absent when text is off.
+
+**Verified**
+- 70 tests pass across `render`, `checks` and `contracts`.
+- Andrew's 34 API tests pass with both `RENDER=stub` and `RENDER=real`. With `real`, the API loads `render` and `checks` from this branch at startup.
+
+**Still open**
+- Open a pull request from `kevin` into `main` so Andrew can set `RENDER=real` on the server.
+- Swap in Bryan's real pages when they land in `fixtures/`; nothing there yet.
+- Reader tests in `tests/` (hour 11).
+
 ## Add commit notes
 
 - Started this file. Every commit from here on gets an entry.

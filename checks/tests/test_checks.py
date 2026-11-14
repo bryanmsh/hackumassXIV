@@ -26,7 +26,10 @@ def test_good_masks_pass(page, level):
     r = run_checks(*page, {"colors": ["#FDD835"], "background": "#000000", "text_mode": "below"}, level, TEXT)
     assert r.fidelity.status == "pass"
     assert r.page_edge.status == "pass"
-    assert r.background.status == "pass", r.background.detail
+    if level == 4:
+        assert r.background is None
+    else:
+        assert r.background.status == "pass", r.background.detail
     assert r.text_contrast.status == "pass"
     assert r.size.status == "pass", r.size.detail
 
@@ -73,7 +76,24 @@ def test_faded_page_meets_half_target_and_outlined_is_not_checked():
     r3 = run_checks(*P1, {}, 3, None)
     assert r3.background.status == "pass" and "of the original" in r3.background.detail
     r4 = run_checks(*P1, {}, 4, None)
-    assert r4.background.status == "pass" and r4.background.value is None
+    assert r4.background is None
+
+
+def test_text_contrast_is_absent_when_text_is_off():
+    assert run_checks(*P1, {"text_mode": "off"}, 2, TEXT).text_contrast is None
+    assert run_checks(*P1, {"text_mode": "below"}, 2, "").text_contrast is None
+
+
+def test_results_are_the_shared_contract_types():
+    from contracts.types import CheckResult, SecondLook
+    assert isinstance(run_checks(*P1, {}, 2, None), CheckResult)
+    assert isinstance(second_look(P1[0], P1[2], "bird", [], ask=lambda png: "bird"), SecondLook)
+
+
+def test_accepts_contract_settings():
+    from contracts.types import Settings
+    r = run_checks(*P1, Settings(colors=["#fdd835"], text_mode="below"), 2, TEXT)
+    assert r.text_contrast.status == "pass"
 
 
 def test_never_raises_on_missing_files(tmp_path):

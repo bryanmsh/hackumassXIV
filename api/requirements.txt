@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic>=2,<3
+pymongo
+python-multipart
+pillow
+httpx2
+pytest

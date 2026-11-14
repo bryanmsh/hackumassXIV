@@ -38,10 +38,10 @@ class LocalCheck(BaseModel):
 class LocalCheckResult(BaseModel):
     fidelity: LocalCheck
     page_edge: LocalCheck
-    background: LocalCheck
+    background: Optional[LocalCheck] = None  # not checked at level 4
     contrast: LocalCheck
     size: LocalCheck
-    text_contrast: LocalCheck
+    text_contrast: Optional[LocalCheck] = None  # only when text is shown
 
 
 class LocalSecondLook(BaseModel):

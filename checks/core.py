@@ -28,7 +28,7 @@ def _check(status: str, value: Optional[float], detail: str) -> LocalCheck:
     return LocalCheck(status=status, value=None if value is None else round(float(value), 4), detail=detail)
 
 
-def _guard(fn: Callable[[], LocalCheck], name: str) -> LocalCheck:
+def _guard(fn: Callable[[], Optional[LocalCheck]], name: str) -> Optional[LocalCheck]:
     try:
         return fn()
     except Exception as e:  # noqa: BLE001 - a check must never raise
@@ -85,9 +85,9 @@ def _background_region(r: Rendered) -> np.ndarray:
     return region
 
 
-def check_background(r: Rendered, view_path) -> LocalCheck:
+def check_background(r: Rendered, view_path) -> Optional[LocalCheck]:
     if r.level == 4:
-        return _check("pass", None, "Not checked at Outlined: the original page is shown on purpose.")
+        return None
     region = _background_region(r)
     value = _edge_fraction(r.rgb, region)
     if r.level in (1, 2):
@@ -149,9 +149,9 @@ def check_size(r: Rendered) -> LocalCheck:
     return _check("pass", share, f"The subject is {share:.0%} of the page's length.")
 
 
-def check_text_contrast(r: Rendered) -> LocalCheck:
+def check_text_contrast(r: Rendered) -> Optional[LocalCheck]:
     if r.text_color is None:
-        return _check("pass", None, "Text is not shown.")
+        return None
     ratio = contrast_ratio(r.text_color, r.background)
     if ratio < TEXT_CONTRAST_MIN:
         return _check("fail", ratio, f"Text contrast is {ratio:.1f} to 1 (at least {TEXT_CONTRAST_MIN} to 1).")
