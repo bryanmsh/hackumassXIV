@@ -2,6 +2,27 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Reader tests over HTTP (hour 11)
+
+**What changed**
+- `tests/test_reader_http.py`: the plan's four reader tests, calling the API from outside over HTTP:
+  1. an approved page is served (WebP, `Cache-Control: no-store`);
+  2. a page that was never approved is refused with 403 and is listed as skipped;
+  3. a page approved and then changed is refused, both its old link and its new version (run twice: a profile color change and a subject change);
+  4. an approval sent for an old version gets 409 "look again", records nothing, and the page stays refused.
+- Each test makes its own book (a generated two-page PDF) and draws the subject as an outline, which needs no AI, so the tests pass with the real pipeline or the stand-ins.
+- `tests/conftest.py`: with no `MIRAI_URL`, it starts a local API by itself; with `MIRAI_URL` (plus `SITE_USER` / `SITE_PASSWORD`) it tests that server instead.
+- `tests/local_server.py`: Andrew's API, unchanged, with an in-memory database (`mongomock`) because this laptop has no Docker or MongoDB. Pipeline stand-ins, real display code, the Gemini key removed.
+- `tests/requirements.txt`: httpx, mongomock, pymupdf, pytest.
+
+**Verified**
+- 5 of 5 pass against the local API in about 13 s.
+- With the approval check deliberately broken (every version counted as approved), all 5 fail. So the tests do catch an unapproved page reaching the reader.
+
+**Still open**
+- Run against the live site once Bryan has it up: `MIRAI_URL=... pytest tests`. There is no delete route, so they leave "zz-test" books and profiles behind there; the profiles would show in the reader's teacher bar.
+- Hand the tests to Andrew (plan: hour 11).
+
 ## Second look: default model gemini-3.8-flash
 
 **What changed**
