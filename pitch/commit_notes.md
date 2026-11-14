@@ -2,6 +2,24 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Fidelity check accepts combined cut-outs; demo script for pre-selected pages
+
+**What changed**
+- `checks/core.py`, `check_fidelity`: the "largest piece holds 90%" rule is gone. A cut-out may be in several pieces; it fails only when stray specks (pieces under 0.1% of the page) hold more than 10% of it. The detail says "in 3 pieces" plainly.
+- Tests: five whole blobs now pass ("in 5 pieces"); a subject plus 40 specks fails ("stray specks").
+- `pitch/demo_script.md` steps 3 to 7 and open decisions, `pitch/checkpoint1_steps.md` expected states.
+
+**Why**
+- Bryan's branch (commit b7bc13f, Andrew's decision) pre-selects one combined cut-out of all sure subjects on a page with several. Joining the three page 2 masks the same way failed fidelity at every look ("3 pieces; the largest holds only 48%"). It now passes: "covers 11.5% of the page, in 3 pieces." Display was already right.
+- Re-checked all 24 real masks (GrabCut and SAM 2): the only fail is still the 0.08% woodpecker.
+- Tradeoff: the check can no longer tell five scattered blobs from five real subjects. That is now the teacher's call on the contact sheet. Departs from the spec's "in one piece".
+- The demo no longer has a page with nothing selected, so the hard page is now: page 2 arrives with all three together, and the teacher switches to the hornbill alone.
+
+**Still open**
+- Tell the team: fidelity no longer means "one piece".
+- Agree with Bryan which Animal Homes edition is the demo book (his notes use a longer one).
+- Display and check results change, not pixels, so `RENDER_VERSION` stays "b1".
+
 ## Teacher email: three questions, real book art (B4)
 
 **What changed**
