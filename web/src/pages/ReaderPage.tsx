@@ -95,6 +95,8 @@ function Reader({
   const [shown, setShown] = useState<{ key: string; url: string; number: number } | 'credits' | null>(null);
   const [imageError, setImageError] = useState<Error | null>(null);
   const [barOpen, setBarOpen] = useState(false);
+  /** Blank screen between pages (B): only the background, held until the teacher turns a page or presses B again. */
+  const [blank, setBlank] = useState(false);
   const [others, setOthers] = useState<Record<string, ReaderManifest>>({});
   const [fsActive, setFsActive] = useState(false);
 
@@ -183,6 +185,7 @@ function Reader({
   const go = useCallback(
     (delta: 1 | -1) => {
       if (!manifest || !spot) return;
+      setBlank(false); // the teacher continued
       setSpot(step(manifest, spot, delta));
     },
     [manifest, spot],
@@ -216,6 +219,11 @@ function Reader({
         return;
       }
       if (fromControl(e.target)) return;
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        if (!e.repeat) setBlank((v) => !v);
+        return;
+      }
       const delta = NEXT_KEYS.has(e.key) ? 1 : PREV_KEYS.has(e.key) ? -1 : 0;
       if (!delta) return;
       e.preventDefault();
@@ -281,8 +289,9 @@ function Reader({
         className={`absolute inset-0 ${gestures.className}`}
         style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
       >
-        {shown === 'credits' && manifest && <CreditsPage manifest={manifest} background={background} />}
-        {shown && shown !== 'credits' && (
+        {blank && <p className="sr-only" role="status">Screen blanked by the teacher. Press B or turn a page to continue.</p>}
+        {!blank && shown === 'credits' && manifest && <CreditsPage manifest={manifest} background={background} />}
+        {!blank && shown && shown !== 'credits' && (
           <img
             src={shown.url}
             alt={`Page ${shown.number}`}
@@ -307,6 +316,8 @@ function Reader({
           canNext={target !== 'credits'}
           onPrev={() => go(-1)}
           onNext={() => go(1)}
+          blank={blank}
+          onToggleBlank={() => setBlank((v) => !v)}
           onSwitch={(v) => {
             setBarOpen(false);
             onSwitch(v);
