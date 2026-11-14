@@ -138,6 +138,30 @@ describe('Child profiles', () => {
     expect(card.getByText(/Large · Left · text below the picture/)).toBeInTheDocument();
   });
 
+  it('a custom colour can be added, made main, warns on low contrast, and is saved as hex', async () => {
+    const user = openProfiles();
+    const calls = captureWrites();
+    await user.click(await screen.findByRole('button', { name: 'New child profile' }));
+    await user.type(screen.getByLabelText('First name'), 'Ana');
+    await user.click(screen.getByRole('radio', { name: /Cut-out/ }));
+    const hex = screen.getByLabelText('Custom color hex code');
+    await user.clear(hex);
+    await user.type(hex, '12ab');
+    expect(screen.getByRole('button', { name: 'Add this color' })).toBeDisabled();
+    await user.clear(hex);
+    await user.type(hex, '#F5E6A3');
+    await user.click(screen.getByRole('button', { name: 'Add this color' }));
+    expect(within(screen.getByRole('list', { name: 'Custom colors chosen' })).getByText('Custom #F5E6A3')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Make Custom #F5E6A3 main' }));
+    await user.click(screen.getByRole('radio', { name: /White/ }));
+    expect(screen.getByText(/Custom #F5E6A3 on white has a contrast of/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('To keep these colors, say why'), 'Her favourite');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    await screen.findByText('Ana’s profile was created.');
+    const body = writesTo(calls, 'POST', '/api/profiles')[0]?.body as { settings: { colors: string[] } };
+    expect(body.settings.colors).toEqual(['#F5E6A3', '#E53935']);
+  });
+
   it('editing Leo keeps his other settings and says approvals will need redoing', async () => {
     const user = openProfiles();
     const calls = captureWrites();
