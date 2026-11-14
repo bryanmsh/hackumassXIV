@@ -144,7 +144,7 @@ describe('Child profiles', () => {
     await user.click(await screen.findByRole('button', { name: 'New child profile' }));
     await user.type(screen.getByLabelText('First name'), 'Ana');
     await user.click(screen.getByRole('radio', { name: /Cut-out/ }));
-    const hex = screen.getByLabelText('Custom color hex code');
+    const hex = screen.getByLabelText('Hex code');
     await user.clear(hex);
     await user.type(hex, '12ab');
     expect(screen.getByRole('button', { name: 'Add this color' })).toBeDisabled();

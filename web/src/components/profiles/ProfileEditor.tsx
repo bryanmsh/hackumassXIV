@@ -166,6 +166,9 @@ export function ProfileEditor({
               );
             })}
           </div>
+          {/* Why some swatches are off, said in view (not only in a tooltip). */}
+          {draft.colors.length >= MAX_COLORS && <p className="mt-2 text-sm text-slate-600">Up to 3 colors. Remove one to add another.</p>}
+          {draft.colors.length === 1 && <p className="mt-2 text-sm text-slate-600">At least one color is needed, so the last one cannot be removed.</p>}
           <div className="mt-3 rounded-lg bg-slate-50 p-3 ring-1 ring-inset ring-slate-200">
             <label htmlFor={`${ids}-custom`} className="font-semibold">
               Custom color <span className="font-normal text-slate-600">(optional)</span>
@@ -180,12 +183,16 @@ export function ProfileEditor({
                 onChange={(e) => setCustom(e.target.value.toUpperCase())}
                 aria-describedby={`${ids}-custom-hex`}
               />
+              <label htmlFor={`${ids}-custom-hex`} className="font-semibold">
+                Hex code
+              </label>
               <input
                 id={`${ids}-custom-hex`}
-                aria-label="Custom color hex code"
                 className="w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-base"
                 value={custom}
                 maxLength={7}
+                autoComplete="off"
+                spellCheck={false}
                 onChange={(e) => setCustom(e.target.value)}
               />
               <Button
@@ -194,7 +201,6 @@ export function ProfileEditor({
               >
                 Add this color
               </Button>
-              {customFull && <span className="text-sm text-slate-600">Up to 3 colors. Remove one to add another.</span>}
               {!customValid && <span className="text-sm text-rose-800">Use a 6-digit code such as #1E88E5.</span>}
             </div>
             {customColors.length > 0 && (
