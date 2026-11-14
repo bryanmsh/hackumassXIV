@@ -14,8 +14,8 @@ export function OverlayImage({ page, className = '' }: { page: Page; className?:
 
   return (
     <div className={`flex aspect-[4/3] items-center justify-center overflow-hidden bg-slate-100 ${className}`}>
-      {key === null && <span className="text-slate-500">Processing…</span>}
-      {img.status === 'loading' && <span className="text-slate-500">Loading image…</span>}
+      {key === null && <span className="text-slate-600">Processing…</span>}
+      {img.status === 'loading' && <span className="text-slate-600">Loading image…</span>}
       {img.status === 'error' && (
         <span role="alert" className="px-3 text-center text-sm text-rose-800">
           Image unavailable: {errorMessage(img.error)}

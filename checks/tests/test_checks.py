@@ -34,10 +34,20 @@ def test_good_masks_pass(page, level):
     assert r.size.status == "pass", r.size.detail
 
 
-def test_scattered_mask_fails_fidelity():
+def test_several_whole_subjects_pass_fidelity():
     r = run_checks(P1[0], P1[1], SAMPLES / "bad_scattered_mask.png", {}, 2, None)
-    assert r.fidelity.status == "fail"
-    assert "pieces" in r.fidelity.detail
+    assert r.fidelity.status == "pass"
+    assert "in 5 pieces" in r.fidelity.detail
+
+
+def test_stray_specks_fail_fidelity(tmp_path):
+    mask = np.zeros((1800, 2400), np.uint8)
+    cv2.circle(mask, (1200, 900), 120, 255, -1)  # the subject, about 1% of the page
+    for i in range(40):
+        cv2.circle(mask, (150 + 55 * i, 200 + (i % 4) * 400), 10, 255, -1)  # specks, about 0.007% each
+    path = write_png(tmp_path / "specks.png", mask)
+    r = run_checks(P1[0], P1[1], path, {}, 2, None)
+    assert r.fidelity.status == "fail" and "stray specks" in r.fidelity.detail
 
 
 def test_huge_mask_fails_fidelity_and_touches_edge():

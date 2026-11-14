@@ -3,14 +3,19 @@ import { api } from '../../api';
 import { useAction } from '../../hooks/useAction';
 import type { Profile } from '../../types/api';
 import { MIN_SWATCH_CONTRAST } from '../../utils/contrast';
-import { BACKGROUNDS, LEVELS, SWATCHES } from '../../utils/display';
+import { BACKGROUNDS, LEVELS, SWATCHES, levelName } from '../../utils/display';
 import {
+  LAYOUT_LEVELS,
   MAX_COLORS,
+  POSITIONS,
+  SIZES,
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   backgroundName,
   draftFrom,
   inputFrom,
+  isSwatch,
+  parseCustomColor,
   lowContrast,
   mainContrast,
   makeMain,
@@ -45,6 +50,10 @@ export function ProfileEditor({
   const ids = useId();
   const [draft, setDraft] = useState<ProfileDraft>(() => draftFrom(profile));
   const [errors, setErrors] = useState<DraftErrors>({});
+  const [custom, setCustom] = useState('#1E88E5');
+  const customColors = draft.colors.filter((c) => !isSwatch(c));
+  const customValid = parseCustomColor(custom);
+  const customFull = draft.colors.length >= MAX_COLORS;
   const save = useAction();
   const settings = useMemo(() => settingsFrom(draft), [draft]);
   const ratio = mainContrast(draft);
@@ -157,6 +166,64 @@ export function ProfileEditor({
               );
             })}
           </div>
+          {/* Why some swatches are off, said in view (not only in a tooltip). */}
+          {draft.colors.length >= MAX_COLORS && <p className="mt-2 text-sm text-slate-600">Up to 3 colors. Remove one to add another.</p>}
+          {draft.colors.length === 1 && <p className="mt-2 text-sm text-slate-600">At least one color is needed, so the last one cannot be removed.</p>}
+          <div className="mt-3 rounded-lg bg-slate-50 p-3 ring-1 ring-inset ring-slate-200">
+            <label htmlFor={`${ids}-custom`} className="font-semibold">
+              Custom color <span className="font-normal text-slate-600">(optional)</span>
+            </label>
+            <p className="text-sm text-slate-600">Any color, when none of the eight suits this child. It counts toward the three.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                id={`${ids}-custom`}
+                type="color"
+                className="size-11 cursor-pointer rounded-lg border border-slate-300 bg-white p-1"
+                value={customValid ?? '#000000'}
+                onChange={(e) => setCustom(e.target.value.toUpperCase())}
+                aria-describedby={`${ids}-custom-hex`}
+              />
+              <label htmlFor={`${ids}-custom-hex`} className="font-semibold">
+                Hex code
+              </label>
+              <input
+                id={`${ids}-custom-hex`}
+                className="w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-base"
+                value={custom}
+                maxLength={7}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setCustom(e.target.value)}
+              />
+              <Button
+                disabled={!customValid || customFull || draft.colors.some((c) => c.toUpperCase() === customValid)}
+                onClick={() => customValid && set({ colors: toggleColor(draft.colors, customValid) })}
+              >
+                Add this color
+              </Button>
+              {!customValid && <span className="text-sm text-rose-800">Use a 6-digit code such as #1E88E5.</span>}
+            </div>
+            {customColors.length > 0 && (
+              <ul className="mt-2 flex flex-wrap gap-2" aria-label="Custom colors chosen">
+                {customColors.map((c) => (
+                  <li key={c} className="flex min-h-11 items-center gap-2 rounded-full bg-sky-50 py-1 pl-1 pr-2 font-semibold ring-2 ring-sky-700">
+                    <span className="size-8 rounded-full ring-1 ring-slate-400" style={{ backgroundColor: c }} aria-hidden />
+                    {swatchName(c)}
+                    {draft.colors[0]?.toUpperCase() === c.toUpperCase() && <span className="text-sm text-sky-800">(main)</span>}
+                    <Button
+                      variant="ghost"
+                      className="min-h-9 px-2 py-1 text-sm"
+                      disabled={draft.colors.length === 1}
+                      aria-label={`Remove ${swatchName(c)}`}
+                      onClick={() => set({ colors: toggleColor(draft.colors, c) })}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           {draft.colors.length > 1 && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="text-slate-700">Main color:</span>
@@ -193,6 +260,70 @@ export function ProfileEditor({
               </label>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="font-semibold">Subject size</legend>
+          <p className="text-sm text-slate-600">
+            How much of the picture the subject fills, in Tinted and Cut-out. Faded page and Outlined keep the book’s own layout.
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {SIZES.map((o) => (
+              <label
+                key={o.value}
+                className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg p-2 ring-1 ring-inset ${
+                  draft.size === o.value ? 'bg-sky-50 ring-2 ring-sky-600' : 'ring-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <input type="radio" name={`${ids}-size`} value={o.value} checked={draft.size === o.value} onChange={() => set({ size: o.value })} className="size-5" />
+                <span>
+                  <span className="block font-semibold">{o.name}</span>
+                  <span className="block text-sm text-slate-600">{o.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {draft.level !== null && !LAYOUT_LEVELS.includes(draft.level) && (
+            <p className="mt-1 text-sm text-slate-600">Not used in {levelName(draft.level)}; kept for Tinted and Cut-out.</p>
+          )}
+        </fieldset>
+
+        <fieldset>
+          <legend className="font-semibold">Subject position</legend>
+          <p className="text-sm text-slate-600">
+            Where the subject sits on the page, in Tinted and Cut-out. Some children see better in one part of their visual field;
+            that is the teacher’s call.
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {POSITIONS.map((o) => (
+              <label
+                key={o.value}
+                className={`flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg p-2 ring-1 ring-inset ${
+                  draft.position === o.value ? 'bg-sky-50 font-semibold ring-2 ring-sky-600' : 'ring-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <input type="radio" name={`${ids}-position`} value={o.value} checked={draft.position === o.value} onChange={() => set({ position: o.value })} className="size-5" />
+                {o.name}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="font-semibold">Text below the picture</legend>
+          <p className="text-sm text-slate-600">
+            The page’s words, large, in a band under the picture. The picture is scaled so the two never overlap. Pages with no
+            text show none.
+          </p>
+          <label className="mt-2 flex min-h-11 w-fit cursor-pointer items-center gap-3 rounded-lg px-2 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
+            <input
+              type="checkbox"
+              className="size-6"
+              checked={draft.textMode === 'below'}
+              onChange={(e) => set({ textMode: e.target.checked ? 'below' : 'off' })}
+            />
+            Show the text below the picture
+          </label>
         </fieldset>
 
         {low && ratio !== null && (

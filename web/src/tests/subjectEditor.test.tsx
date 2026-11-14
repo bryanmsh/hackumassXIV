@@ -112,6 +112,30 @@ describe('Subject editor', () => {
     expect(screen.queryByText(/outlined by teacher/)).not.toBeInTheDocument();
   });
 
+  it('add a missing part: sends {refine_point} for the current subject, which keeps its name', async () => {
+    const { user, frame } = await openPage(1); // page 1 has a selected subject (weaver bird)
+    const bodies = captureSubjectBodies();
+    await user.click(screen.getByRole('button', { name: 'Add a missing part' }));
+    expect(screen.getByText(/that the cut-out missed/)).toHaveTextContent('weaver bird');
+    expect(screen.getByRole('button', { name: 'Add this part' })).toBeDisabled();
+    fireEvent.click(frame, at([0.7, 0.3]));
+    await user.click(screen.getByRole('button', { name: 'Add this part' }));
+    expect(await screen.findByText(/Added the part you clicked/)).toBeInTheDocument();
+    expect(bodies).toEqual([{ refine_point: [0.7, 0.3] }]);
+    expect(screen.getByText(/Current subject/).closest('section')).toHaveTextContent('weaver bird');
+    expect(screen.getByTestId('sent-marker')).toBeInTheDocument();
+  });
+
+  it('add a missing part needs a subject first; switching tools clears the spot', async () => {
+    const { user, frame } = await openPage(3); // nothing selected yet
+    await user.click(screen.getByRole('button', { name: 'Add a missing part' }));
+    expect(screen.getByText('Pick a subject first. Then this adds any part the cut-out missed.')).toBeInTheDocument();
+    fireEvent.click(frame, at([0.5, 0.5]));
+    expect(screen.getByRole('button', { name: 'Add this part' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Click the object' }));
+    expect(screen.queryByTestId('tap-marker')).not.toBeInTheDocument();
+  });
+
   it('click the object: the 0-1 spot inside the drawn image is sent only after Cut out', async () => {
     const { user, frame } = await openPage(3);
     const bodies = captureSubjectBodies();

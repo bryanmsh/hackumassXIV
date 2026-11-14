@@ -2,6 +2,7 @@
 from pathlib import Path
 
 import cv2
+import numpy as np
 import pytest
 
 import pipeline.process
@@ -10,7 +11,7 @@ from contracts.hashing import hash_bytes
 from contracts.types import Candidate, PageAsset, PageResult
 from pipeline import process_page
 from pipeline.gemini import GeminiCandidate, GeminiError, RateLimited, SubjectAnswer
-from pipeline.process import call_with_retry, decide_state, gemini_box_to_pixels
+from pipeline.process import call_with_retry, decide_state, gemini_box_to_pixels, group_label
 
 
 # --- the one place Gemini's 0 to 1000 boxes become master pixels ---
@@ -24,72 +25,72 @@ def test_box_reversed_and_out_of_range_is_fixed():
     assert gemini_box_to_pixels([-50, -10, 2000, 400], 1000, 500) == (0, 0, 400, 500)
 
 
-# --- state rules, in the spec's order ---
+# --- state rules: pre-select on almost every page, ask only when nothing is reasonably sure ---
 
 def cand(label="rabbit", confidence=0.9, synonyms=()):
     return Candidate(label=label, synonyms=list(synonyms), box=(0, 0, 10, 10), confidence=confidence,
                      mask_path="m.png", mask_hash="0" * 12, source="auto")
 
 
-def test_scene_is_no_clear_subject():
-    state, selected, reason = decide_state("scene", [cand(confidence=0.95)], "The rabbit sat.")
-    assert (state, selected) == ("no_clear_subject", None)
+@pytest.mark.parametrize("page_kind", ["single", "several", "scene"])
+def test_no_candidates_is_no_clear_subject(page_kind):
+    state, members, reason = decide_state(page_kind, [])
+    assert (state, members) == ("no_clear_subject", [])
     assert reason
 
 
-def test_no_candidates_is_no_clear_subject():
-    state, selected, reason = decide_state("single", [], "The rabbit sat.")
-    assert (state, selected) == ("no_clear_subject", None)
+def test_single_page_selects_the_top_candidate():
+    assert decide_state("single", [cand(confidence=0.9), cand("tree", 0.3)]) == ("ready", [0], None)
+
+
+def test_single_page_with_a_close_second_still_selects_the_top_one():
+    assert decide_state("single", [cand(confidence=0.8), cand("tree", 0.75)]) == ("ready", [0], None)
+
+
+def test_several_page_selects_every_reasonably_sure_subject():
+    candidates = [cand("rabbit", 0.95), cand("rabbit", 0.95), cand("rat", 0.9), cand("rat", 0.9)]
+    assert decide_state("several", candidates) == ("ready", [0, 1, 2, 3], None)
+
+
+def test_scene_page_with_subjects_selects_them_too():
+    candidates = [cand("children", 0.85), cand("woodpecker", 0.8), cand("ants", 0.75), cand("ant", 0.65)]
+    assert decide_state("scene", candidates) == ("ready", [0, 1, 2, 3], None)
+
+
+def test_weak_candidates_are_left_out_of_the_selection():
+    candidates = [cand("rabbit", 0.9), cand("rat", 0.8), cand("stone", 0.3)]
+    assert decide_state("several", candidates) == ("ready", [0, 1], None)
+
+
+def test_one_sure_subject_on_a_several_page_is_selected_alone():
+    assert decide_state("several", [cand("rabbit", 0.9), cand("stone", 0.3)]) == ("ready", [0], None)
+
+
+def test_the_selection_floor_is_half():
+    assert decide_state("single", [cand(confidence=0.5)]) == ("ready", [0], None)
+    state, members, reason = decide_state("single", [cand(confidence=0.49)])
+    assert (state, members) == ("needs_subject", [])
     assert reason
 
 
-def test_several_is_needs_subject_even_when_confident_and_matching():
-    state, selected, reason = decide_state("several", [cand(confidence=0.95), cand("fox", 0.2)], "The rabbit sat.")
-    assert (state, selected) == ("needs_subject", None)
-    assert reason
+def test_nothing_reasonably_sure_asks_the_teacher_on_any_kind_of_page():
+    for page_kind in ("single", "several", "scene"):
+        state, members, reason = decide_state(page_kind, [cand(confidence=0.4), cand("tree", 0.3)])
+        assert (state, members) == ("needs_subject", [])
+        assert reason
 
 
-def test_text_that_does_not_mention_the_subject_is_needs_subject():
-    state, selected, reason = decide_state("single", [cand("fox", 0.95, ["animal"])], "The rabbit sat.")
-    assert (state, selected) == ("needs_subject", None)
-    assert "fox" in reason
+# --- the name of a combined cut-out ---
+
+def test_group_label_joins_the_different_things():
+    assert group_label(["rabbit", "rat"]) == "rabbit and rat"
+    assert group_label(["children", "woodpecker", "ants"]) == "children, woodpecker and ants"
 
 
-def test_a_synonym_in_the_text_counts():
-    candidates = [cand("hornbill", 0.9, ["bird"]), cand("tree", 0.3)]
-    assert decide_state("single", candidates, "A bird flew.") == ("ready", 0, None)
-
-
-def test_plural_and_case_match():
-    assert decide_state("single", [cand("rabbit", 0.9)], "Rabbits hide.")[0] == "ready"
-    assert decide_state("single", [cand("fox", 0.9)], "Two FOXES ran.")[0] == "ready"
-
-
-def test_a_word_inside_another_word_does_not_match():
-    assert decide_state("single", [cand("cat", 0.9)], "The caterpillar ate.")[0] == "needs_subject"
-
-
-def test_only_the_top_candidate_is_matched_against_the_text():
-    candidates = [cand("tree", 0.9), cand("rabbit", 0.3)]
-    assert decide_state("single", candidates, "The rabbit sat.")[0] == "needs_subject"
-
-
-def test_no_text_skips_the_text_rule():
-    assert decide_state("single", [cand("rabbit", 0.9), cand("tree", 0.3)], "") == ("ready", 0, None)
-    assert decide_state("single", [cand("rabbit", 0.9)], "   ")[0] == "ready"
-
-
-def test_confidence_thresholds():
-    assert decide_state("single", [cand(confidence=0.69)], "")[0] == "needs_subject"
-    assert decide_state("single", [cand(confidence=0.7)], "")[0] == "ready"  # nothing to be ahead of
-    assert decide_state("single", [cand(confidence=0.8), cand("tree", 0.65)], "")[0] == "needs_subject"
-    assert decide_state("single", [cand(confidence=0.9), cand("tree", 0.7)], "")[0] == "ready"  # exactly 0.2 ahead
-
-
-def test_unsure_page_has_no_selection_and_a_reason():
-    state, selected, reason = decide_state("single", [cand(confidence=0.5)], "")
-    assert (state, selected) == ("needs_subject", None)
-    assert reason
+def test_group_label_says_each_thing_once():
+    assert group_label(["rabbit", "rabbit", "rat", "rat"]) == "rabbit and rat"
+    assert group_label(["children", "woodpecker", "ants", "ant", "ant"]) == "children, woodpecker and ants"
+    assert group_label(["fox", "foxes"]) == "fox"
 
 
 # --- retry rule ---
@@ -207,12 +208,67 @@ def test_ready_page_has_masks_on_disk(asset, tmp_path, gemini):
     assert mask[450, 600] == 255 and mask[10, 10] == 0
 
 
-def test_needs_subject_keeps_its_candidates(asset, tmp_path, gemini):
-    gemini(answer(subject("ball", 0.6), subject("cat", 0.5, box=(0, 0, 200, 200)), page_kind="several"))
+def read(candidate):
+    return cv2.imread(candidate.mask_path, cv2.IMREAD_UNCHANGED)
+
+
+def test_several_subjects_are_offered_as_one_combined_cut_out_but_not_pre_selected(asset, tmp_path, gemini):
+    gemini(answer(subject("ball", 0.8), subject("cat", 0.6, box=(0, 0, 200, 200), synonyms=["kitten", "animal"]),
+                  page_kind="several"))
     result = process_page(asset, tmp_path)
-    assert (result.state, result.selected, result.page_kind) == ("needs_subject", None, "several")
-    assert len(result.candidates) == 2
-    assert all(Path(c.mask_path).exists() for c in result.candidates)
+    # The teacher decides what a page with several subjects is about; the group is one click away.
+    assert (result.state, result.page_kind, result.reason) == ("needs_subject", "several", "The page has several subjects")
+    assert [c.label for c in result.candidates] == ["ball", "cat", "ball and cat"]  # singles first, then the group
+    assert result.selected is None
+    ball, cat, group = result.candidates
+    assert np.array_equal(read(group), read(ball) | read(cat))  # every subject, exactly as cut
+    assert group.source == "auto"
+    assert group.confidence == 0.6  # as sure as its least sure member
+    assert group.synonyms == ["ball", "toy", "cat", "kitten", "animal"]  # any member's name is a right answer
+    assert group.box == (0, 0, 840, 675)  # around all of them
+    path = Path(group.mask_path)
+    assert path.parent == tmp_path / "masks" and path.name == f"1_{group.mask_hash}.png"
+    assert group.mask_hash == hash_bytes(path.read_bytes())
+
+
+def test_a_small_subject_survives_in_the_combined_cut_out(asset, tmp_path, gemini):
+    """Cleanup drops regions under 5% of the largest, which must not happen to a whole subject."""
+    gemini(answer(subject("ball", 0.9), subject("ant", 0.8, box=(10, 10, 30, 30), synonyms=[]), page_kind="several"))
+    result = process_page(asset, tmp_path)
+    ant, group = result.candidates[1], result.candidates[2]
+    assert read(ant).sum() * 20 < read(result.candidates[0]).sum()  # the ant is under 5% of the ball
+    assert not (read(ant) & ~read(group)).any()
+
+
+def test_weak_candidates_stay_out_of_the_combined_cut_out(asset, tmp_path, gemini):
+    gemini(answer(subject("ball", 0.9), subject("cat", 0.8, box=(0, 0, 200, 200)),
+                  subject("stone", 0.3, box=(800, 800, 1000, 1000)), page_kind="scene"))
+    result = process_page(asset, tmp_path)
+    assert [c.label for c in result.candidates] == ["ball", "cat", "stone", "ball and cat"]
+    assert (result.state, result.selected) == ("needs_subject", None)
+    stone, group = result.candidates[2], result.candidates[3]
+    assert not (read(stone) & read(group)).any()
+
+
+def test_a_single_subject_page_gets_no_combined_cut_out(asset, tmp_path, gemini):
+    gemini(answer(subject("ball", 0.9), subject("cat", 0.8, box=(0, 0, 200, 200))))
+    result = process_page(asset, tmp_path)
+    assert [c.label for c in result.candidates] == ["ball", "cat"]
+    assert (result.state, result.selected) == ("ready", 0)
+
+
+def test_page_text_no_longer_blocks_a_selection(asset, tmp_path, gemini):
+    asset.text = "He ran all the way home."
+    gemini(answer(subject("ball", 0.9)))
+    assert process_page(asset, tmp_path).state == "ready"
+
+
+def test_nothing_reasonably_sure_still_asks_the_teacher(asset, tmp_path, gemini):
+    gemini(answer(subject("ball", 0.4), subject("cat", 0.3, box=(0, 0, 200, 200)), page_kind="several"))
+    result = process_page(asset, tmp_path)
+    assert (result.state, result.selected) == ("needs_subject", None)
+    assert [c.label for c in result.candidates] == ["ball", "cat"]
+    assert result.reason
 
 
 def test_scene_is_no_clear_subject_through_process_page(asset, tmp_path, gemini):

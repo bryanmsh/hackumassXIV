@@ -107,11 +107,19 @@ export function renderSvg(page: MockPage, settings: Settings, level: Level, tag:
     parts.push(`<rect width="${W}" height="${H}" fill="${bg}"/>`);
     const fill = level === 1 ? main : naturalColor(c.label);
     const { svg, box } = subjectShape(page, c, `fill="${fill}"`);
-    const target = 0.6 * Math.min(W, H);
+    const text = settings.text_mode === 'below' && page.text?.trim() ? page.text.trim() : null;
+    const pictureH = text ? H * 0.84 : H; // bottom 16% is the text band
+    const frac = { small: 0.4, medium: 0.6, large: 0.8 }[settings.size];
+    const [ax, ay] = { center: [0.5, 0.5], left: [0.3, 0.5], right: [0.7, 0.5], upper: [0.5, 0.3], lower: [0.5, 0.7] }[settings.position] as [number, number];
+    const target = frac * Math.min(W, pictureH);
     const s = target / Math.max(box.w, box.h, 1);
-    const tx = W / 2 - (box.x + box.w / 2) * s;
-    const ty = H / 2 - (box.y + box.h / 2) * s;
+    const tx = ax * W - (box.x + box.w / 2) * s;
+    const ty = ay * pictureH - (box.y + box.h / 2) * s;
     parts.push(`<g transform="translate(${tx.toFixed(1)} ${ty.toFixed(1)}) scale(${s.toFixed(4)})">${svg}</g>`);
+    if (text) {
+      const fs = Math.round(H * 0.07);
+      parts.push(`<text x="${W / 2}" y="${H * 0.93}" text-anchor="middle" font-family="sans-serif" font-size="${fs}" fill="${markFill}">${esc(text)}</text>`);
+    }
   } else if (level === 3) {
     parts.push(`<rect width="${W}" height="${H}" fill="${bg}"/>`);
     parts.push(`<g opacity="0.3">${pageBody(page)}</g>`);

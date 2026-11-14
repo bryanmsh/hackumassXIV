@@ -135,6 +135,6 @@ Keep entries brief but complete enough to reconstruct the work. Record real numb
 | README / writeup | `07 - Reusable Templates/Project README.md`, `06 - Demo & Pitch/Judging Criteria.md` |
 | Demo prep | `06 - Demo & Pitch/Demo Script.md`, `06 - Demo & Pitch/Backup Demo.md`, `00 - Dashboard/Submission Checklist.md` |
 
-Notes under `04 - Hackachusetts Tracks/` and the Hackachusetts-specific dashboard notes describe a past event. Don't treat their rules, tracks, or dates as applying to HackUMass.
+The Hackachusetts-specific dashboard notes describe a past event. Don't treat their rules, tracks, or dates as applying to HackUMass.
 
 Guiding principle (from the toolkit): one complete, credible, measurable workflow beats five unfinished features. Integrate before polishing.

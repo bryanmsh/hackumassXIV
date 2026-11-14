@@ -1,4 +1,4 @@
-import type { HexColor, Level, Profile, ProfileInput, Settings } from '../types/api';
+import type { HexColor, Level, Profile, ProfileInput, Settings, SubjectPosition, SubjectSize, TextMode } from '../types/api';
 import { MIN_SWATCH_CONTRAST, contrastRatio } from './contrast';
 import { BACKGROUNDS, DEFAULT_SETTINGS, SWATCHES } from './display';
 
@@ -13,9 +13,30 @@ export interface ProfileDraft {
   colors: HexColor[];
   background: HexColor;
   note: string;
-  /** The saved settings (or defaults for a new child); size, position, text and outline come from here. */
+  /** Phase 2 controls. Size and position apply at Tinted and Cut-out; text below applies at every look. */
+  size: SubjectSize;
+  position: SubjectPosition;
+  textMode: TextMode;
+  /** The saved settings (or defaults for a new child); `outline` (no control yet) comes from here. */
   base: Settings;
 }
+
+export const SIZES: readonly { value: SubjectSize; name: string; hint: string }[] = [
+  { value: 'small', name: 'Small', hint: '40% of the picture area' },
+  { value: 'medium', name: 'Medium', hint: '60% of the picture area' },
+  { value: 'large', name: 'Large', hint: '80% of the picture area' },
+];
+
+export const POSITIONS: readonly { value: SubjectPosition; name: string }[] = [
+  { value: 'center', name: 'Center' },
+  { value: 'left', name: 'Left' },
+  { value: 'right', name: 'Right' },
+  { value: 'upper', name: 'Upper' },
+  { value: 'lower', name: 'Lower' },
+];
+
+/** Size and position only change Tinted and Cut-out; Faded page and Outlined keep the book's layout. */
+export const LAYOUT_LEVELS: readonly Level[] = [1, 2];
 
 export function draftFrom(profile?: Profile): ProfileDraft {
   if (!profile) {
@@ -25,6 +46,9 @@ export function draftFrom(profile?: Profile): ProfileDraft {
       colors: [...DEFAULT_SETTINGS.colors],
       background: DEFAULT_SETTINGS.background,
       note: '',
+      size: DEFAULT_SETTINGS.size,
+      position: DEFAULT_SETTINGS.position,
+      textMode: DEFAULT_SETTINGS.text_mode,
       base: { ...DEFAULT_SETTINGS, colors: [...DEFAULT_SETTINGS.colors] },
     };
   }
@@ -34,13 +58,16 @@ export function draftFrom(profile?: Profile): ProfileDraft {
     colors: [...profile.settings.colors],
     background: profile.settings.background,
     note: profile.contrast_override_note ?? '',
+    size: profile.settings.size,
+    position: profile.settings.position,
+    textMode: profile.settings.text_mode,
     base: { ...profile.settings, colors: [...profile.settings.colors] },
   };
 }
 
 /** The full Contract 2 settings object: the form's colors and background, everything else kept. */
 export function settingsFrom(d: ProfileDraft): Settings {
-  return { ...d.base, colors: [...d.colors], background: d.background };
+  return { ...d.base, colors: [...d.colors], background: d.background, size: d.size, position: d.position, text_mode: d.textMode };
 }
 
 const norm = (hex: string) => hex.toUpperCase();
@@ -60,7 +87,15 @@ export function makeMain(colors: HexColor[], hex: HexColor): HexColor[] {
 }
 
 export function swatchName(hex: string): string {
-  return SWATCHES.find((s) => norm(s.hex) === norm(hex))?.name ?? hex;
+  return SWATCHES.find((s) => norm(s.hex) === norm(hex))?.name ?? `Custom ${norm(hex)}`;
+}
+
+export const isSwatch = (hex: string): boolean => SWATCHES.some((s) => norm(s.hex) === norm(hex));
+
+/** A custom colour: any 6-digit hex (the API accepts any). Returned normalised, or null. */
+export function parseCustomColor(input: string): HexColor | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(input.trim());
+  return m ? `#${m[1]!.toUpperCase()}` : null;
 }
 
 export function backgroundName(hex: string): string {

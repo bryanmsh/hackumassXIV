@@ -19,10 +19,15 @@ def load(pipeline: str, render: str):
     # Each function is named, so a real module that is missing one fails here, at startup.
     if pipeline == "real":
         import pipeline as real_pipeline
+        try:
+            from pipeline.credits import read_credits
+        except ImportError:                          # pipeline/credits.py has not landed yet
+            read_credits = stubs.read_credits
         pipeline_module = SimpleNamespace(
             rasterize=real_pipeline.rasterize, process_page=real_pipeline.process_page,
             segment_at_point=real_pipeline.segment_at_point,
-            mask_from_outline=real_pipeline.mask_from_outline, refine_mask=real_pipeline.refine_mask)
+            mask_from_outline=real_pipeline.mask_from_outline, refine_mask=real_pipeline.refine_mask,
+            read_credits=read_credits)
     else:
         pipeline_module = stubs
 

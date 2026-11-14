@@ -20,7 +20,8 @@ CUTOUT_FAILED = "The cut-out could not be made. Try again or draw an outline."
 
 class SubjectBody(BaseModel):
     """One of five shapes: a candidate, several candidates shown together, a click, a label
-    with an outline, or a click that adds a missing part to the current subject."""
+    with an outline, or a click that adds a missing part to the current subject.
+    `tidy` goes with an outline: the cut-out tool may tighten the drawn shape to the object."""
     model_config = {"extra": "forbid"}
 
     candidate: int | None = None
@@ -29,6 +30,7 @@ class SubjectBody(BaseModel):
     label: str | None = None
     outline: list[tuple[float, float]] | None = None
     refine_point: tuple[float, float] | None = None
+    tidy: bool = False
 
     @model_validator(mode="after")
     def exactly_one_shape(self):
@@ -45,6 +47,8 @@ class SubjectBody(BaseModel):
             raise ValueError("showing subjects together needs at least 2 different candidates")
         if by_outline and (not self.label.strip() or len(self.outline) < 3):
             raise ValueError("an outline needs a label and at least 3 points")
+        if self.tidy and not by_outline:
+            raise ValueError("tidy goes with a label and an outline")
         return self
 
 
@@ -166,7 +170,7 @@ def set_subject(page_id: str, body: SubjectBody):
     else:
         points = [_pixels(p, page) for p in body.outline]
         found = _cutout(page, lambda out_dir: modules.pipeline.mask_from_outline(
-            image_path, body.label.strip(), points, out_dir))
+            image_path, body.label.strip(), points, out_dir, body.tidy))
     # The pipeline is slow: add to the page as it is now, never to the copy read before the call.
     page = _find_page(page_id)
     if page["state"] == "processing":

@@ -4,7 +4,7 @@ import { api } from '../../api';
 import { useAction } from '../../hooks/useAction';
 import type { Page } from '../../types/api';
 import { PAGE_STATE_HINT, formatConfidence, sourceLabel } from '../../utils/display';
-import { secondLookText } from '../../utils/secondLook';
+import { plainReason, secondLookText } from '../../utils/secondLook';
 import { OverlayImage } from '../books/OverlayImage';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
@@ -80,7 +80,7 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
 
         {!page.confirmed && !page.omitted && <p className="text-slate-700">{PAGE_STATE_HINT[page.state]}</p>}
         {page.omitted && <p className="text-slate-700">This page is skipped in the reader.</p>}
-        {page.reason && <p className="text-sm text-slate-600">Reason: {page.reason}</p>}
+        {plainReason(page.reason) && <p className="text-sm text-slate-600">Reason: {plainReason(page.reason)}</p>}
         {page.flags.map((f) => (
           <p key={f} className="text-sm text-amber-900">
             ⚠ {FLAG_TEXT[f] ?? f}
@@ -98,7 +98,7 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
               {page.candidates.length > 1 ? 'Choose the subject' : 'Suggested subject'}
             </legend>
             {page.candidates.length > 1 && (
-              <p className="text-sm text-slate-700">Tap more than one to show them together. Tap again to take one out.</p>
+              <p className="text-sm text-slate-700">Click more than one to show them together. Click again to take one out.</p>
             )}
             <div className="mt-1 flex flex-wrap gap-2">
               {page.candidates.map((c, i) => {

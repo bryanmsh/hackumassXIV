@@ -197,7 +197,7 @@ describe('Subject review', () => {
         <App />
       </MemoryRouter>,
     );
-    expect(await screen.findByText(/Could not load this book \(HTTP 404\)/)).toBeInTheDocument();
+    expect(await screen.findByText('Could not load this book')).toBeInTheDocument();
     expect(screen.getByText('Book not found.')).toBeInTheDocument();
   });
 
