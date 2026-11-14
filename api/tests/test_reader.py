@@ -16,6 +16,7 @@ def test_an_approved_page_is_served():
     r = client.get(page["image_url"])
     assert r.status_code == 200 and r.content[8:12] == b"WEBP"
     assert r.headers["cache-control"] == "no-store"
+    assert r.headers["content-type"] == "image/webp"
 
 
 def test_a_never_approved_page_is_refused():
@@ -57,11 +58,14 @@ def test_approved_then_changed_is_refused(change):
     "profile={p}&level=1",                     # no token
     "profile=65c000000000000000000009&level=1&v={v}",
     "profile=nope&level=1&v={v}",
-    "profile={p}&level=9&v={v}"])
+    "profile={p}&level=9&v={v}",
+    "profile={p}&level=1&v=",                  # empty token
+    "profile={p}&level=1.0&v={v}",             # level is not a whole number
+    "level=1&v={v}"])                          # no profile
 def test_every_other_request_is_refused(query):
     book, p, page = approved_page()
     r = client.get(f"/api/reader/page/{page['page_id']}?" + query.format(p=p["id"], v=page["v"]))
-    assert r.status_code == 403
+    assert r.status_code == 403 and r.json() == {"detail": "not approved"}
     assert client.get(f"/api/reader/page/nope?profile={p['id']}&level=1&v={page['v']}").status_code == 403
 
 

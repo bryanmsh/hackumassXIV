@@ -57,12 +57,12 @@ def _refuse() -> JSONResponse:
 @router.get("/reader/page/{page_id}")
 def reader_page(page_id: str, profile: str | None = None, level: str | None = None, v: str | None = None):
     """The image, only while this exact version is approved. Every failure is the same 403."""
-    if level not in ("1", "2", "3", "4") or not v:
+    if not profile or level not in ("1", "2", "3", "4") or not v:
         return _refuse()
     try:
         page = db.pages.find_one({"_id": ObjectId(page_id)})
         saved = db.profiles.find_one({"_id": ObjectId(profile)})
-    except (InvalidId, TypeError):
+    except InvalidId:
         return _refuse()
     if page is None or saved is None:
         return _refuse()
