@@ -372,7 +372,7 @@ function Editor({
               ) : (
                 <>
                   <p className="text-slate-700">
-                    Each suggestion has a number and colour, the same on the page and here. Click a box on the page, or a name here.
+                    Each suggestion has its own colour, the same on the page and here. Click a box on the page, or a name here.
                     When the story needs more than one, tick each and show them together.
                   </p>
                   <ul className="space-y-2">

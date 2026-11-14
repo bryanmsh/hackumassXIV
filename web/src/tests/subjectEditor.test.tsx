@@ -310,11 +310,11 @@ describe('Subject editor', () => {
     const hornbillBox = screen.getByRole('button', { name: /^Pick hornbill, number 1/ });
     const beehiveBox = screen.getByRole('button', { name: /^Pick beehive, number 2/ });
     const beehiveRow = screen.getByRole('button', { name: /^beehive/ });
-    const onPage = within(frame).getAllByTestId('subject-marker');
-    expect(onPage.map((m) => m.dataset.subject)).toEqual(['1', '2', '3']);
-    expect(onPage[1]).toHaveClass('bg-subject-2');
+    // The box border carries the colour; no numbers are drawn on the artwork.
+    expect(beehiveBox).toHaveClass('border-subject-2');
+    expect(hornbillBox).toHaveClass('border-subject-1');
+    expect(within(frame).queryAllByTestId('subject-marker')).toHaveLength(0);
     expect(within(beehiveRow).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
-    expect(onPage[0]).toHaveClass('bg-subject-1');
     expect(beehiveRow).toHaveTextContent('58%');
 
     await user.hover(beehiveRow);
