@@ -7,7 +7,7 @@ import { EmptyState, ErrorPanel, Loading } from '../components/ui/LoadState';
 import { useApi } from '../hooks/useApi';
 import type { Profile } from '../types/api';
 import { levelName } from '../utils/display';
-import { backgroundName, lowContrast, swatchName } from '../utils/profiles';
+import { POSITIONS, SIZES, backgroundName, lowContrast, swatchName } from '../utils/profiles';
 
 type Editing = { kind: 'new' } | { kind: 'edit'; profile: Profile } | null;
 
@@ -81,6 +81,11 @@ export function ProfilesPage() {
                   Background: {backgroundName(p.settings.background)}
                 </span>
               </div>
+              <p className="mt-2 text-sm text-slate-700">
+                {SIZES.find((s) => s.value === p.settings.size)?.name ?? p.settings.size} ·{' '}
+                {POSITIONS.find((o) => o.value === p.settings.position)?.name ?? p.settings.position} · text{' '}
+                {p.settings.text_mode === 'below' ? 'below the picture' : 'off'}
+              </p>
               {lowContrast({ colors: p.settings.colors, background: p.settings.background }) && (
                 <p className="mt-2 text-sm text-amber-900">
                   Low contrast kept{p.contrast_override_note ? `: “${p.contrast_override_note}”` : '.'}

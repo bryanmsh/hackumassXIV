@@ -3,9 +3,12 @@ import { api } from '../../api';
 import { useAction } from '../../hooks/useAction';
 import type { Profile } from '../../types/api';
 import { MIN_SWATCH_CONTRAST } from '../../utils/contrast';
-import { BACKGROUNDS, LEVELS, SWATCHES } from '../../utils/display';
+import { BACKGROUNDS, LEVELS, SWATCHES, levelName } from '../../utils/display';
 import {
+  LAYOUT_LEVELS,
   MAX_COLORS,
+  POSITIONS,
+  SIZES,
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   backgroundName,
@@ -193,6 +196,70 @@ export function ProfileEditor({
               </label>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="font-semibold">Subject size</legend>
+          <p className="text-sm text-slate-600">
+            How much of the picture the subject fills, in Tinted and Cut-out. Faded page and Outlined keep the book’s own layout.
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {SIZES.map((o) => (
+              <label
+                key={o.value}
+                className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg p-2 ring-1 ring-inset ${
+                  draft.size === o.value ? 'bg-sky-50 ring-2 ring-sky-600' : 'ring-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <input type="radio" name={`${ids}-size`} value={o.value} checked={draft.size === o.value} onChange={() => set({ size: o.value })} className="size-5" />
+                <span>
+                  <span className="block font-semibold">{o.name}</span>
+                  <span className="block text-sm text-slate-600">{o.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {draft.level !== null && !LAYOUT_LEVELS.includes(draft.level) && (
+            <p className="mt-1 text-sm text-slate-600">Not used in {levelName(draft.level)}; kept for Tinted and Cut-out.</p>
+          )}
+        </fieldset>
+
+        <fieldset>
+          <legend className="font-semibold">Subject position</legend>
+          <p className="text-sm text-slate-600">
+            Where the subject sits on the page, in Tinted and Cut-out. Some children see better in one part of their visual field;
+            that is the teacher’s call.
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {POSITIONS.map((o) => (
+              <label
+                key={o.value}
+                className={`flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg p-2 ring-1 ring-inset ${
+                  draft.position === o.value ? 'bg-sky-50 font-semibold ring-2 ring-sky-600' : 'ring-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <input type="radio" name={`${ids}-position`} value={o.value} checked={draft.position === o.value} onChange={() => set({ position: o.value })} className="size-5" />
+                {o.name}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="font-semibold">Text below the picture</legend>
+          <p className="text-sm text-slate-600">
+            The page’s words, large, in a band under the picture. The picture is scaled so the two never overlap. Pages with no
+            text show none.
+          </p>
+          <label className="mt-2 flex min-h-11 w-fit cursor-pointer items-center gap-3 rounded-lg px-2 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
+            <input
+              type="checkbox"
+              className="size-6"
+              checked={draft.textMode === 'below'}
+              onChange={(e) => set({ textMode: e.target.checked ? 'below' : 'off' })}
+            />
+            Show the text below the picture
+          </label>
         </fieldset>
 
         {low && ratio !== null && (
