@@ -432,6 +432,27 @@ export function subjectFromOutline(p: MockPage, label: string, outline: NormPoin
   });
 }
 
+/** Several candidates shown together as one subject. False when an index is unknown. */
+export function subjectTogether(p: MockPage, indexes: number[]): boolean {
+  const parts = indexes.map((i) => p.candidates[i]);
+  if (parts.some((c) => !c)) return false;
+  const labels = [...new Set(parts.map((c) => c!.label))];
+  selectNew(p, {
+    label: labels.join(' and '),
+    synonyms: [...new Set([...labels, ...parts.flatMap((c) => c!.synonyms)])],
+    box: [
+      Math.min(...parts.map((c) => c!.box[0])),
+      Math.min(...parts.map((c) => c!.box[1])),
+      Math.max(...parts.map((c) => c!.box[2])),
+      Math.max(...parts.map((c) => c!.box[3])),
+    ],
+    confidence: 1,
+    source: 'manual',
+    mask_hash: mockHash(`${p.id}:together:${parts.map((c) => c!.mask_hash).sort().join('+')}`),
+  });
+  return true;
+}
+
 export function confirmPage(p: MockPage, now: number = Date.now()): boolean {
   if (p.selected === null || p.state === 'processing') return false;
   p.confirmed = true;
@@ -597,6 +618,7 @@ export function approve(
 }
 
 /** A version is fully approved when every non-omitted page has a current decision and at least one is approved. */
+/** As in api/versions.py: at least one page approved, and every page left out or decided. */
 export function isFullyApproved(book: MockBook, profile: Profile, level: Level): boolean {
   const live = book.pages.filter((p) => !p.omitted);
   if (!live.length) return false;
@@ -625,12 +647,18 @@ export function buildManifest(book: MockBook, profile: Profile, level: Level): R
       skipped.push({ page_id: p.id, number: p.number, reason: st === 'rejected' ? 'rejected' : 'not_approved' });
     }
   }
-  const versions: ReaderManifest['versions'] = [];
-  for (const pr of state.profiles) {
-    for (const lv of [1, 2, 3, 4] as const) {
-      versions.push({ profile_id: pr.id, profile_name: pr.name, level: lv, fully_approved: isFullyApproved(book, pr, lv) });
-    }
+  // As in api/routes/reader.py: each child at their own look, plus every other
+  // (child, look) with an approval record on this book; sorted by name, then look.
+  const pageIds = new Set(book.pages.map((p) => p.id));
+  const pairs = new Map<string, { pr: Profile; lv: Level }>();
+  for (const pr of state.profiles) pairs.set(`${pr.id}|${pr.level}`, { pr, lv: pr.level });
+  for (const a of state.approvals) {
+    const pr = state.profiles.find((x) => x.id === a.profile_id);
+    if (pr && pageIds.has(a.page_id)) pairs.set(`${pr.id}|${a.level}`, { pr, lv: a.level });
   }
+  const versions: ReaderManifest['versions'] = [...pairs.values()]
+    .sort((a, b) => a.pr.name.localeCompare(b.pr.name) || a.lv - b.lv)
+    .map(({ pr, lv }) => ({ profile_id: pr.id, profile_name: pr.name, level: lv, fully_approved: isFullyApproved(book, pr, lv) }));
   return {
     book_id: book.id,
     title: book.title,
