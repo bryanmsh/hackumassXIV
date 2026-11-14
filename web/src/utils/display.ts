@@ -89,8 +89,9 @@ export const CHECK_TONE: Record<CheckStatus, string> = {
   fail: 'bg-rose-50 text-rose-800 ring-rose-200',
 };
 
+/** The AI's own confidence as a whole percentage ("85%"). It is the AI's guess, never a score of correctness. */
 export function formatConfidence(c: number): string {
-  return c.toFixed(2);
+  return `${Math.round(Math.min(1, Math.max(0, c)) * 100)}%`;
 }
 
 /**

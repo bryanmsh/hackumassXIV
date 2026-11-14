@@ -1,5 +1,5 @@
 /** Subject review: each action sends the agreed body, the card shows the server's answer, nothing auto-confirms. */
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { MemoryRouter } from 'react-router';
@@ -47,7 +47,7 @@ describe('Subject review', () => {
   it('shows every page with its state, subject, and the AI’s guess (never styled as correct)', async () => {
     await open();
     expect(card(1).getByText('Ready')).toBeInTheDocument();
-    expect(card(1).getByText(/the AI’s guess, confidence 0\.88/)).toBeInTheDocument();
+    expect(card(1).getByText(/the AI’s guess, confidence 88%/)).toBeInTheDocument();
     expect(card(1).getByText('Ready').className).not.toMatch(/emerald/);
     expect(card(3).getByText('Needs subject')).toBeInTheDocument();
     expect(card(3).getByText('No subject chosen yet.')).toBeInTheDocument();
@@ -165,6 +165,35 @@ describe('Subject review', () => {
     await waitFor(() => expect(chip(/^beehive/)).toHaveAttribute('aria-pressed', 'false'));
     expect(Object.keys(calls[2]!.body as object)).toEqual(['candidate']);
     expect(card(3).getByText(/Subject:/)).toHaveTextContent('hornbill');
+  });
+
+  it('suggestions are numbered and coloured the same on the page and in the chips; pointing at one dims the others', async () => {
+    const { user, id } = await open();
+    // Page 3 has three suggestions: a marker on the page and a chip for each, same number and colour.
+    const onPage = card(3).getAllByTestId('page-marker');
+    expect(onPage).toHaveLength(3);
+    const numbers = card(3)
+      .getAllByTestId('subject-marker')
+      .map((m) => m.dataset.subject)
+      .sort();
+    expect(numbers).toEqual(['1', '1', '2', '2', '3', '3']);
+    const beehiveChip = card(3).getByRole('button', { name: /^beehive/ });
+    expect(within(beehiveChip).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
+    expect(within(onPage[1]!).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
+    // Markers are pointer-only duplicates of the chips: hidden from assistive technology.
+    expect(card(3).queryByRole('button', { name: /number 2/ })).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(onPage[1]!);
+    expect(card(3).getByRole('button', { name: /^hornbill/ })).toHaveClass('opacity-50');
+    expect(beehiveChip).not.toHaveClass('opacity-50');
+    fireEvent.mouseLeave(onPage[1]!);
+    expect(card(3).getByRole('button', { name: /^hornbill/ })).not.toHaveClass('opacity-50');
+
+    // Clicking a marker does what clicking its chip does.
+    const calls = capturePosts();
+    await user.click(onPage[1]!);
+    await waitFor(() => expect(beehiveChip).toHaveAttribute('aria-pressed', 'true'));
+    expect(calls[0]).toEqual({ path: `/api/pages/${id(3)}/subject`, body: { candidate: 1 } });
   });
 
   it('Cancel in Confirm all sends nothing', async () => {
