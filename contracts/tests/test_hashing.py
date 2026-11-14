@@ -33,3 +33,9 @@ def test_subject_hash_is_hash_of_file_bytes(tmp_path):
 def test_version_token_golden_and_level_type():
     assert version_token("374708fff771", "2804b24a29e2", 1, "r1") == "ad960d083f3b"
     assert version_token("374708fff771", "2804b24a29e2", "1", "r1") == "ad960d083f3b"
+
+
+def test_hash_is_the_same_when_validation_was_skipped():
+    # model_copy(update=...) does not validate, which is the natural way to write a PATCH.
+    unvalidated = Settings().model_copy(update={"colors": ["#e53935"]})
+    assert settings_hash(unvalidated) == settings_hash(MAYA)

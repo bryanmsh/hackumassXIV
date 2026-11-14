@@ -1,5 +1,84 @@
 {
-  "_about": "One example per Contract 1 route. Positions (box, point, outline) are fractions from 0 to 1 of the page's width and height, measured from the top-left corner. Levels are the numbers 1 to 4. Ids are opaque strings. Image routes return WebP bytes, shown here as a placeholder object.",
+  "_about": "One example per Contract 1 route. Positions (box, point, outline) are fractions from 0 to 1 of the page's width and height, measured from the top-left corner. Levels are the numbers 1 to 4. Ids are opaque strings. Image routes return WebP bytes, shown here as a placeholder object. To approve, send each page's `version` object back exactly as the sheet gave it.",
+  "_enums": {
+    "book.state": [
+      "ingesting",
+      "ready",
+      "failed"
+    ],
+    "page.state": [
+      "processing",
+      "ready",
+      "needs_subject",
+      "no_clear_subject",
+      "unsupported",
+      "failed"
+    ],
+    "page.page_kind": [
+      "single",
+      "several",
+      "scene"
+    ],
+    "page.flags": [
+      "spread",
+      "low_quality"
+    ],
+    "candidate.source": [
+      "auto",
+      "click",
+      "manual"
+    ],
+    "level": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "settings.size": [
+      "small",
+      "medium",
+      "large"
+    ],
+    "settings.position": [
+      "center",
+      "left",
+      "right",
+      "upper",
+      "lower"
+    ],
+    "settings.text_mode": [
+      "off",
+      "below"
+    ],
+    "settings.outline": [
+      "off",
+      "thin",
+      "thick"
+    ],
+    "check.status": [
+      "pass",
+      "warn",
+      "fail"
+    ],
+    "second_look.status": [
+      "pass",
+      "warn",
+      "pending"
+    ],
+    "sheet.approval": [
+      "approved",
+      "rejected",
+      "none"
+    ],
+    "approve.decision": [
+      "approve",
+      "reject"
+    ],
+    "reader.skipped.reason": [
+      "omitted",
+      "rejected"
+    ]
+  },
   "POST /api/books": {
     "request": {
       "multipart": {
@@ -1277,7 +1356,13 @@
       "pages": [
         {
           "page_id": "65b000000000000000000001",
-          "version": "7dadf3e49047",
+          "version": {
+            "subject_hash": "d37d96b42ad4",
+            "settings_hash": "2804b24a29e2",
+            "level": 1,
+            "render_version": "stub-1",
+            "v": "7dadf3e49047"
+          },
           "decision": "approve"
         }
       ]
@@ -1302,7 +1387,13 @@
         "stale": [
           {
             "page_id": "65b000000000000000000001",
-            "current_version": "7dadf3e49047"
+            "current_version": {
+              "subject_hash": "dc9c5edb8b2d",
+              "settings_hash": "2804b24a29e2",
+              "level": 1,
+              "render_version": "stub-1",
+              "v": "fdf13eac841a"
+            }
           }
         ]
       }

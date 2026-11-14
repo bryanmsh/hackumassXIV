@@ -16,8 +16,13 @@ def load(pipeline: str, render: str):
 
     # Real modules are imported here, not at the top, so a stub run never needs them.
     # The import paths below are a guess until the swaps at hour 4 (display) and hour 7 (pipeline).
+    # Each function is named, so a real module that is missing one fails here, at startup.
     if pipeline == "real":
-        import pipeline as pipeline_module
+        import pipeline as real_pipeline
+        pipeline_module = SimpleNamespace(
+            rasterize=real_pipeline.rasterize, process_page=real_pipeline.process_page,
+            segment_at_point=real_pipeline.segment_at_point,
+            mask_from_outline=real_pipeline.mask_from_outline)
     else:
         pipeline_module = stubs
 

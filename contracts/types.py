@@ -24,7 +24,7 @@ class PageAsset(BaseModel):
     height: int
     text: str
     text_source: Literal["layer", "none"]
-    flags: list[Literal["spread", "low_quality"]] = []
+    flags: list[str] = []  # known so far: "spread", "low_quality"
 
 
 class Candidate(BaseModel):

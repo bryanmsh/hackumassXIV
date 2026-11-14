@@ -16,7 +16,14 @@ def hash_bytes(data: bytes) -> str:
 
 
 def settings_hash(settings: Settings) -> str:
-    """Hash of the display settings only: not the name, level or contrast note."""
+    """Hash of the display settings only: not the name, level or contrast note.
+
+    Rule for adding a field to Settings after the freeze: leave it out of this payload
+    while it equals its default, so settings saved before the field existed keep their hash.
+    """
+    # Validate again: model_copy(update=...) and attribute assignment skip validation,
+    # and "#e53935" must hash the same as "#E53935".
+    settings = Settings.model_validate(settings.model_dump())
     payload = json.dumps(settings.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
     return hash_bytes(payload.encode())
 
