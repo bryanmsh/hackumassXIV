@@ -201,7 +201,8 @@ export interface CheckItem {
 export interface CheckResult {
   fidelity: CheckItem;
   page_edge: CheckItem;
-  background: CheckItem;
+  /** Null at Outlined (level 4), where the background is not checked. */
+  background: CheckItem | null;
   contrast: CheckItem;
   size: CheckItem;
   /** Only when text is shown. PROVISIONAL: null vs omitted. */

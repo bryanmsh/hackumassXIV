@@ -524,7 +524,7 @@ export function mockChecks(p: MockPage, profile: Profile, level: Level): CheckRe
       : item('pass', 0, 'The cut-out does not touch the page edge.'),
     background:
       level === 4
-        ? item('pass', null, 'Not checked for Outlined.')
+        ? null
         : item('pass', 0.002, level === 3 ? 'Background detail is under half the original.' : 'The background is plain.'),
     contrast:
       (level === 1 || level === 4) && ratio < 3
