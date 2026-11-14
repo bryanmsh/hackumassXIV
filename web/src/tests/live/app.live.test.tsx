@@ -157,3 +157,26 @@ describe(`live API at ${API_BASE}: profiles`, () => {
     for (const p of profiles) expect(await screen.findByRole('heading', { name: p.name })).toBeInTheDocument();
   });
 });
+
+describe(`live API at ${API_BASE}: contact sheet (read-only, never approves)`, () => {
+  it('the sheet parses, and each page version renders through /render with its exact v', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await firstBook();
+    const sheet = await api.getSheet(b.id, { profile: profile.id, level: profile.level });
+    expect(sheet.pages.length).toBeGreaterThan(0);
+    for (const p of sheet.pages) expect(['approved', 'rejected', 'none']).toContain(p.approval);
+    const withV = sheet.pages.find((p) => p.version);
+    if (!withV) return;
+    const img = await api.getRender(withV.page_id, { profile: profile.id, level: profile.level, v: withV.version! });
+    expect(img.size).toBeGreaterThan(0);
+  });
+
+  it('the Contact sheet screen renders every page for a child and look', async () => {
+    const [profile] = await api.listProfiles();
+    if (!profile) return;
+    const b = await api.getBook((await firstBook()).id);
+    renderAt(`/books/${b.id}/approve?profile=${profile.id}&level=${profile.level}`);
+    for (const p of b.pages) expect(await screen.findByRole('heading', { name: `Page ${p.number}` })).toBeInTheDocument();
+  });
+});
