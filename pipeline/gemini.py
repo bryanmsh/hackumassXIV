@@ -12,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, ValidationError
 
 TIMEOUT_S = 20
-DEFAULT_MODEL = "gemini-flash-latest"  # used when GEMINI_MODEL is empty; confirm against the live model list
+DEFAULT_MODEL = "gemini-3.8-flash"  # used when GEMINI_MODEL is empty; newest Flash in the live model list on 2026-11-14
 MAX_CANDIDATES = 3
 MAX_SYNONYMS = 5
 

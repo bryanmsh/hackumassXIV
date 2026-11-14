@@ -50,16 +50,17 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 
 | Question | Answer |
 | --- | --- |
-| Model name | not yet confirmed |
-| Box format | not yet confirmed (expected `[ymin, xmin, ymax, xmax]`, 0 to 1000) |
+| Model name | `gemini-3.8-flash` (newest Flash in the live model list, 2026-11-14). `gemini-flash-latest` does not exist for our key: 404 |
+| Box format | `[ymin, xmin, ymax, xmax]`, integers 0 to 1000. Confirmed by eye on one page: both boxes landed on their objects |
 | Four calls at once | not yet tested |
+| Time per call | 9.4 s for one page (1600 px view, no page text), one sample |
 
 ## Settings
 
 | Setting | Values | Notes |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | your key | Read from the environment only. Never printed or logged |
-| `GEMINI_MODEL` | a Flash model name | Empty uses `gemini-flash-latest` |
+| `GEMINI_MODEL` | a Flash model name | Empty uses `gemini-3.8-flash` |
 | `SEGMENTER` | `grabcut` (default), `stub`, `edgesam`, `sam2` | `edgesam` and `sam2` are not built: they raise `NotImplementedError` until the PyTorch code is added in `segment.py` |
 
 ## Adding the PyTorch segmenter (Bryan)
