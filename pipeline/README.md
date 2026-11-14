@@ -54,7 +54,8 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 | Model name | `gemini-3.8-flash` (newest Flash in the live model list, 2026-11-14). `gemini-flash-latest` does not exist for our key: 404 |
 | Box format | `[ymin, xmin, ymax, xmax]`, integers 0 to 1000. Confirmed by eye on one page: both boxes landed on their objects |
 | Four calls at once | not yet tested |
-| Time per call | 9.4 s for one page (1600 px view, no page text), one sample |
+| Time per call | 9.4 s and 9.2 s for the same page (1600 px view, no page text), two samples |
+| Tokens per call | 1,355 in (image plus prompt), 471 thinking, 203 answer; one sample |
 
 ## Settings
 
@@ -65,6 +66,76 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 | `SEGMENTER` | `grabcut` (default), `stub`, `sam2`, `edgetam` | `sam2` is the recommended setting on the server. `edgesam` raises: it has no installable package |
 | `MODEL_CACHE_DIR` | a folder | Where model weights download on first use. Empty means `$DATA_DIR/models` (the mounted `data/` folder in Docker) |
 | `TORCH_THREADS` | a number | Threads torch may use. Empty means every core |
+
+## How subjects are found
+
+One call per page asks Gemini for **every main subject**, up to 5, each as one clean object.
+
+- The model first lists everything it sees (`things_on_page`), then ranks.
+- Each candidate is one person, animal or object, or one tight group of the same kind that
+  touch (two children playing). Things apart on the page are separate candidates.
+- Guards in `gemini.py` hold even if the model ignores the prompt: the setting is dropped
+  (forest, sky, ground, grass, background...), a box holding two or more other candidates is
+  dropped as a group, and two boxes on the same object keep the more confident one.
+- A fixed `seed` makes the same page give the same answer.
+
+Measured on *Animal Homes* with `gemini-3.8-flash` (2026-11-14, 9 live calls):
+
+| Page | Text | Result |
+| --- | --- | --- |
+| 2 | Animals live all around us. | `scene`: children 0.85, woodpecker 0.80, ants 0.75, ant 0.65, ant 0.65. Identical in 4 runs out of 4 |
+| 3 | Birds build their homes up high. And so do bees. | `several`: beehive 0.95, bird 0.95, bird nest 0.90, bird 0.85 |
+| 7 | Rabbits and rats live in burrows under the ground. | `several`: rabbit 0.95, rabbit 0.95, rat 0.90, rat 0.90 |
+| 10 | Crocodiles live in swamps. | `single`: crocodile 1.00, so Ready |
+
+Before this change the same page 2 gave a different answer on each of three runs, one of them
+a grouped "bird and..." box, the "forest", and no children.
+
+Per call: about 1,545 tokens in, 400 to 816 thinking, 161 to 509 answer; 7.6 to 12.9 s.
+Sending the picture at high `media_resolution` changed neither the answer nor the token
+count, so it is not set.
+
+Cut-outs are a separate matter: on page 2 GrabCut cut the children and the woodpecker
+cleanly, did poorly on the ants among leaves, and found no shape for one ant, which was
+dropped. That is the segmenter's limit, not the finding step.
+
+## What gets pre-selected
+
+A page about one thing comes back Ready with its top candidate selected. A page with several
+main subjects offers a combined cut-out but does not pre-select it: the subject is what the
+story is about, and that is the teacher's call. The teacher still confirms or changes every page.
+
+| Page | Pre-selected | State |
+| --- | --- | --- |
+| About one thing (`single`) | The top candidate, if its confidence is 0.5 or more | Ready |
+| Several main subjects, or a scene | Nothing. One **combined cut-out** of every candidate at 0.5 or more is added after the single ones (for example "rabbit and rat"), one click away | Needs subject |
+| Candidates found, none at 0.5 | Nothing | Needs subject |
+| No candidates, or no usable cut-out | Nothing | No clear subject |
+| The first choice had no usable cut-out | Nothing | Needs subject |
+
+The combined cut-out is the single masks joined, not cleaned again, so a small subject beside
+a large one is kept. Its synonyms are every member's names, its confidence the lowest member's.
+The page text no longer blocks a selection, and the old 0.7 / 0.2-ahead thresholds are gone.
+**This departs from the spec**, which sends `several` pages to Needs subject and scenes to
+No clear subject (Andrew's decision, 2026-11-14).
+
+On *Animal Homes*: page 2 selects "children, woodpecker and ants", page 3 "beehive, bird and
+bird nest", page 7 "rabbit and rat" (both rabbits and both rats), page 10 "crocodile".
+
+## Limits on one Gemini call
+
+Set in `gemini.py`, far above normal use, so they trip only when a call goes badly wrong.
+
+| Limit | Value | A real call on the demo page |
+| --- | --- | --- |
+| Thinking tokens (`MAX_THINKING_TOKENS`) | 8,192 | 400 to 816 across four pages |
+| Thinking plus answer (`MAX_OUTPUT_TOKENS`) | 16,384 | 561 to 1,291 |
+| Page text sent (`MAX_TEXT_CHARS`) | 8,000 characters | 0 (no text layer); a picture-book page is a few hundred |
+| Time per attempt | 20 s | 7.6 to 12.9 s |
+| Attempts per page | 2 | 1 |
+
+An answer cut off at the output cap is treated as a failed call: one retry, then the page is
+Failed with the reason "Gemini's answer was cut off at the output limit".
 
 ## Segmenter: SAM 2.1 small
 
