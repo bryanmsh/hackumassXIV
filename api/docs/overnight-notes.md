@@ -1,13 +1,13 @@
 # Overnight notes
 
-Every API route is real now. It runs on the stand-in pipeline and display. **170 tests pass** (`.venv/bin/python -m pytest api contracts -q`), and Thomas's own typed client (`web/src/api.ts`) ran the whole demo against the live API without a failure.
+Every MVP route is real now. It runs on the stand-in pipeline and display. **171 tests pass** (`.venv/bin/python -m pytest api contracts -q`). Thomas's own typed client (`web/src/api.ts`) ran the whole demo against the live API without a failure. That run covers the fields the joining test reads; `api/tests/test_shapes.py` checks every field the examples show on populated responses.
 
 Two checks to run first thing:
 
-- `bash api/joining/run.sh` runs the web client through upload, review, profiles, approval and the reader. It uses a throwaway database (`mirai_joining`) and folder, stops its own server, and exits 0 only if everything passed. MongoDB must be running (`docker start mirai-mongo`).
-- `.venv/bin/python -m pytest api contracts -q` runs the rest. `api/tests/test_shapes.py` checks that every JSON route answers in the shape of `contracts/examples.json`.
+- `bash api/joining/run.sh` runs the web client through upload, review, profiles, approval and the reader. It uses a throwaway database (`mirai_joining`) and folder, stops its own server, and exits 0 only if everything passed. It refuses to start if something already listens on port 8765. MongoDB must be running (`docker start mirai-mongo`).
+- `.venv/bin/python -m pytest api contracts -q` runs the rest. `api/tests/test_shapes.py` checks that every JSON route answers in the shape of `contracts/examples.json`, and fails if a response is empty where its example has content.
 
-The server also survives a kill. I started it, put a page in `processing`, stopped it and started it again. The page came back `failed` with the reason `interrupted, retry`.
+The server also survives a hard kill. I started it on a throwaway database, put a page in `processing`, killed the server with `kill -9`, and started it again. The page came back `failed` with the reason `interrupted, retry`, and nothing was left stuck.
 
 ## Decisions
 
@@ -76,7 +76,7 @@ ERROR api/tests/test_swap.py - AttributeError: module 'pipeline' has no attri...
 
 **Thomas**
 
-- Nothing blocks you. The joining run found no place where the API and `web/src/api.ts` disagree. `web/` was not touched.
+- Nothing blocks you. The joining run and the shape tests found no place where the API and `web/src/api.ts` disagree, for the fields they read. `web/` was not touched.
 
 ## Not done
 

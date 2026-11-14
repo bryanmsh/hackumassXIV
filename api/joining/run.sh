@@ -26,6 +26,11 @@ import sys
 from api.tests.helpers import make_pdf
 open(sys.argv[1], 'wb').write(make_pdf(3))" "$PDF" 2>/dev/null
 
+if .venv/bin/python -c "import socket, sys; s = socket.socket(); s.settimeout(1); sys.exit(s.connect_ex(('127.0.0.1', $PORT)))"; then
+  echo "something is already listening on port $PORT; stop it and run again" >&2
+  exit 1
+fi
+
 mkdir -p "$WORK/data"
 MONGODB_URI="mongodb://localhost:27017/$DB" DATA_DIR="$WORK/data" PIPELINE=stub RENDER=stub \
   .venv/bin/python -m uvicorn api.main:app --port "$PORT" >"$WORK/server.log" 2>&1 &
