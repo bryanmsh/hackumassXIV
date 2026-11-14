@@ -1,6 +1,8 @@
 """The one door to the segmenter. Nothing outside this file knows which one is in use.
 
-SEGMENTER picks it: `stub`, `grabcut` (the default), `edgesam` or `sam2`.
+SEGMENTER picks it: `stub`, `grabcut` (the default), `sam2` or `edgetam`.
+`sam2` (SAM 2.1 small) and `edgetam` need torch and live in pipeline/sam.py, the only
+file that imports it; `stub` and `grabcut` run without torch installed.
 The setting is read on every call, so it can be changed without a restart.
 """
 import os
@@ -25,25 +27,37 @@ def segment(image: np.ndarray, box=None, points=None) -> np.ndarray:
 
     image:  RGB uint8 array of the master page, shape (height, width, 3).
     box:    (x0, y0, x1, y1) in master pixels around the subject, or None.
-    points: list of (x, y) master-pixel points known to be on the subject, or None.
-    At least one of box and points must be given.
+    points: list of master-pixel points, each (x, y) or (x, y, label), or None.
+            label 1 (the default) = on the subject, 0 = not on the subject.
+    At least one of box and a label-1 point must be given.
 
     Returns a uint8 array of shape (height, width): 255 = subject, 0 = everything else.
     The mask is raw; callers run pipeline.masks.clean_mask on it.
     """
-    if box is None and not points:
-        raise ValueError("segment needs a box or at least one point")
+    points = _labelled(points)
+    if box is None and not any(label == 1 for _, _, label in points):
+        raise ValueError("segment needs a box or at least one point on the subject")
     name = os.environ.get("SEGMENTER") or "grabcut"
     if name not in _SEGMENTERS:
         raise ValueError(f"SEGMENTER must be one of {sorted(_SEGMENTERS)}, got {name!r}")
-    return _SEGMENTERS[name](image, box, list(points or []))
+    return _SEGMENTERS[name](image, box, points)
+
+
+def _labelled(points) -> list[tuple[float, float, int]]:
+    """Every point as (x, y, label); a bare (x, y) is on the subject."""
+    out = []
+    for point in points or []:
+        x, y, *rest = point
+        out.append((float(x), float(y), int(rest[0]) if rest else 1))
+    return out
 
 
 def _box_or_point_box(image, box, points):
     if box is not None:
         return box
     height, width = image.shape[:2]
-    return point_box(points[0][0], points[0][1], width, height)
+    x, y, _ = next(p for p in points if p[2] == 1)
+    return point_box(x, y, width, height)
 
 
 def _stub(image, box, points) -> np.ndarray:
@@ -58,7 +72,7 @@ def _stub(image, box, points) -> np.ndarray:
 
 
 def _grabcut(image, box, points) -> np.ndarray:
-    """OpenCV GrabCut seeded by the box. Points are marked as sure foreground."""
+    """OpenCV GrabCut seeded by the box. Label-1 points are sure foreground, label-0 sure background."""
     height, width = image.shape[:2]
     empty = np.zeros((height, width), np.uint8)
     scale = min(1.0, GRABCUT_MAX_SIDE / max(height, width))
@@ -77,8 +91,9 @@ def _grabcut(image, box, points) -> np.ndarray:
         if points:
             labels[y0:y1, x0:x1] = cv2.GC_PR_FGD
             radius = max(2, round(POINT_RADIUS_FRACTION * max(small_h, small_w)))
-            for x, y in points:
-                cv2.circle(labels, (round(x * scale), round(y * scale)), radius, int(cv2.GC_FGD), -1)
+            for x, y, label in points:
+                seed = cv2.GC_FGD if label == 1 else cv2.GC_BGD
+                cv2.circle(labels, (round(x * scale), round(y * scale)), radius, int(seed), -1)
             cv2.grabCut(small, labels, None, background_model, foreground_model,
                         GRABCUT_ITERATIONS, cv2.GC_INIT_WITH_MASK)
         else:
@@ -96,29 +111,32 @@ def _grabcut(image, box, points) -> np.ndarray:
     return cv2.resize(subject, (width, height), interpolation=cv2.INTER_NEAREST)
 
 
-def _edgesam(image, box, points) -> np.ndarray:
-    """EdgeSAM on CPU. Not built yet: PyTorch is installed by Bryan, not by this code.
+def _pytorch(name, image, box, points) -> np.ndarray:
+    """Run a model from pipeline/sam.py. When the model's answer to a box looks wrong
+    (low score, or the background inside the box), use GrabCut for that prompt instead:
+    a rough cut-out of the right object beats a clean cut-out of the wrong one."""
+    from pipeline import sam
 
-    Input, exactly as segment() receives it:
-      image:  RGB uint8 numpy array of the master page, shape (height, width, 3), up to 3,000 px.
-      box:    (x0, y0, x1, y1) floats in master pixels, or None. Pass as the box prompt.
-      points: list of (x, y) floats in master pixels, possibly empty. Pass each as a
-              positive point prompt (label 1). When box is None there is always one point.
-    Output:
-      uint8 numpy array of shape (height, width), the same size as `image`:
-      255 where the subject is, 0 elsewhere. No other values. Do not clean it;
-      callers run clean_mask.
-    Rules:
-      Load the model once and keep it in a module-level variable; never per call.
-      Import torch inside this function so the rest of the pipeline runs without it.
-      Raise on failure; process_page turns any exception into a Failed page.
-    """
-    raise NotImplementedError("Bryan: PyTorch segmenter goes here")
+    try:
+        return sam.segment(name, image, box, points)
+    except sam.LowConfidence as reason:
+        sam.last_timing["fallback"] = str(reason)
+        return _grabcut(image, box, points)
 
 
 def _sam2(image, box, points) -> np.ndarray:
-    """SAM 2 small. Not built yet. Same input, output and rules as _edgesam above."""
-    raise NotImplementedError("Bryan: PyTorch segmenter goes here")
+    """SAM 2.1 small (Meta), through transformers. See pipeline/sam.py."""
+    return _pytorch("sam2", image, box, points)
 
 
-_SEGMENTERS = {"stub": _stub, "grabcut": _grabcut, "edgesam": _edgesam, "sam2": _sam2}
+def _edgetam(image, box, points) -> np.ndarray:
+    """EdgeTAM, a faster SAM 2 variant, through transformers. See pipeline/sam.py."""
+    return _pytorch("edgetam", image, box, points)
+
+
+def _edgesam(image, box, points) -> np.ndarray:
+    """EdgeSAM is not built: it has no pip package, only research-repo code. Use edgetam."""
+    raise NotImplementedError("EdgeSAM has no installable package; set SEGMENTER=edgetam (its successor) or sam2")
+
+
+_SEGMENTERS = {"stub": _stub, "grabcut": _grabcut, "sam2": _sam2, "edgetam": _edgetam, "edgesam": _edgesam}
