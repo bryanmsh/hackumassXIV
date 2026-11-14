@@ -15,7 +15,7 @@ import { formatConfidence } from '../../utils/display';
 import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
 
-export type EditorMode = 'suggestions' | 'point' | 'outline';
+export type EditorMode = 'suggestions' | 'point' | 'refine' | 'outline';
 
 /** A new stroke vertex is kept only once the pointer has moved this far (page fraction). */
 const STROKE_STEP = 0.003;
@@ -95,14 +95,14 @@ export function PageSurface({
 
   // ----- Point mode -----
   function onTap(e: React.MouseEvent<HTMLDivElement>) {
-    if (mode !== 'point' || disabled) return;
+    if ((mode !== 'point' && mode !== 'refine') || disabled) return;
     const rect = frameRect();
     if (!rect) return;
     const { point: p, inside } = clientToNorm(e.clientX, e.clientY, rect);
     onPoint(inside ? p : null, inside);
   }
 
-  // ----- Outline mode (Pointer Events: mouse, pen and finger) -----
+  // ----- Outline mode (Pointer Events: mouse or trackpad; pen and touch also work) -----
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (mode !== 'outline' || disabled || !e.isPrimary || stroke.current) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -163,7 +163,9 @@ export function PageSurface({
 
   const label =
     mode === 'point'
-      ? 'Page. Tap the object to choose it.'
+      ? 'Page. Click the object to choose it.'
+      : mode === 'refine'
+        ? 'Page. Click the part the cut-out missed.'
       : mode === 'outline'
         ? 'Page. Draw a line around the object.'
         : 'Page with suggested subjects.';
@@ -247,7 +249,7 @@ export function PageSurface({
               )}
             </svg>
 
-            {mode === 'point' && point && <Marker point={point} testId="tap-marker" />}
+            {(mode === 'point' || mode === 'refine') && point && <Marker point={point} testId="tap-marker" />}
             {sent?.point && <Marker point={sent.point} testId="sent-marker" dashed />}
           </div>
         )}
@@ -281,7 +283,7 @@ function Marker({ point: [x, y], testId, dashed = false }: { point: NormPoint; t
 
 function CandidateBox({ c, selected, disabled, onPick }: { c: Candidate; selected: boolean; disabled: boolean; onPick: () => void }) {
   const name = c.label || 'Unlabeled';
-  const conf = c.source === 'auto' ? `, AI confidence ${formatConfidence(c.confidence)}` : '';
+  const conf = c.source === 'auto' ? `, the AI’s guess with confidence ${formatConfidence(c.confidence)}` : '';
   return (
     <button
       type="button"
@@ -304,7 +306,7 @@ function CandidateBox({ c, selected, disabled, onPick }: { c: Candidate; selecte
           selected ? 'bg-sky-600 text-white' : 'bg-black/75 text-white'
         }`}
       >
-        {selected && '✓ '}
+        {selected && '● '}
         {name}
         {c.source === 'auto' && ` ${formatConfidence(c.confidence)}`}
       </span>

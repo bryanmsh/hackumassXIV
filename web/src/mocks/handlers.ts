@@ -165,6 +165,16 @@ export const handlers = [
     }),
   ),
 
+  http.post(
+    `${API}/books/:id/rerun`,
+    route(({ params }) => {
+      const book = db.findBook(param(params.id));
+      if (!book) return notFound('Book');
+      const updated = book.pages.filter((p) => db.rerunPage(p));
+      return HttpResponse.json(updated.map(db.publicPage));
+    }),
+  ),
+
   // ---------------- Pages ----------------
   http.post(
     `${API}/pages/:id/retry`,
@@ -215,9 +225,10 @@ export const handlers = [
         if (outline.length > 200) return fail(422, 'An outline may have at most 200 points.');
         db.subjectFromOutline(page, label, outline);
       } else if (keys === 'refine_point') {
-        return fail(501, 'Refine is a P1 feature and is not available yet.');
+        if (!isPoint(body.refine_point)) return fail(422, 'refine_point must be [x, y] fractions between 0 and 1.');
+        if (!db.subjectRefine(page, body.refine_point)) return fail(409, 'This page has no subject to add to. Pick one first.');
       } else {
-        return fail(422, 'Send exactly one of {candidate}, {point} or {label, outline}.');
+        return fail(422, 'Send exactly one of {candidate}, {candidates}, {point}, {refine_point} or {label, outline}.');
       }
       return HttpResponse.json(db.publicPage(page));
     }),

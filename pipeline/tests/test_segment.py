@@ -75,12 +75,55 @@ def test_unknown_segmenter_raises(image, monkeypatch):
         segment(image, box=(100, 100, 300, 200))
 
 
-@pytest.mark.parametrize("name", ["edgesam", "sam2"])
-def test_edgesam_and_sam2_raise_not_implemented(image, monkeypatch, name):
-    monkeypatch.setenv("SEGMENTER", name)
-    with pytest.raises(NotImplementedError) as error:
+def test_edgesam_raises_and_points_to_edgetam(image, monkeypatch):
+    monkeypatch.setenv("SEGMENTER", "edgesam")
+    with pytest.raises(NotImplementedError, match="edgetam"):
         segment(image, box=(100, 100, 300, 200))
-    assert str(error.value) == "Bryan: PyTorch segmenter goes here"
+
+
+@pytest.mark.parametrize("name", ["sam2", "edgetam"])
+def test_pytorch_segmenters_go_through_sam_module(image, monkeypatch, name):
+    import pipeline.sam as sam
+
+    seen = {}
+
+    def fake(model_name, img, box, points):
+        seen.update(name=model_name, box=box, points=points)
+        return np.zeros(img.shape[:2], np.uint8)
+
+    monkeypatch.setattr(sam, "segment", fake)
+    monkeypatch.setenv("SEGMENTER", name)
+    segment(image, box=(1, 2, 3, 4), points=[(5, 6)])
+    assert seen == {"name": name, "box": (1, 2, 3, 4), "points": [(5.0, 6.0, 1)]}
+
+
+def test_points_accept_labels(image, monkeypatch):
+    monkeypatch.setenv("SEGMENTER", "stub")
+    unlabelled = segment(image, points=[(600, 450)])
+    labelled = segment(image, points=[(600, 450, 1)])
+    assert np.array_equal(unlabelled, labelled)
+
+
+def test_negative_point_alone_is_not_enough(image):
+    with pytest.raises(ValueError):
+        segment(image, points=[(600, 450, 0)])
+
+
+def test_grabcut_negative_point_removes_its_area(image, ellipse, monkeypatch):
+    monkeypatch.setenv("SEGMENTER", "grabcut")
+    box = (350, 250, 850, 650)
+    plain = segment(image, box=box, points=[(600, 450, 1)])
+    excluded = segment(image, box=box, points=[(600, 450, 1), (450, 450, 0)])
+    assert plain[450, 450] == 255 and excluded[450, 450] == 0
+
+
+def test_stub_and_grabcut_need_no_torch(image, monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "torch", None)  # any `import torch` now fails
+    for name in ("stub", "grabcut"):
+        monkeypatch.setenv("SEGMENTER", name)
+        assert segment(image, box=(350, 250, 850, 650)).shape == image.shape[:2]
 
 
 def test_needs_a_box_or_points(image):

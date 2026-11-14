@@ -130,8 +130,9 @@ export type SubjectRequest =
   /** Several suggestions shown together as one subject. At least 2 different indexes. */
   | { candidates: number[] }
   | { point: NormPoint }
-  | { label: string; outline: NormPoint[] };
-// P1 only, not before checkpoint 2: | { refine_point: NormPoint }
+  | { label: string; outline: NormPoint[] }
+  /** Phase 2: add the part the current cut-out missed, at this spot. The subject keeps its label. */
+  | { refine_point: NormPoint };
 
 export interface RetryInput {
   force?: boolean;
@@ -223,7 +224,7 @@ export interface SheetPage {
   confirmed: boolean;
   omitted: boolean;
   label: string | null;
-  /** "manual" pages are shown as "outlined by teacher". */
+  /** Shown in words by utils/display.ts sourceLabel ("made by teacher" for manual). */
   source: CandidateSource | null;
   checks: CheckResult | null;
   second_look: SecondLook | null;

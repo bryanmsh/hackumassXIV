@@ -8,7 +8,7 @@ import { ErrorPanel, Loading, errorMessage } from '../components/ui/LoadState';
 import { useAction } from '../hooks/useAction';
 import { useBook } from '../hooks/useBook';
 import type { Page } from '../types/api';
-import { confirmablePages, processedCount, undecidedPages } from '../utils/pages';
+import { confirmablePages, processedCount, rerunnablePages, undecidedPages } from '../utils/pages';
 
 /**
  * Subject review: every page with its highlighted subject. The teacher
@@ -20,6 +20,9 @@ export function SubjectReviewPage() {
   const { book, status, error, polling, refresh, replacePages } = useBook(id);
   const confirmAll = useAction();
   const [asking, setAsking] = useState(false);
+  const rerun = useAction();
+  const [askingRerun, setAskingRerun] = useState(false);
+  const [rerunNotice, setRerunNotice] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   function changed(pages: Page[]) {
@@ -31,6 +34,7 @@ export function SubjectReviewPage() {
   const pages = book?.pages ?? [];
   const confirmable = confirmablePages(pages);
   const undecided = undecidedPages(pages);
+  const rerunnable = rerunnablePages(pages);
   const processed = processedCount(pages);
 
   async function doConfirmAll() {
@@ -39,6 +43,19 @@ export function SubjectReviewPage() {
     if (updated) {
       changed(updated);
       setNotice(`Confirmed ${updated.length} ${updated.length === 1 ? 'page' : 'pages'}.`);
+    }
+  }
+
+  async function doRerun() {
+    const updated = await rerun.run('rerun', (s) => api.rerunBook(id, s));
+    setAskingRerun(false);
+    if (updated) {
+      changed(updated);
+      setRerunNotice(
+        updated.length === 0
+          ? 'No pages to ask about.'
+          : `Asking the AI again about ${updated.length} ${updated.length === 1 ? 'page' : 'pages'}. New suggestions appear as each page finishes.`,
+      );
     }
   }
 
@@ -85,6 +102,9 @@ export function SubjectReviewPage() {
               {undecided.length > 0 && <> · {undecided.length} still need you (confirm a subject or leave the page out)</>}
               {processed < pages.length && <> · {pages.length - processed} processing</>}
             </p>
+            {confirmable.length === 0 && pages.length > 0 && (
+              <p className="text-sm text-slate-600">Confirm all is off: no page has a subject waiting to be confirmed.</p>
+            )}
             <p className="text-slate-700">
               The AI’s confidence is its own guess, not a check that it is right. Look at each highlighted subject before
               you confirm it. Changing a page’s subject means that page needs approval again.
@@ -142,6 +162,60 @@ export function SubjectReviewPage() {
                 <SubjectPageCard key={p.id} page={p} onChanged={changed} />
               ))}
             </ul>
+          )}
+
+          {pages.length > 0 && (
+            <section className="mt-8 space-y-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200" aria-labelledby="rerun-section-h">
+              <h2 id="rerun-section-h" className="text-lg font-bold">
+                Missing something?
+              </h2>
+              <p className="text-slate-700">
+                The AI’s suggestions can differ each time it looks at a page. Asking again adds new suggestions to choose
+                from.
+              </p>
+              {!askingRerun && (
+                <Button
+                  disabled={rerunnable.length === 0 || rerun.pending !== null}
+                  onClick={() => {
+                    setRerunNotice(null);
+                    setAskingRerun(true);
+                  }}
+                >
+                  Ask the AI again…
+                </Button>
+              )}
+              {rerunnable.length === 0 && <p className="text-sm text-slate-600">Every page is still processing or left out.</p>}
+              {askingRerun && (
+                <div role="dialog" aria-modal="false" aria-labelledby="rerun-h" className="rounded-xl bg-sky-50 p-4 ring-1 ring-sky-300">
+                  <h3 id="rerun-h" className="text-lg font-bold">
+                    Ask the AI again about {rerunnable.length} {rerunnable.length === 1 ? 'page' : 'pages'}?
+                  </h3>
+                  <p className="mt-1">
+                    Pages {rerunnable.map((p) => p.number).join(', ')} will be sent to the outside AI service again. New
+                    suggestions are added to the ones already there. Pages you have confirmed keep their subject and stay
+                    confirmed. On the other pages, the subject becomes the AI’s new guess.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="primary" disabled={rerun.pending !== null} onClick={() => void doRerun()}>
+                      {rerun.pending ? 'Asking…' : `Ask about ${rerunnable.length}`}
+                    </Button>
+                    <Button disabled={rerun.pending !== null} onClick={() => setAskingRerun(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {rerun.error && (
+                <p role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-900 ring-1 ring-rose-200">
+                  Could not ask the AI again: {errorMessage(rerun.error)}
+                </p>
+              )}
+              {rerunNotice && (
+                <p role="status" className="rounded-lg bg-emerald-50 p-3 text-emerald-950 ring-1 ring-emerald-200">
+                  {rerunNotice}
+                </p>
+              )}
+            </section>
           )}
         </>
       )}

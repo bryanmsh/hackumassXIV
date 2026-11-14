@@ -14,15 +14,17 @@ ELLIPSE_RADII = (200, 150)
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "live: calls the real Gemini API; runs only with RUN_LIVE=1")
+    config.addinivalue_line("markers", "torch: runs a real PyTorch segmenter (downloads weights); runs only with RUN_TORCH=1")
 
 
 def pytest_collection_modifyitems(config, items):
-    if os.environ.get("RUN_LIVE") == "1":
-        return
-    skip = pytest.mark.skip(reason="live test; set RUN_LIVE=1 to run")
-    for item in items:
-        if "live" in item.keywords:
-            item.add_marker(skip)
+    for marker, variable in (("live", "RUN_LIVE"), ("torch", "RUN_TORCH")):
+        if os.environ.get(variable) == "1":
+            continue
+        skip = pytest.mark.skip(reason=f"{marker} test; set {variable}=1 to run")
+        for item in items:
+            if marker in item.keywords:
+                item.add_marker(skip)
 
 
 @pytest.fixture

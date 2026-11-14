@@ -33,7 +33,8 @@ def failure_reason(error: Exception, book_id=None) -> str:
 def apply_result(page: dict, result: PageResult) -> None:
     """Store what the pipeline returned. Candidates are only ever added, never dropped.
 
-    Merges against the page as stored now, not the caller's copy.
+    Merges against the page as stored now, not the caller's copy. A page the teacher has
+    confirmed keeps its subject and stays confirmed: asking again only adds suggestions.
     """
     page = db.pages.find_one({"_id": page["_id"]})
     if page is None:
@@ -43,12 +44,15 @@ def apply_result(page: dict, result: PageResult) -> None:
     candidates += [c.model_dump() for c in result.candidates if c.mask_hash not in known]
     chosen = result.candidates[result.selected].mask_hash if result.selected is not None else None
     selected = next((i for i, c in enumerate(candidates) if c["mask_hash"] == chosen), None)
-    changed = chosen != page.get("subject_hash")
+    auto = {"auto_state": result.state, "auto_subject_hash": chosen, "auto_reason": result.reason}
+    if page.get("confirmed") and page.get("selected") is not None:
+        db.pages.update_one({"_id": page["_id"]}, {"$set": {
+            "state": "ready", "reason": None, "candidates": candidates, **auto}})
+        return
     db.pages.update_one({"_id": page["_id"]}, {"$set": {
         "state": result.state, "reason": result.reason, "page_kind": result.page_kind,
         "candidates": candidates, "selected": selected, "subject_hash": chosen,
-        "confirmed": page.get("confirmed", False) and not changed,
-        "auto_state": result.state, "auto_subject_hash": chosen, "auto_reason": result.reason}})
+        "confirmed": False, **auto}})
 
 
 def _failed(error: Exception, book_id=None) -> PageResult:
@@ -99,6 +103,11 @@ def ingest_book(book_id: ObjectId) -> None:
             "auto_state": None, "auto_subject_hash": None, "auto_reason": None,
             "second_look": None}).inserted_id)
     db.books.update_one({"_id": book_id}, {"$set": {"state": "ready", "page_count": len(assets)}})
+    process_pages(page_ids)
+
+
+def process_pages(page_ids: list[ObjectId]) -> None:
+    """Run the pipeline on these pages, a few at a time."""
     with ThreadPoolExecutor(max_workers=settings.PAGE_CONCURRENCY) as pool:
         list(pool.map(process_one, page_ids))
 
