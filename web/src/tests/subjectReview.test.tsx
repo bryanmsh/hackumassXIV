@@ -1,5 +1,5 @@
 /** Subject review: each action sends the agreed body, the card shows the server's answer, nothing auto-confirms. */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { MemoryRouter } from 'react-router';
@@ -141,6 +141,28 @@ describe('Subject review', () => {
     expect(await card(1).findByText('Processing')).toBeInTheDocument();
     expect(card(1).getByText('Confirmed')).toBeInTheDocument();
     expect(await card(2).findByText('Processing')).toBeInTheDocument();
+  });
+
+  it('tapping a second suggestion shows both together; tapping one again takes it out', async () => {
+    const { user, id } = await open();
+    const calls = capturePosts();
+    const chip = (name: RegExp) => card(3).getByRole('button', { name });
+    await user.click(chip(/^beehive/));
+    await waitFor(() => expect(chip(/^beehive/)).toHaveAttribute('aria-pressed', 'true'));
+    await user.click(chip(/^hornbill/));
+    await waitFor(() => expect(chip(/^hornbill/)).toHaveAttribute('aria-pressed', 'true'));
+    expect(chip(/^beehive/)).toHaveAttribute('aria-pressed', 'true');
+    expect(card(3).getByText(/Subject:/)).toHaveTextContent(/hornbill and beehive|beehive and hornbill/);
+    expect(calls.map((c) => c.path)).toEqual([`/api/pages/${id(3)}/subject`, `/api/pages/${id(3)}/subject`]);
+    expect(Object.keys(calls[0]!.body as object)).toEqual(['candidate']);
+    expect((calls[1]!.body as { candidates: number[] }).candidates).toHaveLength(2);
+    // the joined subject has no chip of its own while its parts are ticked
+    expect(card(3).queryByRole('button', { name: / and / })).not.toBeInTheDocument();
+
+    await user.click(chip(/^beehive/));
+    await waitFor(() => expect(chip(/^beehive/)).toHaveAttribute('aria-pressed', 'false'));
+    expect(Object.keys(calls[2]!.body as object)).toEqual(['candidate']);
+    expect(card(3).getByText(/Subject:/)).toHaveTextContent('hornbill');
   });
 
   it('Cancel in Confirm all sends nothing', async () => {

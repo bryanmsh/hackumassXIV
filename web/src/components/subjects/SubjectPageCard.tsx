@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../../api';
 import { useAction } from '../../hooks/useAction';
@@ -30,6 +31,24 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
   const busy = action.pending !== null;
   const processing = page.state === 'processing';
   const selected = page.selected !== null ? page.candidates[page.selected] : undefined;
+  /**
+   * The suggestions the teacher tapped to show together, and the subject that made. It only
+   * counts while that is still the page's subject; a change made anywhere else drops it.
+   */
+  const [joined, setJoined] = useState<{ parts: number[]; hash: string | null } | null>(null);
+  const parts = joined && joined.hash === page.subject_hash ? joined.parts : page.selected !== null ? [page.selected] : [];
+
+  /** Tapping a suggestion adds it to the subject or takes it out; the result is saved at once. */
+  async function toggle(i: number) {
+    const next = (parts.includes(i) ? parts.filter((x) => x !== i) : [...parts, i]).sort((a, b) => a - b);
+    if (next.length === 0) return;
+    const body = next.length === 1 ? { candidate: next[0]! } : { candidates: next };
+    const updated = await action.run('candidate', (s) => api.setSubject(page.id, body, s));
+    if (updated) {
+      setJoined(next.length > 1 ? { parts: next, hash: updated.subject_hash } : null);
+      onChanged([updated]);
+    }
+  }
 
   async function act(name: string, fn: (signal: AbortSignal) => Promise<Page>) {
     const updated = await action.run(name, fn);
@@ -83,16 +102,21 @@ export function SubjectPageCard({ page, onChanged }: { page: Page; onChanged: (p
             <legend className="text-sm font-semibold text-slate-700">
               {page.candidates.length > 1 ? 'Choose the subject' : 'Suggested subject'}
             </legend>
+            {page.candidates.length > 1 && (
+              <p className="text-sm text-slate-700">Tap more than one to show them together. Tap again to take one out.</p>
+            )}
             <div className="mt-1 flex flex-wrap gap-2">
               {page.candidates.map((c, i) => {
-                const isSel = page.selected === i;
+                // The joined subject is shown by its ticked parts, not as a chip of its own.
+                if (parts.length > 1 && page.selected === i) return null;
+                const isSel = parts.includes(i);
                 return (
                   <button
                     key={`${i}:${c.mask_hash}`}
                     type="button"
                     aria-pressed={isSel}
-                    disabled={busy || isSel}
-                    onClick={() => void act('candidate', (s) => api.setSubject(page.id, { candidate: i }, s))}
+                    disabled={busy || (isSel && parts.length === 1)}
+                    onClick={() => void toggle(i)}
                     className={`inline-flex min-h-11 items-center gap-1 rounded-full px-3 text-base ring-1 ring-inset disabled:cursor-default ${
                       isSel
                         ? 'bg-sky-700 font-semibold text-white ring-sky-800'
