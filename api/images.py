@@ -1,12 +1,18 @@
 """Image responses and the pictures built from a stored page."""
 import io
+import threading
+from collections import OrderedDict
 from functools import lru_cache
 
 from fastapi import HTTPException, Response
 from PIL import Image
 
-from api import modules, settings
+from api import modules, settings, versions
 from contracts.types import Settings
+
+CACHE_SIZE = 256
+_cache: OrderedDict[tuple, bytes] = OrderedDict()
+_cache_lock = threading.Lock()
 
 
 def image(data: bytes) -> Response:
@@ -49,3 +55,29 @@ def render_page(page: dict, settings: Settings, level: int) -> bytes:
         raise HTTPException(409, "This page has no subject yet.")
     return modules.display.render(page["image_path"], page["view_path"], subject["mask_path"],
                                   settings, level, page["text"])
+
+
+def cached_render(page: dict, profile: dict, level: int) -> bytes:
+    """render_page for a saved profile, remembering the last 256 pictures by (page, version token).
+
+    A page with no version yet is keyed by the token of its selected subject, so a preview of an
+    unconfirmed page is cached too and is never mistaken for an approved version."""
+    version = versions.current_version(page, profile, level)
+    if version is None:
+        subject = selected(page)
+        if subject is None:
+            raise HTTPException(409, "This page has no subject yet.")
+        version = versions.Version(subject["mask_hash"], profile["settings_hash"], level,
+                                   modules.display.RENDER_VERSION)
+    key = (page["_id"], version.token)
+    with _cache_lock:
+        if key in _cache:
+            _cache.move_to_end(key)
+            return _cache[key]
+    data = render_page(page, Settings.model_validate(profile["settings"]), level)
+    with _cache_lock:
+        _cache[key] = data
+        _cache.move_to_end(key)
+        while len(_cache) > CACHE_SIZE:
+            _cache.popitem(last=False)
+    return data

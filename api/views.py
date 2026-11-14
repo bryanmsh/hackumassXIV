@@ -58,3 +58,14 @@ def book_json(book: dict, pages: list[dict]) -> dict:
         "created_at": _iso(book["created_at"]),
         "pages": [page_json(p) for p in pages],
     }
+
+
+def profile_json(profile: dict) -> dict:
+    return {
+        "id": str(profile["_id"]),
+        "name": profile["name"],
+        "level": profile["level"],
+        "settings": profile["settings"],
+        "settings_hash": profile["settings_hash"],
+        "contrast_override_note": profile["contrast_override_note"],
+    }

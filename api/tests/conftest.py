@@ -33,7 +33,8 @@ def throwaway_database():
 
 @pytest.fixture(autouse=True)
 def clean_db(throwaway_database):
-    from api import db
+    from api import db, images
 
+    images._cache.clear()
     for collection in (db.books, db.pages, db.profiles, db.checks, db.approvals):
         collection.delete_many({})
