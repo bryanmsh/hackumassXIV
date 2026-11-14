@@ -26,6 +26,7 @@ Run everything from the repo root so `contracts` and `pipeline` import.
 | `gemini.py` | `choose_subjects(view_path, text)` and `label_crop(png_bytes)`: the one door to Gemini |
 | `process.py` | `process_page(asset, out_dir, force=False)`: Gemini, a mask per candidate, the state rules. Never raises |
 | `click.py` | `segment_at_point(image_path, x, y, out_dir)` and `refine_mask(image_path, mask_path, x, y, out_dir)` |
+| `credits.py` | `read_credits(pdf_path)`: author, illustrator, publisher, source and license copied from the PDF's text layer (first 2 and last 4 pages); `None` when not printed, never raises, never guesses |
 | `run_book.py` | Command line: process a whole PDF with no API and no database |
 
 ## Run a whole book
