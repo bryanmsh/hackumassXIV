@@ -93,6 +93,18 @@ def segment_at_point(image_path, x, y, out_dir) -> Candidate:
     return _rect_candidate(image_path, out_dir, (w, h), box, "object", [], 0.9, "click")
 
 
+def refine_mask(image_path, mask_path, x, y, out_dir) -> Candidate:
+    """The old mask plus a rectangle 10% of the page around the click. No label, like the real one."""
+    old = Image.open(mask_path).convert("L")
+    w, h = old.size
+    added = (max(0, x - 0.05 * w), max(0, y - 0.05 * h), min(w, x + 0.05 * w), min(h, y + 0.05 * h))
+    mask = old.copy()
+    ImageDraw.Draw(mask).rectangle(added, fill=255)
+    mask_path, mask_hash = _save_mask(mask, image_path, out_dir)
+    return Candidate(label="", synonyms=[], box=mask.getbbox(), confidence=1.0,
+                     mask_path=mask_path, mask_hash=mask_hash, source="click")
+
+
 def mask_from_outline(image_path, label, points, out_dir, tidy=False) -> Candidate:
     """Fills the teacher's polygon exactly as drawn."""
     points = [tuple(p) for p in points]
