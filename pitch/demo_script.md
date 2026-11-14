@@ -27,9 +27,9 @@ If size, position and text controls are not in Profiles yet, Leo is Cut-out, cen
 | --- | --- | --- | --- |
 | 1 | 0:00 | Title slide | "Children with cortical visual impairment, CVI, recognize one clear object on a plain background far better than a busy picture-book page. Today their teachers rebuild pages by hand, with scissors and black card, so each child gets only a few books." |
 | 2 | 0:20 | Library: Animal Homes, already uploaded | "Mirai adapts a real picture book, using only the book's own artwork. This is Animal Homes, a free StoryWeaver book. When we upload it, each page goes to an AI once to find what the page is about. The upload screen tells the teacher that." |
-| 3 | 0:40 | Open Subject review; point at the states and the pre-selected cut-outs | "Every page ends in a clear state, and the AI has already suggested a subject for almost every one. But a suggestion is all it is. Nothing reaches a child until the teacher confirms it." |
-| 4 | 1:00 | Open page 2: the combined pick "beehive, bird and bird nest" is selected | "This page is the hard one. 'Birds build their homes up high, and so do bees.' The AI found a hornbill, a beehive and a nest, and suggested all three together. For a child with CVI, three objects can be two too many. Only a person knows which one matters for this child today." |
-| 5 | 1:20 | **Suggestions**: switch to the hornbill alone, then confirm | "One click switches it to the hornbill alone, and the teacher confirms. The cut-out is the original drawing, traced by a segmentation model. Nothing is drawn or invented by AI." |
+| 3 | 0:40 | Open Subject review; point at the states | "Every page ends in a clear state. When a page is about one thing, the AI pre-selects it. When a page names several things, it does not guess: it asks the teacher. Nothing reaches a child until the teacher confirms it." |
+| 4 | 1:00 | Open page 2: Needs subject, with hornbill, beehive, nest and the combined "beehive, bird and bird nest" offered | "This page is the hard one. 'Birds build their homes up high, and so do bees.' The AI found a hornbill, a beehive and a nest, and offers all three together too. For a child with CVI, three objects can be two too many. Only a person knows which one matters for this child today." |
+| 5 | 1:20 | **Suggestions**: pick the hornbill alone, then confirm | "One click on the hornbill, and the teacher confirms. The cut-out is the original drawing, traced by a segmentation model. Nothing is drawn or invented by AI." |
 | 6 | 1:35 | **Confirm all** for the remaining pages; **Leave out** any page not wanted | "For pages where the suggestion is right, the teacher confirms them all at once, and leaves out any page that does not work for this child." |
 | 7 | 1:50 | Contact sheet: choose Maya, Tinted | "Now the teacher picks a child. Maya sees the subject alone, tinted in her red, on black. Under each page are automatic checks: is the cut-out taken from the original with no stray specks, is the background plain, does the subject stand out. They are measurements, not approval." |
 | 8 | 2:15 | **Approve sheet** | "The teacher approves the whole sheet at once. That approval is tied to this exact picture: change her color, or the subject, and the page needs approval again." |
@@ -58,7 +58,7 @@ If size, position and text controls are not in Profiles yet, Leo is Cut-out, cen
 
 ## Open decisions
 
-- Demo book and hard page: Animal Homes, page 2, switching the combined pick to the hornbill alone. Confirm with Bryan at hour 10.
+- Demo book and hard page: Animal Homes, page 2 (Needs subject since commit 9e09be4); the teacher picks the hornbill alone. Confirm with Bryan at hour 10.
 - Which edition: `fixtures/` has a 5-page Animal Homes, but Bryan's notes use a longer one (page 10 is the crocodile). Page numbers above are for the 5-page fixture.
 - Which pre-selected picks to leave as they are on the other pages. Run the book with Bryan's latest pipeline and `SEGMENTER=sam2` first.
 - Timing is a guess until the first rehearsal; cut steps 6 and 12 first if over time.
