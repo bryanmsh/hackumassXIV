@@ -7,9 +7,9 @@ app, forwards `/api` to the API, handles HTTPS and asks for a password on every 
 
 | | |
 | --- | --- |
-| Address | `https://140-82-15-107.sslip.io` (IP `140.82.15.107`) |
+| Address | `https://jensenhuangexecutiveboard.vip`, fallback `https://140-82-15-107.sslip.io` (IP `140.82.15.107`) |
 | Log in | `ssh -i ~/.ssh/mirai_vultr root@140.82.15.107` (key only) |
-| Repo | `/opt/mirai`, branch `bryan`, read-only deploy key |
+| Repo | `/opt/mirai`, branch `main`, read-only deploy key |
 | Data | `/opt/mirai/data`, mounted into the API container; survives restarts and rebuilds |
 | Open ports | 22, 80, 443 |
 
@@ -19,7 +19,7 @@ Copy `.env.example` and fill it in on the server. It is never committed.
 
 | Name | Value on the server |
 | --- | --- |
-| `SITE_ADDRESS` | `140-82-15-107.sslip.io` |
+| `SITE_ADDRESS` | `jensenhuangexecutiveboard.vip, 140-82-15-107.sslip.io` |
 | `SITE_USER`, `SITE_PASSWORD` | The site login. Compose refuses to start if either is empty |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | The key and the Flash model name |
 | `SEGMENTER` | `grabcut` until the PyTorch segmenter is added |
@@ -30,6 +30,22 @@ Copy `.env.example` and fill it in on the server. It is never committed.
 Keep the password free of `$` characters, or wrap it in single quotes: Compose reads `$` as a variable.
 
 ## Deploy
+
+Deploys are automatic. A systemd timer runs `infra/autodeploy.sh` (installed as
+`/usr/local/bin/mirai-autodeploy`) every minute. When `origin/main` has moved, it pulls
+and runs `docker compose up -d --build`. A failed build leaves the old containers
+serving. Merging to `main` is deploying: the site updates about a minute later.
+
+```bash
+tail -f /var/log/mirai-autodeploy.log            # what each deploy did
+systemctl list-timers mirai-autodeploy.timer     # when it next checks
+systemctl stop mirai-autodeploy.timer            # pause auto-deploys
+systemctl start mirai-autodeploy.timer           # resume
+```
+
+After editing `infra/autodeploy.sh`, copy it to `/usr/local/bin/mirai-autodeploy` on the server.
+
+To deploy by hand right away:
 
 ```bash
 cd /opt/mirai && git pull && docker compose up -d --build
@@ -51,12 +67,15 @@ The first request after a fresh start can take a few seconds while Caddy gets it
 
 ## Roll back
 
+The timer would redeploy `main` within a minute, so pause it first:
+
 ```bash
+systemctl stop mirai-autodeploy.timer
 cd /opt/mirai && git log --oneline -5
 git checkout <previous commit> && docker compose up -d --build
 ```
 
-Go back to the branch afterwards with `git checkout bryan`.
+Once `main` is fixed, run `git checkout main && systemctl start mirai-autodeploy.timer`.
 
 ## Try it on a laptop
 
