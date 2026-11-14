@@ -24,7 +24,7 @@ def _candidate_json(candidate: dict, width: int, height: int) -> dict:
 def page_json(page: dict) -> dict:
     width, height = page["width"], page["height"]
     look = page.get("second_look")
-    if look and look["subject_hash"] == page["subject_hash"]:
+    if look and page["subject_hash"] is not None and look["subject_hash"] == page["subject_hash"]:
         look = {"status": look["status"], "answer": look["answer"], "detail": look["detail"]}
     else:
         look = None

@@ -2,6 +2,7 @@ import json
 
 from api import db, modules, settings
 from api.tests.helpers import EX, client, make_pdf, upload
+from contracts.types import PageResult
 
 
 def test_upload_answers_at_once_then_pages_reach_states():
@@ -93,3 +94,45 @@ def test_list_patch_and_unknown_book():
     assert r.json()["credits"]["license"] == "CC BY 4.0" and r.json()["title"] == book["title"]
     assert client.get("/api/books/nope").status_code == 404
     assert client.get("/api/books/65a000000000000000000001").status_code == 404
+
+
+def test_failure_reason_hides_server_paths(monkeypatch):
+    def lost(asset, out_dir, force=False):
+        raise FileNotFoundError(f"{settings.DATA_DIR}/books/x/pages/1.png")
+    monkeypatch.setattr(modules.pipeline, "process_page", lost)
+    page = upload()["pages"][0]
+    assert page["state"] == "failed" and str(settings.DATA_DIR) not in page["reason"]
+
+
+def test_failure_with_no_message_names_the_exception(monkeypatch):
+    def silent(asset, out_dir, force=False):
+        raise RuntimeError()
+    monkeypatch.setattr(modules.pipeline, "process_page", silent)
+    assert upload()["pages"][0]["reason"] == "RuntimeError"
+
+
+def test_a_bad_result_fails_the_page_not_the_book(monkeypatch):
+    real = modules.pipeline.process_page
+    def bad(asset, out_dir, force=False):
+        if asset.page_number == 1:
+            return PageResult.model_construct(state="ready", page_kind="single", candidates=[],
+                                              selected=5, reason=None)
+        return real(asset, out_dir, force)
+    monkeypatch.setattr(modules.pipeline, "process_page", bad)
+    pages = upload()["pages"]
+    assert pages[0]["state"] == "failed" and pages[0]["reason"] == "list index out of range"
+    assert [p["state"] for p in pages[1:]] == ["needs_subject", "failed"]
+
+
+def test_rasterize_failure_is_logged(monkeypatch, caplog):
+    monkeypatch.setattr(modules.pipeline, "rasterize", lambda *a: 1 / 0)
+    upload()
+    assert "rasterize failed for book" in caplog.text
+
+
+def test_second_look_is_hidden_without_a_subject():
+    from api import views
+    upload()
+    doc = db.pages.find_one({"number": 2})
+    doc["second_look"] = {"subject_hash": None, "status": "pass", "answer": "x", "detail": None}
+    assert doc["subject_hash"] is None and views.page_json(doc)["second_look"] is None
