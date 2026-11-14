@@ -40,11 +40,24 @@ def test_profile_hashes_match_the_helper():
 
 
 def test_version_tokens_match_the_helper():
-    versions = [d for d in walk(EXAMPLES) if "v" in d and "render_version" in d]
-    assert versions
-    for v in versions:
-        assert v["v"] == version_token(
-            v["subject_hash"], v["settings_hash"], v["level"], v["render_version"])
+    book = EXAMPLES["GET /api/books/{id}"]["response"]
+    subject = {p["id"]: p["subject_hash"] for p in book["pages"]}
+    settings = {p["id"]: p["settings_hash"] for p in EXAMPLES["GET /api/profiles"]["response"]}
+    sheet = EXAMPLES["GET /api/books/{id}/sheet"]["response"]
+    reader = EXAMPLES["GET /api/reader/{book_id}"]["response"]
+
+    def expected(page_id, source):
+        return version_token(subject[page_id], settings[source["profile_id"]],
+                             source["level"], sheet["render_version"])
+
+    versioned = [row for row in sheet["pages"] if row["version"]]
+    assert versioned and reader["pages"]
+    for row in versioned:
+        assert row["version"] == expected(row["page_id"], sheet)
+        assert f"v={row['version']}" in row["preview_url"]
+    for page in reader["pages"]:
+        assert page["v"] == expected(page["page_id"], reader)
+        assert f"v={page['v']}" in page["image_url"]
 
 
 def literal_values(annotation):
@@ -75,7 +88,26 @@ def test_approve_sends_back_the_version_exactly_as_the_sheet_gave_it():
              for row in EXAMPLES["GET /api/books/{id}/sheet"]["response"]["pages"]}
     approve = EXAMPLES["POST /api/books/{id}/approve"]
     for page in approve["request"]["pages"]:
-        assert page["version"] == sheet[page["page_id"]]
-    for stale in approve["errors"]["409"]["stale"]:
-        assert set(stale["current_version"]) == {"subject_hash", "settings_hash", "level",
-                                                 "render_version", "v"}
+        assert isinstance(page["version"], str) and page["version"] == sheet[page["page_id"]]
+    conflict = approve["errors"]["409"]
+    assert conflict["recorded"] == []
+    for changed in conflict["changed"]:
+        assert changed["sent"] == sheet[changed["page_id"]] != changed["current"]
+
+
+def test_lists_are_plain_arrays():
+    assert isinstance(EXAMPLES["GET /api/books"]["response"], list)
+    assert isinstance(EXAMPLES["GET /api/profiles"]["response"], list)
+    assert isinstance(EXAMPLES["POST /api/books/{id}/confirm-all"]["response"], list)
+    assert "state" in EXAMPLES["POST /api/pages/{id}/confirm"]["response"]
+
+
+def test_reader_lists_every_version_and_why_each_page_is_skipped():
+    reader = EXAMPLES["GET /api/reader/{book_id}"]["response"]
+    book = EXAMPLES["GET /api/books/{id}"]["response"]
+    assert reader["adaptation_note"]
+    assert all({"profile_id", "profile_name", "level", "fully_approved"} == set(v)
+               for v in reader["versions"])
+    shown = [p["page_id"] for p in reader["pages"]] + [p["page_id"] for p in reader["skipped"]]
+    assert sorted(shown) == sorted(p["id"] for p in book["pages"])
+    assert {p["reason"] for p in reader["skipped"]} <= set(EXAMPLES["_enums"]["reader.skipped.reason"])
