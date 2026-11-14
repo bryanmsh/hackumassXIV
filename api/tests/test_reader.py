@@ -1,5 +1,6 @@
 import pytest
 
+from api import modules
 from api.tests.helpers import EX, approve_all, client, confirmed_book, make_profile
 
 manifest = lambda book, p, level=1: client.get(f"/api/reader/{book['id']}?profile={p['id']}&level={level}").json()
@@ -36,7 +37,23 @@ CHANGES = {
     "rejected": lambda page, p: client.post(
         f"/api/books/{page['book_id']}/approve", json={"profile_id": p["id"], "level": 1,
         "pages": [{"page_id": page["page_id"], "version": page["v"], "decision": "reject"}]}),
+    "render": lambda page, p: setattr(modules.display, "RENDER_VERSION", "next"),
 }
+
+# How the teacher (or, for the render version, a redeploy) undoes each change above.
+BACK = {
+    "profile": lambda page, p: client.patch(f"/api/profiles/{p['id']}", json={"settings": p["settings"]}),
+    "subject": lambda page, p: [client.post(f"/api/pages/{page['page_id']}/subject", json={"candidate": 0}),
+                                client.post(f"/api/pages/{page['page_id']}/confirm")],
+    "omitted": lambda page, p: client.post(f"/api/pages/{page['page_id']}/omit", json={"omitted": False}),
+    "render": lambda page, p: setattr(modules.display, "RENDER_VERSION", page["render_version"]),
+}
+
+
+@pytest.fixture(autouse=True)
+def render_version_put_back(monkeypatch):
+    """The "render" change sets the display code's version; this puts it back after each test."""
+    monkeypatch.setattr(modules.display, "RENDER_VERSION", modules.display.RENDER_VERSION)
 
 
 @pytest.mark.parametrize("change", CHANGES)
@@ -46,10 +63,21 @@ def test_approved_then_changed_is_refused(change):
     assert client.get(page["image_url"]).status_code == 403          # the old link is dead
     after = manifest(book, p)
     assert after["pages"] == []
-    if change in ("profile", "subject"):                              # a fresh link is refused too
+    if change in ("profile", "subject", "render"):                    # a fresh link is refused too
         token = client.get(f"/api/books/{book['id']}/sheet?profile={p['id']}&level=1").json()["pages"][0]["version"]
         assert token != page["v"]
         assert client.get(f"/api/reader/page/{page['page_id']}?profile={p['id']}&level=1&v={token}").status_code == 403
+
+
+@pytest.mark.parametrize("change", BACK)
+def test_switching_back_restores_the_approval(change):
+    book, p, page = approved_page()
+    page = {**page, "book_id": book["id"], "render_version": modules.display.RENDER_VERSION}
+    CHANGES[change](page, p)
+    assert manifest(book, p)["pages"] == []
+    BACK[change](page, p)
+    assert [x["v"] for x in manifest(book, p)["pages"]] == [page["v"]]  # no new approval was given
+    assert client.get(page["image_url"]).status_code == 200
 
 
 @pytest.mark.parametrize("query", [
