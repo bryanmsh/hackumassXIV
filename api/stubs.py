@@ -118,6 +118,11 @@ def mask_from_outline(image_path, label, points, out_dir, tidy=False) -> Candida
                      confidence=1.0, mask_path=mask_path, mask_hash=mask_hash, source="manual")
 
 
+def read_credits(pdf_path) -> dict:
+    """Ignores the PDF and finds no credits, so the teacher's own are kept."""
+    return {"author": None, "illustrator": None, "publisher": None, "source": None, "license": None}
+
+
 # --- display and checks ---
 
 def render(image_path, view_path, mask_path, settings, level, text, fmt="webp") -> bytes:
