@@ -44,10 +44,11 @@ async function open() {
 const card = (n: number) => within(screen.getByRole('heading', { name: `Page ${n}` }).closest('li')!);
 
 describe('Subject review', () => {
-  it('shows every page with its state, subject, and AI confidence', async () => {
+  it('shows every page with its state, subject, and the AI’s guess (never styled as correct)', async () => {
     await open();
     expect(card(1).getByText('Ready')).toBeInTheDocument();
-    expect(card(1).getByText(/AI confidence 0\.88/)).toBeInTheDocument();
+    expect(card(1).getByText(/the AI’s guess, confidence 0\.88/)).toBeInTheDocument();
+    expect(card(1).getByText('Ready').className).not.toMatch(/emerald/);
     expect(card(3).getByText('Needs subject')).toBeInTheDocument();
     expect(card(3).getByText('No subject chosen yet.')).toBeInTheDocument();
     expect(card(4).getByText('No clear subject')).toBeInTheDocument();
@@ -121,6 +122,7 @@ describe('Subject review', () => {
     expect(card(2).getByText('Confirmed')).toBeInTheDocument();
     expect(card(3).queryByText('Confirmed')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm all…' })).toBeDisabled();
+    expect(screen.getByText(/Confirm all is off: no page has a subject waiting to be confirmed/)).toBeInTheDocument();
   });
 
   it('Ask the AI again asks first; a confirmed page is asked about too and stays confirmed', async () => {

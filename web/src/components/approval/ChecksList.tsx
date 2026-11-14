@@ -69,10 +69,9 @@ function rank(item: CheckItem | null): number {
 /** The AI's second look: a weak signal, never proof and never a blocker. */
 export function SecondLookLine({ look }: { look: SecondLook | null }) {
   if (!look) return null;
-  const { text, raw } = secondLookText(look);
   return (
-    <p className={`text-sm ${look.status === 'warn' ? 'text-amber-900' : 'text-slate-700'}`} title={raw ?? undefined}>
-      <span className="font-semibold">Second look (AI):</span> {text}
+    <p className={`text-sm ${look.status === 'warn' ? 'text-amber-900' : 'text-slate-700'}`}>
+      <span className="font-semibold">Second look (AI):</span> {secondLookText(look)}
     </p>
   );
 }

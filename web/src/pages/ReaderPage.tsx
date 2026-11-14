@@ -33,10 +33,10 @@ function fromControl(target: EventTarget | null): boolean {
  *   from GET /reader/page/{id}?v= with the manifest's own token. Never /render
  *   or /preview, never the original page as a substitute.
  * - A refused image (403) shows no picture, only a message for the teacher.
- * - Single taps and clicks do nothing. Pages turn with → / Space / PageDown and
- *   ← / PageUp (keyboard or clicker). T, or a 1-second press in a corner,
- *   opens the teacher bar. Two-finger gestures are off: they were not tested
- *   on the demo tablet, and the team chose the plan's fallback (2026-11-14).
+ * - Clicks do nothing. Pages turn with → / Space / PageDown and ← / PageUp
+ *   (keyboard or presentation clicker). T opens the teacher bar. The spec is
+ *   laptop/desktop only (PR #12), so there are no touch gestures; a 1-second
+ *   press in a corner also opens the bar, as a harmless extra.
  * - No timers that move pages, no transitions; a new page replaces the old
  *   one only when it is ready.
  */
@@ -226,7 +226,7 @@ function Reader({
     return () => window.removeEventListener('keydown', onKey);
   }, [go, barOpen, openBar]);
 
-  // Touch: only a 1-second press in a corner does anything (opens the teacher bar).
+  // Pointer: only a 1-second press in a corner does anything (opens the teacher bar).
   const gestures = useGestures((g) => {
     if (g.type === 'corner-long-press') openBar();
   });
@@ -290,21 +290,12 @@ function Reader({
             draggable={false}
           />
         )}
+        {/* A refused or failed page: nothing in front of the child, only the page background.
+            The explanation is in the teacher bar (T). Screen readers still hear that something is wrong. */}
         {imageError && (
-          <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black p-8 text-center text-xl text-white">
-            <p>
-              {imageError instanceof ApiError && imageError.status === 403
-                ? 'This page is not approved for this child and look any more, so nothing is shown.'
-                : `This page could not be shown: ${errorMessage(imageError)}`}
-            </p>
-            <p className="text-base text-slate-300">Press T (or hold a corner) for the teacher bar, or check the contact sheet.</p>
-            <Link
-              to={`/books/${encodeURIComponent(bookId)}/approve?profile=${encodeURIComponent(manifest?.profile_id ?? profileId)}&level=${manifest?.level ?? level}`}
-              className="font-semibold underline"
-            >
-              Leave the reader and open the contact sheet
-            </Link>
-          </div>
+          <p role="status" className="sr-only">
+            This page cannot be shown. Press T for the teacher bar.
+          </p>
         )}
       </div>
 
@@ -324,6 +315,13 @@ function Reader({
           fullscreen={{ supported: fsSupported, active: fsActive, toggle: toggleFs }}
           checking={current.refreshing}
           checkError={current.status === 'error' ? errorMessage(current.error) : null}
+          pageProblem={
+            imageError
+              ? imageError instanceof ApiError && imageError.status === 403
+                ? `${position}: this page is not approved for this child and look any more, so nothing is shown.`
+                : `${position}: this page could not be shown. ${errorMessage(imageError)}`
+              : null
+          }
         />
       )}
     </div>

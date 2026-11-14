@@ -137,13 +137,18 @@ describe('Reader', () => {
     expect(seen.filter((u) => u.pathname === `/api/reader/page/${second}`).length).toBe(before); // served from memory
   });
 
-  it('a 403 on an image shows no picture, only a message for the teacher', async () => {
+  it('a 403 on an image shows no picture and nothing in front of the child; the teacher bar explains', async () => {
     const { backup, maya } = await fixtures();
     scenarios.readerForbiddenNext = true;
     openReader(backup.id, maya);
-    expect(await screen.findByRole('alert')).toHaveTextContent('not approved for this child and look any more');
+    expect(await screen.findByRole('status')).toHaveTextContent('This page cannot be shown');
+    expect(screen.getByRole('status')).toHaveClass('sr-only');
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /contact sheet/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument(); // no visible controls for the child
+    await key('t');
+    const bar = await screen.findByRole('dialog', { name: 'Teacher controls' });
+    expect(within(bar).getByRole('alert')).toHaveTextContent('not approved for this child and look any more');
+    expect(within(bar).getAllByRole('link', { name: /contact sheet/ }).length).toBeGreaterThan(0);
   });
 
   it('if the approval lapses, re-checking (opening the teacher bar) removes the page', async () => {
@@ -172,7 +177,7 @@ describe('Reader', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('holding a corner for a second opens the teacher bar (tablet fallback)', async () => {
+  it('holding a corner for a second also opens the teacher bar (a harmless extra)', async () => {
     const { backup, maya } = await fixtures();
     openReader(backup.id, maya);
     await pageImg(1);
