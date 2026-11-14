@@ -103,3 +103,30 @@ describe(`live API at ${API_BASE}: subject editor`, () => {
     expect(byOutline.candidates.length).toBeGreaterThan(0);
   });
 });
+
+describe(`live API at ${API_BASE}: profiles`, () => {
+  it('lists profiles and previews unsaved settings without saving anything', async () => {
+    const profiles = await api.listProfiles();
+    for (const p of profiles) {
+      expect([1, 2, 3, 4]).toContain(p.level);
+      expect(p.settings.colors.length).toBeGreaterThanOrEqual(1);
+    }
+    const b = await api.getBook((await firstBook()).id);
+    const page = b.pages.find((p) => p.selected !== null && p.state !== 'processing');
+    if (!page) return;
+    const before = profiles.map((p) => p.settings_hash);
+    const img = await api.preview({
+      page_id: page.id,
+      level: 1,
+      settings: { colors: ['#FDD835'], background: '#000000', size: 'medium', position: 'center', text_mode: 'off', outline: 'off' },
+    });
+    expect(img.size).toBeGreaterThan(0);
+    expect((await api.listProfiles()).map((p) => p.settings_hash)).toEqual(before);
+  });
+
+  it('the Profiles screen renders the server’s profiles', async () => {
+    const profiles = await api.listProfiles();
+    renderAt('/profiles');
+    for (const p of profiles) expect(await screen.findByRole('heading', { name: p.name })).toBeInTheDocument();
+  });
+});
