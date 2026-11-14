@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from cutout_model.tests.conftest import duts_root  # noqa: F401
+
 
 def _solid(path, colour, size=(64, 48)):
     path.parent.mkdir(parents=True, exist_ok=True)
