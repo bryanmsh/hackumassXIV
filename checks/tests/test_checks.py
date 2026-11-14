@@ -47,15 +47,23 @@ def test_huge_mask_fails_fidelity_and_touches_edge():
     assert "top" in r.page_edge.detail and "left" in r.page_edge.detail
 
 
-def test_tiny_mask_fails_fidelity_and_warns_on_enlargement(tmp_path):
+def test_small_subject_passes_fidelity_but_warns_on_enlargement(tmp_path):
     mask = np.zeros((1800, 2400), np.uint8)
-    cv2.circle(mask, (1200, 900), 60, 255, -1)
-    path = write_png(tmp_path / "tiny.png", mask)
+    cv2.circle(mask, (1200, 900), 60, 255, -1)  # about 0.26% of the page, like a frog in Animal Homes
+    path = write_png(tmp_path / "small.png", mask)
     r = run_checks(P1[0], P1[1], path, {"size": "large"}, 2, None)
-    assert r.fidelity.status == "fail"
+    assert r.fidelity.status == "pass"
     assert r.size.status == "warn" and r.size.value > 2.5
     r3 = run_checks(P1[0], P1[1], path, {}, 3, None)
     assert r3.size.status == "warn" and r3.size.value < 0.15
+
+
+def test_speck_fails_fidelity(tmp_path):
+    mask = np.zeros((1800, 2400), np.uint8)
+    cv2.circle(mask, (1200, 900), 20, 255, -1)  # about 0.03% of the page
+    path = write_png(tmp_path / "speck.png", mask)
+    r = run_checks(P1[0], P1[1], path, {}, 2, None)
+    assert r.fidelity.status == "fail" and "at least 0.1%" in r.fidelity.detail
 
 
 def test_low_contrast_subject_warns():
