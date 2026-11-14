@@ -27,6 +27,7 @@ Children with CVI recognize objects far better in simple pictures: one object, l
 - **Secondary users:** parents reading at home, and early-intervention and special-education staff.
 - **Buyers:** school district special-education budgets and CVI organizations.
 - **The child** is the audience, never the operator.
+- **Platform:** a web app used in a desktop or laptop browser, by teacher and child alike. Tablets and touch gestures are not a target.
 
 ## Priorities
 
@@ -225,7 +226,7 @@ The reader shows one approved page at a time, full screen, at the pace the teach
 
 - Pages never advance on their own.
 - No animations, flashing transitions or visible buttons.
-- A child's touch does nothing. On a tablet, the teacher turns pages with a two-finger swipe and opens the teacher bar with a two-finger tap. On a laptop, the arrow keys turn pages and the T key opens the teacher bar.
+- A child's clicks do nothing. The teacher turns pages with the arrow keys or space and opens the teacher bar with the T key.
 - Optional blank screen in the background color between pages, held until the teacher continues (P1).
 - The teacher bar offers only the child and level versions that are fully approved for this book. An approved version appears in under a second.
 - Versions that are not approved are shown greyed out. To approve one, the teacher leaves the reader and opens its contact sheet, so a child never sees a review screen.
@@ -581,15 +582,14 @@ The web app is a React single-page app that talks only to Contract 1. Until the 
 - **Profiles:** the live preview calls `POST /preview` with the unsaved settings, at most once every 300 ms. Nothing is saved until the teacher presses Save, so trying colors never disturbs approvals.
 - **Contact sheet:** Approve sends back the version of every page exactly as the sheet received it. On a 409, the sheet reloads the changed pages and tells the teacher to look again.
 - **Outline drawing:** record pointer positions, thin them to at most 200 points, convert from screen to master pixels, and close the shape.
-- Target device for the demo is a tablet in landscape; every screen must also work on a laptop.
+- Platform is a web app in a desktop or laptop browser only. There is no tablet or touch target, so no touch-gesture handling is needed.
 
 **Reader**
 
 - Images come only from `/reader/page/...` with the token from `GET /reader/...`.
 - The reader prefetches the next page, and the current page in every other approved version, and holds them in memory. That is what keeps a switch under a second on venue Wi-Fi.
-- Single touches and clicks on the page do nothing, so a child cannot operate it.
-- Tablet: two-finger swipe turns the page; two-finger tap opens the teacher bar.
-- Laptop: arrow keys or space turn the page; T opens the teacher bar; B shows the blank screen (P1).
+- Single clicks on the page do nothing, so a child cannot operate it.
+- Keyboard: arrow keys or space turn the page; T opens the teacher bar; B shows the blank screen (P1).
 - The teacher bar lists only fully approved child and level versions. Others are greyed out with "not approved." Approving one means leaving the reader.
 - No timers, no transitions, no auto-advance.
 
@@ -653,7 +653,7 @@ In each list below, "Needs" names the only thing a task waits for. Tasks marked 
 | D3 | Subject editor: click to pick, and the outline canvas sending master-pixel points | D1 | An outline drawn on screen posts the right coordinates |
 | D4 | Profiles with live preview and contrast warning | D1 | Works on mocks |
 | D5 | Contact sheet that sends versions back and handles the 409 | D1 | Works on mocks, including a forced 409 |
-| D6 | Reader: gestures, keys, teacher bar, prefetch, credits | D1 | A single tap does nothing; two-finger swipe turns the page |
+| D6 | Reader: gestures, keys, teacher bar, prefetch, credits | D1 | A single click does nothing; arrow keys turn the page |
 | D7 | Point each screen at the real API as C's routes land | C3 to C6; until then, the mocks | No screen uses a mock |
 
 **When fakes get swapped for real**
