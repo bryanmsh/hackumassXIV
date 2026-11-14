@@ -87,3 +87,17 @@ def test_approval_state_follows_the_newest_record_for_the_exact_version():
     assert versions.approval_state(page_id, profile_id, version) == "rejected"
     assert versions.approval_state(page_id, profile_id, version._replace(settings_hash="c" * 12)) == "none"
     assert versions.approval_state(page_id, ObjectId(), version) == "none"
+
+
+def test_decisions_in_the_same_millisecond_are_ordered_by_id():
+    version = versions.Version("a" * 12, "b" * 12, 1, "stub-1")
+    at = datetime.now(timezone.utc)
+    for physical_order in ("older first", "newer first"):       # the answer must not depend on where Mongo put them
+        page_id, profile_id = ObjectId(), ObjectId()
+        older, newer = sorted((ObjectId(), ObjectId()))
+        docs = [{"_id": older, "decision": "approve"}, {"_id": newer, "decision": "reject"}]
+        for doc in docs if physical_order == "older first" else reversed(docs):
+            db.approvals.insert_one({**doc, "page_id": page_id, "profile_id": profile_id,
+                                     "subject_hash": version.subject_hash, "settings_hash": version.settings_hash,
+                                     "level": version.level, "render_version": version.render_version, "at": at})
+        assert versions.approval_state(page_id, profile_id, version) == "rejected"

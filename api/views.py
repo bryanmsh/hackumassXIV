@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 
 from api import coords
+from contracts.hashing import version_token
 
 
 def _iso(moment: datetime) -> str:
@@ -68,4 +69,16 @@ def profile_json(profile: dict) -> dict:
         "settings": profile["settings"],
         "settings_hash": profile["settings_hash"],
         "contrast_override_note": profile["contrast_override_note"],
+    }
+
+
+def approval_json(record: dict) -> dict:
+    return {
+        "page_id": str(record["page_id"]),
+        "profile_id": str(record["profile_id"]),
+        "level": record["level"],
+        "version": version_token(record["subject_hash"], record["settings_hash"], record["level"],
+                                 record["render_version"]),
+        "decision": record["decision"],
+        "at": _iso(record["at"]),
     }

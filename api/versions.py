@@ -35,7 +35,7 @@ def approval_state(page_id: ObjectId, profile_id: ObjectId,
         {"page_id": page_id, "profile_id": profile_id, "subject_hash": version.subject_hash,
          "settings_hash": version.settings_hash, "level": version.level,
          "render_version": version.render_version},
-        sort=[("at", -1)])
+        sort=[("at", -1), ("_id", -1)])  # _id breaks a tie inside one millisecond
     if newest is None:
         return "none"
     return "approved" if newest["decision"] == "approve" else "rejected"

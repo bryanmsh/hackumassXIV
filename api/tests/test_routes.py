@@ -11,7 +11,6 @@ client = TestClient(app)
 EX = json.loads((Path(__file__).parents[2] / "contracts" / "examples.json").read_text())
 
 JSON_ROUTES = [  # (method, url, examples key)
-    ("POST", "/api/books/b1/approve", "POST /api/books/{id}/approve"),
     ("GET", "/api/reader/b1?profile=pr1&level=1", "GET /api/reader/{book_id}"),
 ]
 

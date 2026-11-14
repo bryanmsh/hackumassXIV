@@ -43,3 +43,12 @@ def confirmed_book(pages: int = 3) -> dict:
     book = upload(pages)
     assert client.post(f"/api/books/{book['id']}/confirm-all").status_code == 200
     return client.get(f"/api/books/{book['id']}").json()
+
+
+def approve_all(book: dict, profile: dict, level: int = 1):
+    """Load the sheet and approve every row that has a version."""
+    sheet = client.get(f"/api/books/{book['id']}/sheet?profile={profile['id']}&level={level}").json()
+    return client.post(f"/api/books/{book['id']}/approve", json={
+        "profile_id": profile["id"], "level": level,
+        "pages": [{"page_id": r["page_id"], "version": r["version"], "decision": "approve"}
+                  for r in sheet["pages"] if r["version"]]})
