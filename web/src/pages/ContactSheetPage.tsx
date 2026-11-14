@@ -323,7 +323,7 @@ export function ContactSheetPage() {
               ))}
             </ul>
           )}
-          <p className="mt-6 text-sm text-slate-500">Display version {sheet.data.render_version}</p>
+          <p className="mt-6 text-sm text-slate-600">Display version {sheet.data.render_version}</p>
         </>
       )}
     </>
