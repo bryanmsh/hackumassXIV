@@ -56,3 +56,11 @@ def stored_checks(page: dict, version: Version, settings: Settings) -> dict:
                                         page["text"]).model_dump()
     db.checks.update_one(key, {"$setOnInsert": {"result": result}}, upsert=True)
     return result
+
+
+def fully_approved(pages: list[dict], profile: dict, level: int) -> bool:
+    """At least one page is approved, and every page is omitted or has a decision on its current version."""
+    states = [None if page["omitted"] else
+              approval_state(page["_id"], profile["_id"], current_version(page, profile, level))
+              for page in pages]
+    return "approved" in states and all(s in (None, "approved", "rejected") for s in states)
