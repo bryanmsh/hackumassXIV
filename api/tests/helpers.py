@@ -26,3 +26,20 @@ def upload(pages: int = 3) -> dict:
     posted = client.post("/api/books", files={"file": ("book.pdf", make_pdf(pages), "application/pdf")})
     assert posted.status_code == 200, posted.text
     return client.get(f"/api/books/{posted.json()['book_id']}").json()
+
+
+MAYA = {"name": "Maya", "level": 1, "contrast_override_note": None,
+        "settings": {"colors": ["#E53935"], "background": "#000000", "size": "medium",
+                     "position": "center", "text_mode": "off", "outline": "off"}}
+
+
+def make_profile(**over) -> dict:
+    """Save a profile (Maya's, with any field replaced) and return it."""
+    return client.post("/api/profiles", json={**MAYA, **over}).json()
+
+
+def confirmed_book(pages: int = 3) -> dict:
+    """Upload a book, confirm every page that can be, and return the book as it now stands."""
+    book = upload(pages)
+    assert client.post(f"/api/books/{book['id']}/confirm-all").status_code == 200
+    return client.get(f"/api/books/{book['id']}").json()
