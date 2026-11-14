@@ -2,3 +2,9 @@
 
 # Claude dev log (local only)
 CLAUDE_NOTES.md
+
+CLAUDE.md
+data/
+.venv/
+__pycache__/
+node_modules/

@@ -1,0 +1,1478 @@
+{
+  "_about": "One example per Contract 1 route. Positions (box, point, outline) are fractions from 0 to 1 of the page's width and height, measured from the top-left corner. Levels are the numbers 1 to 4. Ids are opaque strings. Image routes return WebP bytes, shown here as a placeholder object. To approve, send each page's `version` token back exactly as the sheet gave it. Extra fields may appear over time.",
+  "_enums": {
+    "book.state": [
+      "ingesting",
+      "ready",
+      "failed"
+    ],
+    "page.state": [
+      "processing",
+      "ready",
+      "needs_subject",
+      "no_clear_subject",
+      "unsupported",
+      "failed"
+    ],
+    "page.page_kind": [
+      "single",
+      "several",
+      "scene"
+    ],
+    "page.flags": [
+      "spread",
+      "low_quality"
+    ],
+    "candidate.source": [
+      "auto",
+      "click",
+      "manual"
+    ],
+    "level": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "settings.size": [
+      "small",
+      "medium",
+      "large"
+    ],
+    "settings.position": [
+      "center",
+      "left",
+      "right",
+      "upper",
+      "lower"
+    ],
+    "settings.text_mode": [
+      "off",
+      "below"
+    ],
+    "settings.outline": [
+      "off",
+      "thin",
+      "thick"
+    ],
+    "check.status": [
+      "pass",
+      "warn",
+      "fail"
+    ],
+    "second_look.status": [
+      "pass",
+      "warn",
+      "pending"
+    ],
+    "sheet.approval": [
+      "approved",
+      "rejected",
+      "none"
+    ],
+    "approve.decision": [
+      "approve",
+      "reject"
+    ],
+    "reader.skipped.reason": [
+      "omitted",
+      "rejected",
+      "not_approved"
+    ]
+  },
+  "POST /api/books": {
+    "request": {
+      "multipart": {
+        "file": "the PDF",
+        "title": "optional",
+        "credits": "optional JSON string of the credits object"
+      }
+    },
+    "response": {
+      "book_id": "65a000000000000000000001",
+      "state": "ingesting"
+    }
+  },
+  "GET /api/books": {
+    "request": null,
+    "response": [
+      {
+        "id": "65a000000000000000000001",
+        "title": "Animal Homes",
+        "credits": {
+          "author": "A. Author",
+          "illustrator": "I. Illustrator",
+          "publisher": "Example Press",
+          "source": "https://example.org/animal-homes",
+          "license": "CC BY 4.0"
+        },
+        "state": "ready",
+        "page_count": 6,
+        "created_at": "2026-11-14T15:00:00Z",
+        "pages": [
+          {
+            "id": "65b000000000000000000001",
+            "book_id": "65a000000000000000000001",
+            "number": 1,
+            "width": 3000,
+            "height": 2250,
+            "text": "The rabbit sat under the tree.",
+            "flags": [],
+            "state": "ready",
+            "reason": null,
+            "page_kind": "single",
+            "candidates": [
+              {
+                "label": "rabbit",
+                "synonyms": [
+                  "bunny",
+                  "animal"
+                ],
+                "box": [
+                  0.3,
+                  0.4,
+                  0.6,
+                  0.8
+                ],
+                "confidence": 0.84,
+                "mask_hash": "d37d96b42ad4",
+                "source": "auto"
+              },
+              {
+                "label": "tree",
+                "synonyms": [
+                  "oak",
+                  "plant"
+                ],
+                "box": [
+                  0.6,
+                  0.05,
+                  0.95,
+                  0.9
+                ],
+                "confidence": 0.41,
+                "mask_hash": "dc9c5edb8b2d",
+                "source": "auto"
+              },
+              {
+                "label": "carrot",
+                "synonyms": [],
+                "box": [
+                  0.12,
+                  0.7,
+                  0.24,
+                  0.86
+                ],
+                "confidence": 0.9,
+                "mask_hash": "b96482290a87",
+                "source": "click"
+              }
+            ],
+            "selected": 0,
+            "subject_hash": "d37d96b42ad4",
+            "confirmed": true,
+            "omitted": false,
+            "second_look": {
+              "status": "pass",
+              "answer": "rabbit",
+              "detail": null
+            }
+          },
+          {
+            "id": "65b000000000000000000002",
+            "book_id": "65a000000000000000000001",
+            "number": 2,
+            "width": 3000,
+            "height": 2250,
+            "text": "The duck and the frog met at the pond.",
+            "flags": [],
+            "state": "needs_subject",
+            "reason": null,
+            "page_kind": "several",
+            "candidates": [
+              {
+                "label": "duck",
+                "synonyms": [
+                  "duckling",
+                  "bird"
+                ],
+                "box": [
+                  0.1,
+                  0.45,
+                  0.42,
+                  0.85
+                ],
+                "confidence": 0.62,
+                "mask_hash": "2d2370db2447",
+                "source": "auto"
+              },
+              {
+                "label": "frog",
+                "synonyms": [
+                  "toad",
+                  "animal"
+                ],
+                "box": [
+                  0.55,
+                  0.5,
+                  0.85,
+                  0.82
+                ],
+                "confidence": 0.58,
+                "mask_hash": "74fa5327cc0f",
+                "source": "auto"
+              }
+            ],
+            "selected": null,
+            "subject_hash": null,
+            "confirmed": false,
+            "omitted": false,
+            "second_look": null
+          },
+          {
+            "id": "65b000000000000000000003",
+            "book_id": "65a000000000000000000001",
+            "number": 3,
+            "width": 3000,
+            "height": 2250,
+            "text": "Everyone came to the party.",
+            "flags": [],
+            "state": "no_clear_subject",
+            "reason": null,
+            "page_kind": "scene",
+            "candidates": [],
+            "selected": null,
+            "subject_hash": null,
+            "confirmed": false,
+            "omitted": false,
+            "second_look": null
+          },
+          {
+            "id": "65b000000000000000000004",
+            "book_id": "65a000000000000000000001",
+            "number": 4,
+            "width": 3000,
+            "height": 2250,
+            "text": "",
+            "flags": [],
+            "state": "failed",
+            "reason": "timed out after 20 seconds",
+            "page_kind": null,
+            "candidates": [],
+            "selected": null,
+            "subject_hash": null,
+            "confirmed": false,
+            "omitted": false,
+            "second_look": null
+          },
+          {
+            "id": "65b000000000000000000005",
+            "book_id": "65a000000000000000000001",
+            "number": 5,
+            "width": 3000,
+            "height": 1500,
+            "text": "",
+            "flags": [
+              "spread"
+            ],
+            "state": "unsupported",
+            "reason": "two-page spread",
+            "page_kind": null,
+            "candidates": [],
+            "selected": null,
+            "subject_hash": null,
+            "confirmed": false,
+            "omitted": false,
+            "second_look": null
+          },
+          {
+            "id": "65b000000000000000000006",
+            "book_id": "65a000000000000000000001",
+            "number": 6,
+            "width": 3000,
+            "height": 2250,
+            "text": "",
+            "flags": [],
+            "state": "processing",
+            "reason": null,
+            "page_kind": null,
+            "candidates": [],
+            "selected": null,
+            "subject_hash": null,
+            "confirmed": false,
+            "omitted": false,
+            "second_look": null
+          }
+        ]
+      }
+    ]
+  },
+  "GET /api/books/{id}": {
+    "request": null,
+    "response": {
+      "id": "65a000000000000000000001",
+      "title": "Animal Homes",
+      "credits": {
+        "author": "A. Author",
+        "illustrator": "I. Illustrator",
+        "publisher": "Example Press",
+        "source": "https://example.org/animal-homes",
+        "license": "CC BY 4.0"
+      },
+      "state": "ready",
+      "page_count": 6,
+      "created_at": "2026-11-14T15:00:00Z",
+      "pages": [
+        {
+          "id": "65b000000000000000000001",
+          "book_id": "65a000000000000000000001",
+          "number": 1,
+          "width": 3000,
+          "height": 2250,
+          "text": "The rabbit sat under the tree.",
+          "flags": [],
+          "state": "ready",
+          "reason": null,
+          "page_kind": "single",
+          "candidates": [
+            {
+              "label": "rabbit",
+              "synonyms": [
+                "bunny",
+                "animal"
+              ],
+              "box": [
+                0.3,
+                0.4,
+                0.6,
+                0.8
+              ],
+              "confidence": 0.84,
+              "mask_hash": "d37d96b42ad4",
+              "source": "auto"
+            },
+            {
+              "label": "tree",
+              "synonyms": [
+                "oak",
+                "plant"
+              ],
+              "box": [
+                0.6,
+                0.05,
+                0.95,
+                0.9
+              ],
+              "confidence": 0.41,
+              "mask_hash": "dc9c5edb8b2d",
+              "source": "auto"
+            },
+            {
+              "label": "carrot",
+              "synonyms": [],
+              "box": [
+                0.12,
+                0.7,
+                0.24,
+                0.86
+              ],
+              "confidence": 0.9,
+              "mask_hash": "b96482290a87",
+              "source": "click"
+            }
+          ],
+          "selected": 0,
+          "subject_hash": "d37d96b42ad4",
+          "confirmed": true,
+          "omitted": false,
+          "second_look": {
+            "status": "pass",
+            "answer": "rabbit",
+            "detail": null
+          }
+        },
+        {
+          "id": "65b000000000000000000002",
+          "book_id": "65a000000000000000000001",
+          "number": 2,
+          "width": 3000,
+          "height": 2250,
+          "text": "The duck and the frog met at the pond.",
+          "flags": [],
+          "state": "needs_subject",
+          "reason": null,
+          "page_kind": "several",
+          "candidates": [
+            {
+              "label": "duck",
+              "synonyms": [
+                "duckling",
+                "bird"
+              ],
+              "box": [
+                0.1,
+                0.45,
+                0.42,
+                0.85
+              ],
+              "confidence": 0.62,
+              "mask_hash": "2d2370db2447",
+              "source": "auto"
+            },
+            {
+              "label": "frog",
+              "synonyms": [
+                "toad",
+                "animal"
+              ],
+              "box": [
+                0.55,
+                0.5,
+                0.85,
+                0.82
+              ],
+              "confidence": 0.58,
+              "mask_hash": "74fa5327cc0f",
+              "source": "auto"
+            }
+          ],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        },
+        {
+          "id": "65b000000000000000000003",
+          "book_id": "65a000000000000000000001",
+          "number": 3,
+          "width": 3000,
+          "height": 2250,
+          "text": "Everyone came to the party.",
+          "flags": [],
+          "state": "no_clear_subject",
+          "reason": null,
+          "page_kind": "scene",
+          "candidates": [],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        },
+        {
+          "id": "65b000000000000000000004",
+          "book_id": "65a000000000000000000001",
+          "number": 4,
+          "width": 3000,
+          "height": 2250,
+          "text": "",
+          "flags": [],
+          "state": "failed",
+          "reason": "timed out after 20 seconds",
+          "page_kind": null,
+          "candidates": [],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        },
+        {
+          "id": "65b000000000000000000005",
+          "book_id": "65a000000000000000000001",
+          "number": 5,
+          "width": 3000,
+          "height": 1500,
+          "text": "",
+          "flags": [
+            "spread"
+          ],
+          "state": "unsupported",
+          "reason": "two-page spread",
+          "page_kind": null,
+          "candidates": [],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        },
+        {
+          "id": "65b000000000000000000006",
+          "book_id": "65a000000000000000000001",
+          "number": 6,
+          "width": 3000,
+          "height": 2250,
+          "text": "",
+          "flags": [],
+          "state": "processing",
+          "reason": null,
+          "page_kind": null,
+          "candidates": [],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        }
+      ]
+    }
+  },
+  "PATCH /api/books/{id}": {
+    "request": {
+      "title": "Animal Homes",
+      "credits": {
+        "author": "A. Author",
+        "illustrator": "I. Illustrator",
+        "publisher": "Example Press",
+        "source": "https://example.org/animal-homes",
+        "license": "CC BY 4.0"
+      }
+    },
+    "response": {
+      "id": "65a000000000000000000001",
+      "title": "Animal Homes",
+      "credits": {
+        "author": "A. Author",
+        "illustrator": "I. Illustrator",
+        "publisher": "Example Press",
+        "source": "https://example.org/animal-homes",
+        "license": "CC BY 4.0"
+      },
+      "state": "ready",
+      "page_count": 6,
+      "created_at": "2026-11-14T15:00:00Z",
+      "pages": [
+        {
+          "id": "65b000000000000000000001",
+          "book_id": "65a000000000000000000001",
+          "number": 1,
+          "width": 3000,
+          "height": 2250,
+          "text": "The rabbit sat under the tree.",
+          "flags": [],
+          "state": "ready",
+          "reason": null,
+          "page_kind": "single",
+          "candidates": [
+            {
+              "label": "rabbit",
+              "synonyms": [
+                "bunny",
+                "animal"
+              ],
+              "box": [
+                0.3,
+                0.4,
+                0.6,
+                0.8
+              ],
+              "confidence": 0.84,
+              "mask_hash": "d37d96b42ad4",
+              "source": "auto"
+            },
+            {
+              "label": "tree",
+              "synonyms": [
+                "oak",
+                "plant"
+              ],
+              "box": [
+                0.6,
+                0.05,
+                0.95,
+                0.9
+              ],
+              "confidence": 0.41,
+              "mask_hash": "dc9c5edb8b2d",
+              "source": "auto"
+            },
+            {
+              "label": "carrot",
+              "synonyms": [],
+              "box": [
+                0.12,
+                0.7,
+                0.24,
+                0.86
+              ],
+              "confidence": 0.9,
+              "mask_hash": "b96482290a87",
+              "source": "click"
+            }
+          ],
+          "selected": 0,
+          "subject_hash": "d37d96b42ad4",
+          "confirmed": true,
+          "omitted": false,
+          "second_look": {
+            "status": "pass",
+            "answer": "rabbit",
+            "detail": null
+          }
+        },
+        {
+          "id": "65b000000000000000000002",
+          "book_id": "65a000000000000000000001",
+          "number": 2,
+          "width": 3000,
+          "height": 2250,
+          "text": "The duck and the frog met at the pond.",
+          "flags": [],
+          "state": "needs_subject",
+          "reason": null,
+          "page_kind": "several",
+          "candidates": [
+            {
+              "label": "duck",
+              "synonyms": [
+                "duckling",
+                "bird"
+              ],
+              "box": [
+                0.1,
+                0.45,
+                0.42,
+                0.85
+              ],
+              "confidence": 0.62,
+              "mask_hash": "2d2370db2447",
+              "source": "auto"
+            },
+            {
+              "label": "frog",
+              "synonyms": [
+                "toad",
+                "animal"
+              ],
+              "box": [
+                0.55,
+                0.5,
+                0.85,
+                0.82
+              ],
+              "confidence": 0.58,
+              "mask_hash": "74fa5327cc0f",
+              "source": "auto"
+            }
+          ],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        },
+        {
+          "id": "65b000000000000000000003",
+          "book_id": "65a000000000000000000001",
+          "number": 3,
+          "width": 3000,
+          "height": 2250,
+          "text": "Everyone came to the party.",
+          "flags": [],
+          "state": "no_clear_subject",
+          "reason": null,
+          "page_kind": "scene",
+          "candidates": [],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        },
+        {
+          "id": "65b000000000000000000004",
+          "book_id": "65a000000000000000000001",
+          "number": 4,
+          "width": 3000,
+          "height": 2250,
+          "text": "",
+          "flags": [],
+          "state": "failed",
+          "reason": "timed out after 20 seconds",
+          "page_kind": null,
+          "candidates": [],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        },
+        {
+          "id": "65b000000000000000000005",
+          "book_id": "65a000000000000000000001",
+          "number": 5,
+          "width": 3000,
+          "height": 1500,
+          "text": "",
+          "flags": [
+            "spread"
+          ],
+          "state": "unsupported",
+          "reason": "two-page spread",
+          "page_kind": null,
+          "candidates": [],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        },
+        {
+          "id": "65b000000000000000000006",
+          "book_id": "65a000000000000000000001",
+          "number": 6,
+          "width": 3000,
+          "height": 2250,
+          "text": "",
+          "flags": [],
+          "state": "processing",
+          "reason": null,
+          "page_kind": null,
+          "candidates": [],
+          "selected": null,
+          "subject_hash": null,
+          "confirmed": false,
+          "omitted": false,
+          "second_look": null
+        }
+      ]
+    }
+  },
+  "POST /api/pages/{id}/retry": {
+    "request": {
+      "force": false
+    },
+    "response": {
+      "id": "65b000000000000000000004",
+      "book_id": "65a000000000000000000001",
+      "number": 4,
+      "width": 3000,
+      "height": 2250,
+      "text": "",
+      "flags": [],
+      "state": "processing",
+      "reason": null,
+      "page_kind": null,
+      "candidates": [],
+      "selected": null,
+      "subject_hash": null,
+      "confirmed": false,
+      "omitted": false,
+      "second_look": null
+    }
+  },
+  "POST /api/pages/{id}/subject": {
+    "request": {
+      "label": "frog",
+      "outline": [
+        [
+          0.54,
+          0.5
+        ],
+        [
+          0.7,
+          0.48
+        ],
+        [
+          0.86,
+          0.6
+        ],
+        [
+          0.84,
+          0.8
+        ],
+        [
+          0.66,
+          0.84
+        ],
+        [
+          0.55,
+          0.74
+        ]
+      ]
+    },
+    "request_variants": [
+      {
+        "candidate": 1
+      },
+      {
+        "point": [
+          0.18,
+          0.78
+        ]
+      },
+      {
+        "label": "frog",
+        "outline": [
+          [
+            0.54,
+            0.5
+          ],
+          [
+            0.7,
+            0.48
+          ],
+          [
+            0.86,
+            0.6
+          ],
+          [
+            0.84,
+            0.8
+          ],
+          [
+            0.66,
+            0.84
+          ],
+          [
+            0.55,
+            0.74
+          ]
+        ]
+      }
+    ],
+    "response": {
+      "id": "65b000000000000000000002",
+      "book_id": "65a000000000000000000001",
+      "number": 2,
+      "width": 3000,
+      "height": 2250,
+      "text": "The duck and the frog met at the pond.",
+      "flags": [],
+      "state": "ready",
+      "reason": null,
+      "page_kind": "several",
+      "candidates": [
+        {
+          "label": "duck",
+          "synonyms": [
+            "duckling",
+            "bird"
+          ],
+          "box": [
+            0.1,
+            0.45,
+            0.42,
+            0.85
+          ],
+          "confidence": 0.62,
+          "mask_hash": "2d2370db2447",
+          "source": "auto"
+        },
+        {
+          "label": "frog",
+          "synonyms": [
+            "toad",
+            "animal"
+          ],
+          "box": [
+            0.55,
+            0.5,
+            0.85,
+            0.82
+          ],
+          "confidence": 0.58,
+          "mask_hash": "74fa5327cc0f",
+          "source": "auto"
+        },
+        {
+          "label": "frog",
+          "synonyms": [],
+          "box": [
+            0.54,
+            0.48,
+            0.86,
+            0.84
+          ],
+          "confidence": 1.0,
+          "mask_hash": "91da343d85c3",
+          "source": "manual"
+        }
+      ],
+      "selected": 2,
+      "subject_hash": "91da343d85c3",
+      "confirmed": false,
+      "omitted": false,
+      "second_look": null
+    }
+  },
+  "POST /api/pages/{id}/confirm": {
+    "request": null,
+    "response": {
+      "id": "65b000000000000000000001",
+      "book_id": "65a000000000000000000001",
+      "number": 1,
+      "width": 3000,
+      "height": 2250,
+      "text": "The rabbit sat under the tree.",
+      "flags": [],
+      "state": "ready",
+      "reason": null,
+      "page_kind": "single",
+      "candidates": [
+        {
+          "label": "rabbit",
+          "synonyms": [
+            "bunny",
+            "animal"
+          ],
+          "box": [
+            0.3,
+            0.4,
+            0.6,
+            0.8
+          ],
+          "confidence": 0.84,
+          "mask_hash": "d37d96b42ad4",
+          "source": "auto"
+        },
+        {
+          "label": "tree",
+          "synonyms": [
+            "oak",
+            "plant"
+          ],
+          "box": [
+            0.6,
+            0.05,
+            0.95,
+            0.9
+          ],
+          "confidence": 0.41,
+          "mask_hash": "dc9c5edb8b2d",
+          "source": "auto"
+        },
+        {
+          "label": "carrot",
+          "synonyms": [],
+          "box": [
+            0.12,
+            0.7,
+            0.24,
+            0.86
+          ],
+          "confidence": 0.9,
+          "mask_hash": "b96482290a87",
+          "source": "click"
+        }
+      ],
+      "selected": 0,
+      "subject_hash": "d37d96b42ad4",
+      "confirmed": true,
+      "omitted": false,
+      "second_look": {
+        "status": "pending",
+        "answer": null,
+        "detail": null
+      }
+    }
+  },
+  "POST /api/books/{id}/confirm-all": {
+    "request": null,
+    "response": [
+      {
+        "id": "65b000000000000000000001",
+        "book_id": "65a000000000000000000001",
+        "number": 1,
+        "width": 3000,
+        "height": 2250,
+        "text": "The rabbit sat under the tree.",
+        "flags": [],
+        "state": "ready",
+        "reason": null,
+        "page_kind": "single",
+        "candidates": [
+          {
+            "label": "rabbit",
+            "synonyms": [
+              "bunny",
+              "animal"
+            ],
+            "box": [
+              0.3,
+              0.4,
+              0.6,
+              0.8
+            ],
+            "confidence": 0.84,
+            "mask_hash": "d37d96b42ad4",
+            "source": "auto"
+          },
+          {
+            "label": "tree",
+            "synonyms": [
+              "oak",
+              "plant"
+            ],
+            "box": [
+              0.6,
+              0.05,
+              0.95,
+              0.9
+            ],
+            "confidence": 0.41,
+            "mask_hash": "dc9c5edb8b2d",
+            "source": "auto"
+          },
+          {
+            "label": "carrot",
+            "synonyms": [],
+            "box": [
+              0.12,
+              0.7,
+              0.24,
+              0.86
+            ],
+            "confidence": 0.9,
+            "mask_hash": "b96482290a87",
+            "source": "click"
+          }
+        ],
+        "selected": 0,
+        "subject_hash": "d37d96b42ad4",
+        "confirmed": true,
+        "omitted": false,
+        "second_look": {
+          "status": "pending",
+          "answer": null,
+          "detail": null
+        }
+      }
+    ]
+  },
+  "POST /api/pages/{id}/omit": {
+    "request": {
+      "omitted": true
+    },
+    "response": {
+      "id": "65b000000000000000000003",
+      "book_id": "65a000000000000000000001",
+      "number": 3,
+      "width": 3000,
+      "height": 2250,
+      "text": "Everyone came to the party.",
+      "flags": [],
+      "state": "no_clear_subject",
+      "reason": null,
+      "page_kind": "scene",
+      "candidates": [],
+      "selected": null,
+      "subject_hash": null,
+      "confirmed": false,
+      "omitted": true,
+      "second_look": null
+    }
+  },
+  "GET /api/pages/{id}/overlay": {
+    "request": null,
+    "response": {
+      "image": "image/webp",
+      "headers": {
+        "Cache-Control": "no-store"
+      }
+    }
+  },
+  "GET /api/profiles": {
+    "request": null,
+    "response": [
+      {
+        "id": "65c000000000000000000001",
+        "name": "Maya",
+        "level": 1,
+        "settings": {
+          "colors": [
+            "#E53935"
+          ],
+          "background": "#000000",
+          "size": "medium",
+          "position": "center",
+          "text_mode": "off",
+          "outline": "off"
+        },
+        "settings_hash": "2804b24a29e2",
+        "contrast_override_note": null
+      },
+      {
+        "id": "65c000000000000000000002",
+        "name": "Leo",
+        "level": 2,
+        "settings": {
+          "colors": [
+            "#FDD835",
+            "#1E88E5"
+          ],
+          "background": "#000000",
+          "size": "medium",
+          "position": "center",
+          "text_mode": "off",
+          "outline": "off"
+        },
+        "settings_hash": "587f6c9dbcef",
+        "contrast_override_note": null
+      }
+    ]
+  },
+  "POST /api/profiles": {
+    "request": {
+      "name": "Maya",
+      "level": 1,
+      "settings": {
+        "colors": [
+          "#E53935"
+        ],
+        "background": "#000000",
+        "size": "medium",
+        "position": "center",
+        "text_mode": "off",
+        "outline": "off"
+      },
+      "contrast_override_note": null
+    },
+    "response": {
+      "id": "65c000000000000000000001",
+      "name": "Maya",
+      "level": 1,
+      "settings": {
+        "colors": [
+          "#E53935"
+        ],
+        "background": "#000000",
+        "size": "medium",
+        "position": "center",
+        "text_mode": "off",
+        "outline": "off"
+      },
+      "settings_hash": "2804b24a29e2",
+      "contrast_override_note": null
+    }
+  },
+  "PATCH /api/profiles/{id}": {
+    "request": {
+      "settings": {
+        "colors": [
+          "#FDD835",
+          "#1E88E5"
+        ],
+        "background": "#000000",
+        "size": "medium",
+        "position": "center",
+        "text_mode": "off",
+        "outline": "off"
+      }
+    },
+    "response": {
+      "id": "65c000000000000000000002",
+      "name": "Leo",
+      "level": 2,
+      "settings": {
+        "colors": [
+          "#FDD835",
+          "#1E88E5"
+        ],
+        "background": "#000000",
+        "size": "medium",
+        "position": "center",
+        "text_mode": "off",
+        "outline": "off"
+      },
+      "settings_hash": "587f6c9dbcef",
+      "contrast_override_note": null
+    }
+  },
+  "POST /api/preview": {
+    "request": {
+      "page_id": "65b000000000000000000001",
+      "settings": {
+        "colors": [
+          "#FDD835",
+          "#1E88E5"
+        ],
+        "background": "#000000",
+        "size": "medium",
+        "position": "center",
+        "text_mode": "off",
+        "outline": "off"
+      },
+      "level": 2
+    },
+    "response": {
+      "image": "image/webp",
+      "headers": {
+        "Cache-Control": "no-store"
+      }
+    }
+  },
+  "GET /api/render/{page_id}": {
+    "request": null,
+    "query": {
+      "profile": "65c000000000000000000001",
+      "level": 1,
+      "v": "7dadf3e49047"
+    },
+    "response": {
+      "image": "image/webp",
+      "headers": {
+        "Cache-Control": "no-store"
+      }
+    }
+  },
+  "GET /api/books/{id}/sheet": {
+    "request": null,
+    "query": {
+      "profile": "65c000000000000000000001",
+      "level": 1
+    },
+    "response": {
+      "book_id": "65a000000000000000000001",
+      "profile_id": "65c000000000000000000001",
+      "level": 1,
+      "render_version": "stub-1",
+      "pages": [
+        {
+          "page_id": "65b000000000000000000001",
+          "number": 1,
+          "version": "7dadf3e49047",
+          "state": "ready",
+          "confirmed": true,
+          "omitted": false,
+          "label": "rabbit",
+          "source": "auto",
+          "checks": {
+            "fidelity": {
+              "status": "pass",
+              "value": 0.12,
+              "detail": "The cut-out is in one piece."
+            },
+            "page_edge": {
+              "status": "pass",
+              "value": 0.0,
+              "detail": "The cut-out does not touch the edge of the page."
+            },
+            "background": {
+              "status": "pass",
+              "value": 0.001,
+              "detail": "The background is plain."
+            },
+            "contrast": {
+              "status": "pass",
+              "value": 5.3,
+              "detail": "The subject stands out from the background."
+            },
+            "size": {
+              "status": "pass",
+              "value": 1.4,
+              "detail": "The subject is large enough and not over-enlarged."
+            },
+            "text_contrast": null
+          },
+          "second_look": {
+            "status": "pass",
+            "answer": "rabbit",
+            "detail": null
+          },
+          "approval": "approved",
+          "preview_url": "/api/render/65b000000000000000000001?profile=65c000000000000000000001&level=1&v=7dadf3e49047"
+        },
+        {
+          "page_id": "65b000000000000000000002",
+          "number": 2,
+          "version": null,
+          "state": "needs_subject",
+          "confirmed": false,
+          "omitted": false,
+          "label": null,
+          "source": null,
+          "checks": null,
+          "second_look": null,
+          "approval": "none",
+          "preview_url": null
+        },
+        {
+          "page_id": "65b000000000000000000003",
+          "number": 3,
+          "version": null,
+          "state": "no_clear_subject",
+          "confirmed": false,
+          "omitted": true,
+          "label": null,
+          "source": null,
+          "checks": null,
+          "second_look": null,
+          "approval": "none",
+          "preview_url": null
+        },
+        {
+          "page_id": "65b000000000000000000004",
+          "number": 4,
+          "version": null,
+          "state": "failed",
+          "confirmed": false,
+          "omitted": false,
+          "label": null,
+          "source": null,
+          "checks": null,
+          "second_look": null,
+          "approval": "none",
+          "preview_url": null
+        },
+        {
+          "page_id": "65b000000000000000000005",
+          "number": 5,
+          "version": null,
+          "state": "unsupported",
+          "confirmed": false,
+          "omitted": false,
+          "label": null,
+          "source": null,
+          "checks": null,
+          "second_look": null,
+          "approval": "none",
+          "preview_url": null
+        },
+        {
+          "page_id": "65b000000000000000000006",
+          "number": 6,
+          "version": null,
+          "state": "processing",
+          "confirmed": false,
+          "omitted": false,
+          "label": null,
+          "source": null,
+          "checks": null,
+          "second_look": null,
+          "approval": "none",
+          "preview_url": null
+        }
+      ]
+    }
+  },
+  "POST /api/books/{id}/approve": {
+    "request": {
+      "profile_id": "65c000000000000000000001",
+      "level": 1,
+      "pages": [
+        {
+          "page_id": "65b000000000000000000001",
+          "version": "7dadf3e49047",
+          "decision": "approve"
+        }
+      ]
+    },
+    "response": {
+      "approvals": [
+        {
+          "page_id": "65b000000000000000000001",
+          "profile_id": "65c000000000000000000001",
+          "level": 1,
+          "version": "7dadf3e49047",
+          "decision": "approve",
+          "at": "2026-11-14T16:30:00Z"
+        }
+      ]
+    },
+    "errors": {
+      "409": {
+        "detail": "look again",
+        "changed": [
+          {
+            "page_id": "65b000000000000000000001",
+            "sent": "7dadf3e49047",
+            "current": "fdf13eac841a"
+          }
+        ],
+        "recorded": []
+      }
+    }
+  },
+  "GET /api/reader/{book_id}": {
+    "request": null,
+    "query": {
+      "profile": "65c000000000000000000001",
+      "level": 1
+    },
+    "response": {
+      "book_id": "65a000000000000000000001",
+      "title": "Animal Homes",
+      "profile_id": "65c000000000000000000001",
+      "level": 1,
+      "pages": [
+        {
+          "page_id": "65b000000000000000000001",
+          "number": 1,
+          "v": "7dadf3e49047",
+          "image_url": "/api/reader/page/65b000000000000000000001?profile=65c000000000000000000001&level=1&v=7dadf3e49047"
+        }
+      ],
+      "skipped": [
+        {
+          "page_id": "65b000000000000000000002",
+          "number": 2,
+          "reason": "not_approved"
+        },
+        {
+          "page_id": "65b000000000000000000003",
+          "number": 3,
+          "reason": "omitted"
+        },
+        {
+          "page_id": "65b000000000000000000004",
+          "number": 4,
+          "reason": "not_approved"
+        },
+        {
+          "page_id": "65b000000000000000000005",
+          "number": 5,
+          "reason": "not_approved"
+        },
+        {
+          "page_id": "65b000000000000000000006",
+          "number": 6,
+          "reason": "not_approved"
+        }
+      ],
+      "credits": {
+        "author": "A. Author",
+        "illustrator": "I. Illustrator",
+        "publisher": "Example Press",
+        "source": "https://example.org/animal-homes",
+        "license": "CC BY 4.0"
+      },
+      "adaptation_note": "These pages were adapted from the original book.",
+      "versions": [
+        {
+          "profile_id": "65c000000000000000000001",
+          "profile_name": "Maya",
+          "level": 1,
+          "fully_approved": false
+        },
+        {
+          "profile_id": "65c000000000000000000002",
+          "profile_name": "Leo",
+          "level": 2,
+          "fully_approved": false
+        }
+      ]
+    }
+  },
+  "GET /api/reader/page/{page_id}": {
+    "request": null,
+    "query": {
+      "profile": "65c000000000000000000001",
+      "level": 1,
+      "v": "7dadf3e49047"
+    },
+    "response": {
+      "image": "image/webp",
+      "headers": {
+        "Cache-Control": "no-store"
+      }
+    },
+    "errors": {
+      "403": {
+        "detail": "not approved"
+      }
+    }
+  }
+}
