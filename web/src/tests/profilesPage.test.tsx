@@ -114,28 +114,29 @@ describe('Child profiles', () => {
     );
   });
 
-  it('size, position and text controls are saved and previewed', async () => {
+  it('size and position controls are saved and previewed; the words have no control', async () => {
     const user = openProfiles();
     const calls = captureWrites();
     const [, leo] = await api.listProfiles();
     await user.click(await screen.findByRole('button', { name: 'Edit Leo' }));
     expect(screen.getByRole('radio', { name: /Medium/ })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'Center' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Also show the words below the picture at Faded page and Outlined' })).not.toBeChecked();
+    // The words are always shown in one type at every look; there is no control for them.
+    expect(screen.queryByRole('checkbox', { name: /words below/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/There is nothing to set/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('radio', { name: /Large/ }));
     await user.click(screen.getByRole('radio', { name: 'Left' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Also show the words below the picture at Faded page and Outlined' }));
     await waitFor(() => {
       const last = writesTo(calls, 'POST', '/api/preview').at(-1)?.body as { settings: Record<string, string> } | undefined;
-      expect(last?.settings).toEqual(expect.objectContaining({ size: 'large', position: 'left', text_mode: 'below' }));
+      expect(last?.settings).toEqual(expect.objectContaining({ size: 'large', position: 'left', text_mode: leo!.settings.text_mode }));
     });
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     await screen.findByText('Leo’s profile was saved.');
     const patch = writesTo(calls, 'PATCH', `/api/profiles/${leo!.id}`)[0]?.body as { settings: Record<string, string> };
-    expect(patch.settings).toEqual({ ...leo!.settings, size: 'large', position: 'left', text_mode: 'below' });
+    expect(patch.settings).toEqual({ ...leo!.settings, size: 'large', position: 'left' });
     const card = within((await screen.findByRole('heading', { name: 'Leo' })).closest('li')!);
-    expect(card.getByText(/Large · Left · text also below the picture/)).toBeInTheDocument();
+    expect(card.getByText(/Large · Left/)).toBeInTheDocument();
   });
 
   it('a custom colour can be added, made main, warns on low contrast, and is saved as hex', async () => {

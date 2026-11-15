@@ -135,23 +135,10 @@ export function ProfileEditor({
           {errors.level && <FieldError>{errors.level}</FieldError>}
         </fieldset>
 
-        <fieldset>
-          <legend className="font-semibold">The page’s words</legend>
-          <p className="text-sm text-slate-600">
-            A picture book is words and pictures, so the words are always shown. At Faded page and Outlined they stay where
-            the book put them, as vivid as the subject. At Tinted and Cut-out, where the page itself is gone, they are drawn
-            large and bold in a band under the picture, in the child’s main colour when it stands out from the background.
-          </p>
-          <label className="mt-2 flex min-h-11 w-fit cursor-pointer items-center gap-3 rounded-lg px-2 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
-            <input
-              type="checkbox"
-              className="size-6"
-              checked={draft.textMode === 'below'}
-              onChange={(e) => set({ textMode: e.target.checked ? 'below' : 'off' })}
-            />
-            Also show the words below the picture at Faded page and Outlined
-          </label>
-        </fieldset>
+        <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200">
+          <span className="font-semibold text-slate-900">The page’s words</span> are always shown, large and bold in a band under
+          the picture, in the same type at every look. There is nothing to set.
+        </p>
 
         <fieldset>
           <legend className="font-semibold">Colors</legend>
