@@ -60,7 +60,7 @@ describe('Child profiles', () => {
     expect(writesTo(calls, 'POST', '/api/profiles')[0]?.body).toEqual({
       name: 'Ana',
       level: 3,
-      settings: { colors: ['#43A047', '#1E88E5'], background: '#001F3F', size: 'medium', position: 'center', text_mode: 'below', outline: 'off' },
+      settings: { colors: ['#43A047', '#1E88E5'], background: '#001F3F', size: 'medium', position: 'center', text_mode: 'off', outline: 'off' },
       contrast_override_note: null,
     });
     const card = within((await screen.findByRole('heading', { name: 'Ana' })).closest('li')!);
@@ -121,11 +121,11 @@ describe('Child profiles', () => {
     await user.click(await screen.findByRole('button', { name: 'Edit Leo' }));
     expect(screen.getByRole('radio', { name: /Medium/ })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'Center' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Show the text below the picture' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Also show the words below the picture at Faded page and Outlined' })).not.toBeChecked();
 
     await user.click(screen.getByRole('radio', { name: /Large/ }));
     await user.click(screen.getByRole('radio', { name: 'Left' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Show the text below the picture' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Also show the words below the picture at Faded page and Outlined' }));
     await waitFor(() => {
       const last = writesTo(calls, 'POST', '/api/preview').at(-1)?.body as { settings: Record<string, string> } | undefined;
       expect(last?.settings).toEqual(expect.objectContaining({ size: 'large', position: 'left', text_mode: 'below' }));
@@ -135,7 +135,7 @@ describe('Child profiles', () => {
     const patch = writesTo(calls, 'PATCH', `/api/profiles/${leo!.id}`)[0]?.body as { settings: Record<string, string> };
     expect(patch.settings).toEqual({ ...leo!.settings, size: 'large', position: 'left', text_mode: 'below' });
     const card = within((await screen.findByRole('heading', { name: 'Leo' })).closest('li')!);
-    expect(card.getByText(/Large · Left · text below the picture/)).toBeInTheDocument();
+    expect(card.getByText(/Large · Left · text also below the picture/)).toBeInTheDocument();
   });
 
   it('a custom colour can be added, made main, warns on low contrast, and is saved as hex', async () => {
