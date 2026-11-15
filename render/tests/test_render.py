@@ -130,7 +130,11 @@ def test_text_band_only_when_text_is_on():
     assert contrast_ratio(on.text_color, on.background) >= 4.5
     band = on.rgb[on.picture_height:]
     assert (band == 255).all(axis=2).any()
-    off = compose(*PAGES[0], {"text_mode": "off"}, 2, TEXT)
+    # Tinted and Cut-out always carry the words below (the page itself is gone there).
+    forced = compose(*PAGES[0], {"text_mode": "off"}, 2, TEXT)
+    assert forced.text_color is not None and forced.picture_height < forced.rgb.shape[0]
+    # Faded page and Outlined keep the words on the page; the band is the profile's extra copy.
+    off = compose(*PAGES[0], {"text_mode": "off"}, 3, TEXT)
     assert off.picture_height == off.rgb.shape[0] and off.text_color is None
     empty = compose(*PAGES[0], {"text_mode": "below"}, 2, "  ")
     assert empty.text_color is None
@@ -313,3 +317,18 @@ def test_gather_layout_keeps_order_and_one_scale():
     assert [sp[7] for sp in spots] == [round(w * scale) for _, _, w, _, _ in parts]  # one common scale
     right = max(sp[5] + sp[7] for sp in spots)
     assert right - min(lefts) <= round(0.7 * 1600) + 2
+
+
+def test_faded_page_keeps_the_words_as_vivid_as_the_subject():
+    """With the page's text boxes known, Faded page leaves those areas untouched."""
+    view = load_rgb(PAGES[0][1])
+    box = (0.05, 0.05, 0.35, 0.12)  # a strip far from the sample's subject
+    r = compose(*PAGES[0], {"background": "#000000", "text_mode": "off"}, 3, TEXT, [box])
+    px, py, pw, ph = r.page_rect
+    x0, y0 = px + int(box[0] * pw) + 12, py + int(box[1] * ph) + 12
+    x1, y1 = px + int(box[2] * pw) - 12, py + int(box[3] * ph) - 12
+    assert np.array_equal(r.rgb[y0:y1, x0:x1], view[y0 - py:y1 - py, x0 - px:x1 - px])
+    plain = compose(*PAGES[0], {"background": "#000000", "text_mode": "off"}, 3, TEXT)
+    assert not np.array_equal(plain.rgb[y0:y1, x0:x1], view[y0 - py:y1 - py, x0 - px:x1 - px])
+    # No band at Faded page unless asked; the words are already on the page.
+    assert r.text_color is None

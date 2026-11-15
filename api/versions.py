@@ -53,7 +53,7 @@ def stored_checks(page: dict, version: Version, settings: Settings) -> dict:
         return stored["result"]
     result = modules.display.run_checks(page["image_path"], page["view_path"],
                                         images.selected(page)["mask_path"], settings, version.level,
-                                        page["text"]).model_dump()
+                                        page["text"], text_boxes=page.get("text_boxes")).model_dump()
     db.checks.update_one(key, {"$setOnInsert": {"result": result}}, upsert=True)
     return result
 

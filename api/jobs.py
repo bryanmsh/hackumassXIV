@@ -103,7 +103,8 @@ def ingest_book(book_id: ObjectId) -> None:
         page_ids.append(db.pages.insert_one({
             "book_id": book_id, "number": asset.page_number, "image_path": asset.image_path,
             "view_path": asset.view_path, "width": asset.width, "height": asset.height,
-            "text": asset.text, "flags": asset.flags, "state": "processing", "reason": None,
+            "text": asset.text, "text_boxes": [list(b) for b in asset.text_boxes],
+            "flags": asset.flags, "state": "processing", "reason": None,
             "page_kind": None, "candidates": [], "selected": None, "subject_hash": None,
             "confirmed": False, "omitted": False, "processing_started_at": started,
             "auto_state": None, "auto_subject_hash": None, "auto_reason": None,
