@@ -64,7 +64,14 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 | --- | --- | --- |
 | `GEMINI_API_KEY` | your key | Read from the environment only. Never printed or logged |
 | `GEMINI_MODEL` | a Flash model name | Empty uses `gemini-3.8-flash` |
-| `SEGMENTER` | `grabcut` (default), `stub`, `sam2`, `edgetam` | `sam2` is the recommended setting on the server. `edgesam` raises: it has no installable package |
+| `SEGMENTER` | `grabcut` (default), `stub`, `sam2`, `edgetam`, `mirai`, `cascade` | `sam2` is the recommended setting on the server. `edgesam` raises: it has no installable package. `mirai` is our own cut-out model alone; `cascade` runs it first and sends unsure boxes to SAM 2 (`pipeline/cascade.py`) |
+| `CASCADE_MIN_CONFIDENCE` | 0 to 1 | Empty means 0.6, a placeholder until `calibrate_cascade` is run. Below it, a box goes to the fallback |
+| `CASCADE_FALLBACK` | a segmenter name | Empty means `sam2`. Not `cascade` or `mirai` |
+| `CASCADE_FLIP` | `1` (default) or `0` | `0` skips the mirrored-page check, which halves our model's time per box |
+| `CUTOUT_MODEL` | empty or `standin` | `standin` replaces our model with GrabCut with blurred edges, until the weights exist |
+| `SUBJECT_FINDER` | `gemini` (default), `local`, `cascade` | `local` is Andrew's `subject_model` with no Gemini call; `cascade` asks it first and Gemini when it found nothing or is unsure |
+| `SUBJECT_MIN_CONFIDENCE` | 0 to 1 | Empty means 0.6. The cascade keeps our answer when its top candidate is at least this sure |
+| `SUBJECT_MODEL` | empty or `standin` | `standin` is a placeholder that finds nothing, so the cascade always asks Gemini |
 | `MODEL_CACHE_DIR` | a folder | Where model weights download on first use. Empty means `$DATA_DIR/models` (the mounted `data/` folder in Docker) |
 | `TORCH_THREADS` | a number | Threads torch may use. Empty means every core |
 
