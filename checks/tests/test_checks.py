@@ -98,10 +98,10 @@ def test_faded_page_meets_half_target_and_outlined_is_not_checked():
 
 
 def test_text_contrast_is_absent_when_no_band_is_drawn():
-    # Tinted and Cut-out always carry the words below, so the band (and its check) is there even with text off.
+    # Every look carries the words below, so the band (and its check) is there even with text off.
     assert run_checks(*P1, {"text_mode": "off"}, 2, TEXT).text_contrast is not None
-    # Faded page keeps the words on the page; no band, no band check, unless the profile asks for the extra copy.
-    assert run_checks(*P1, {"text_mode": "off"}, 3, TEXT).text_contrast is None
+    assert run_checks(*P1, {"text_mode": "off"}, 3, TEXT).text_contrast is not None
+    # No words on the page: no band, no band check.
     assert run_checks(*P1, {"text_mode": "below"}, 2, "").text_contrast is None
 
 
