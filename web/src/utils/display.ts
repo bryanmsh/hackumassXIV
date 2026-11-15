@@ -39,15 +39,16 @@ export const BACKGROUNDS: readonly { name: string; hex: string }[] = [
 ];
 
 /**
- * Defaults for a new child. A picture book is words and pictures, so the page's
- * words are shown below the picture unless the teacher turns them off.
+ * Defaults for a new child. The page's words are always shown by the display:
+ * in place at Faded page and Outlined, below the picture at Tinted and Cut-out.
+ * `text_mode: "below"` adds the band below at Faded page and Outlined too.
  */
 export const DEFAULT_SETTINGS: Settings = {
   colors: ['#E53935'],
   background: '#000000',
   size: 'medium',
   position: 'center',
-  text_mode: 'below',
+  text_mode: 'off',
   outline: 'off',
 };
 
