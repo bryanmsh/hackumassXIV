@@ -285,3 +285,31 @@ def test_settings_accept_model_or_dict_and_bad_level_raises():
 
 def test_render_version_is_a_string():
     assert isinstance(RENDER_VERSION, str) and RENDER_VERSION
+
+
+def test_scattered_pieces_are_gathered_large_at_cutout_and_tinted():
+    """Several small pieces far apart are laid side by side at one scale, not left tiny in a big box."""
+    scattered = str(SAMPLES / "bad_scattered_mask.png")
+    for level in (1, 2):
+        r = compose(PAGES[0][0], PAGES[0][1], scattered, {"colors": ["#FDD835"], "background": "#000000"}, level)
+        share = r.subject.mean()
+        assert share > 0.2, share  # five pieces now fill a fifth of the canvas or more
+        assert r.scale > 1.0  # enlarged, not shrunk with the page
+        # Only the background outside the pieces; nothing is drawn where no piece sits.
+        assert (r.rgb[~r.subject] == 0).all()
+    # A single-piece subject is unchanged by the rule.
+    one = compose(*PAGES[0], {"colors": ["#FDD835"]}, 2)
+    from render.core import subject_parts, should_gather
+    parts, _ = subject_parts(load_mask(PAGES[0][2]))
+    assert not should_gather(parts, *one.subject_box[2:])
+
+
+def test_gather_layout_keeps_order_and_one_scale():
+    from render.core import gather_layout
+    parts = [(100, 500, 200, 200, 1), (1500, 100, 400, 300, 2), (900, 900, 100, 100, 3)]
+    scale, spots = gather_layout(parts, 1600, 1200, "medium", "center")
+    lefts = [sp[5] for sp in spots]
+    assert lefts == sorted(lefts)  # left-to-right order of the page is kept
+    assert [sp[7] for sp in spots] == [round(w * scale) for _, _, w, _, _ in parts]  # one common scale
+    right = max(sp[5] + sp[7] for sp in spots)
+    assert right - min(lefts) <= round(0.7 * 1600) + 2

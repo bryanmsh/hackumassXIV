@@ -43,6 +43,13 @@ EDGE_MARGIN = 0.04
 # Ring widths on the 1,600 px canvas. Outlined (level 4) always rings the subject: "thick"
 # unless the profile asks for thin. The extra ring at Cut-out and Faded page follows the profile.
 OUTLINE_PX = {"off": 0, "thin": 8, "thick": 20}
+# A subject in several pieces far apart (two animals, a child and an ant) would stay tiny if its
+# whole box were scaled, so at levels 1 and 2 the pieces are gathered: cut from the original as
+# they are, kept in left-to-right order and at one common scale, laid out side by side.
+GATHER_EMPTY_RATIO = 2.5  # gather when the union box is this many times the pieces' own boxes
+GATHER_PART_MIN = 0.02  # a piece under this share of the largest piece is mask noise, not drawn
+GATHER_GAP = 0.08  # gap between gathered pieces, as a share of the widest piece
+GATHER_ROW_MAX = 4  # more pieces than this go on two rows
 SOFTEN_SIGMA = 1.0  # about a 2 px edge blur
 FADE_SATURATION = 0.20
 FADE_PAGE_WEIGHT = 0.30
@@ -109,7 +116,7 @@ def load_mask(path) -> np.ndarray:
 
 @lru_cache(maxsize=8)
 def _font(size: int) -> ImageFont.ImageFont:
-    for name in ("AtkinsonHyperlegible-Regular.ttf",):
+    for name in ("AtkinsonHyperlegible-Bold.ttf", "AtkinsonHyperlegible-Regular.ttf"):
         f = FONT_DIR / name
         if f.exists():
             return ImageFont.truetype(str(f), size)
@@ -227,6 +234,62 @@ def subject_placement(box_w: int, box_h: int, canvas_w: int, picture_h: int,
     return scale, nw, nh, left, top
 
 
+def subject_parts(mask: np.ndarray):
+    """Connected pieces of the mask worth drawing, left to right: (x, y, w, h, label), and the label map."""
+    n, labels, stats, _ = cv2.connectedComponentsWithStats((mask >= 128).astype(np.uint8), connectivity=8)
+    if n <= 1:
+        return [], labels
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    floor = GATHER_PART_MIN * float(areas.max())
+    parts = [(int(stats[i, cv2.CC_STAT_LEFT]), int(stats[i, cv2.CC_STAT_TOP]), int(stats[i, cv2.CC_STAT_WIDTH]),
+              int(stats[i, cv2.CC_STAT_HEIGHT]), i) for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= floor]
+    parts.sort(key=lambda p: (p[0], p[1]))
+    return parts, labels
+
+
+def should_gather(parts, union_w: int, union_h: int) -> bool:
+    """True when the pieces sit far apart: scaling their union box would leave each one small."""
+    if len(parts) < 2:
+        return False
+    own = sum(w * h for _, _, w, h, _ in parts)
+    return union_w * union_h > GATHER_EMPTY_RATIO * own
+
+
+def gather_layout(parts, canvas_w: int, picture_h: int, size: str, position: str):
+    """One common scale and a canvas spot for each piece, side by side (two rows past GATHER_ROW_MAX).
+
+    Returns (scale, [(label, x, y, w, h, left, top, nw, nh), ...]) with master-pixel boxes and
+    canvas placements. Relative sizes between pieces are kept: one scale for all.
+    """
+    rows = [parts] if len(parts) <= GATHER_ROW_MAX else [parts[: (len(parts) + 1) // 2], parts[(len(parts) + 1) // 2:]]
+    gap = GATHER_GAP * max(w for _, _, w, _, _ in parts)
+    row_w = [sum(w for _, _, w, _, _ in row) + gap * (len(row) - 1) for row in rows]
+    row_h = [max(h for _, _, _, h, _ in row) for row in rows]
+    block_w, block_h = max(row_w), sum(row_h) + gap * (len(rows) - 1)
+    scale = SIZE_FRACTION[size] * min(canvas_w / block_w, picture_h / block_h)
+    bw, bh = max(1, round(block_w * scale)), max(1, round(block_h * scale))
+    fx, fy = POSITIONS[position]
+    mx, my = round(EDGE_MARGIN * canvas_w), round(EDGE_MARGIN * picture_h)
+
+    def clamp(start: int, length: int, total: int, margin: int) -> int:
+        lo, hi = margin, total - margin - length
+        return (total - length) // 2 if hi < lo else int(min(max(start, lo), hi))
+
+    block_left = clamp(round(fx * canvas_w - bw / 2), bw, canvas_w, mx)
+    block_top = clamp(round(fy * picture_h - bh / 2), bh, picture_h, my)
+    spots = []
+    y = block_top
+    for row, rw, rh in zip(rows, row_w, row_h):
+        x = block_left + (bw - round(rw * scale)) / 2  # each row centred in the block
+        for px, py, w, h, label in row:
+            nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
+            top = y + (round(rh * scale) - nh) // 2  # centred in its row
+            spots.append((label, px, py, w, h, int(round(x)), int(top), nw, nh))
+            x += (w + gap) * scale
+        y += round((rh + gap) * scale)
+    return scale, spots
+
+
 def resample(crop: np.ndarray, nw: int, nh: int, scale: float) -> np.ndarray:
     interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
     return cv2.resize(crop, (nw, nh), interpolation=interp)
@@ -308,16 +371,26 @@ def compose(image_path, view_path, mask_path, settings, level: int,
             master = load_rgb(image_path)
             if master.shape[:2] != mask.shape[:2]:
                 raise ValueError("mask and master page differ in size")
-            scale, nw, nh, left, top = subject_placement(bw, bh, W, pic_h, s.size, s.position)
-            crop = master[by:by + bh, bx:bx + bw]
-            mcrop = mask[by:by + bh, bx:bx + bw]
-            sub = resample(crop, nw, nh, scale)
-            hard = cv2.resize(mcrop, (nw, nh), interpolation=cv2.INTER_LINEAR) >= 128
-            if level == 1:
-                sub = tint(sub, hard, _main_color(s))
-            subject[top:top + nh, left:left + nw] = hard
-            roi = canvas[top:top + nh, left:left + nw]
-            canvas[top:top + nh, left:left + nw] = _blend(sub, roi, _soften(hard))
+
+            def draw_piece(mcrop: np.ndarray, px: int, py: int, w: int, h: int,
+                           left: int, top: int, nw: int, nh: int, k: float) -> None:
+                sub = resample(master[py:py + h, px:px + w], nw, nh, k)
+                hard = cv2.resize(mcrop, (nw, nh), interpolation=cv2.INTER_LINEAR) >= 128
+                if level == 1:
+                    sub = tint(sub, hard, _main_color(s))
+                subject[top:top + nh, left:left + nw] |= hard
+                roi = canvas[top:top + nh, left:left + nw]
+                canvas[top:top + nh, left:left + nw] = _blend(sub, roi, _soften(hard))
+
+            parts, labels = subject_parts(mask)
+            if should_gather(parts, bw, bh):
+                scale, spots = gather_layout(parts, W, pic_h, s.size, s.position)
+                for label, px, py, w, h, left, top, nw, nh in spots:
+                    piece = (labels[py:py + h, px:px + w] == label).astype(np.uint8) * 255
+                    draw_piece(piece, px, py, w, h, left, top, nw, nh, scale)
+            else:
+                scale, nw, nh, left, top = subject_placement(bw, bh, W, pic_h, s.size, s.position)
+                draw_piece(mask[by:by + bh, bx:bx + bw], bx, by, bw, bh, left, top, nw, nh, scale)
         if level == 2:
             outline_px = OUTLINE_PX[s.outline]
             outline_color = _second_color(s)
