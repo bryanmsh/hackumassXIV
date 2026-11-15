@@ -8,3 +8,6 @@ data/
 .venv/
 __pycache__/
 node_modules/
+
+# Demo video files (local only)
+video/
