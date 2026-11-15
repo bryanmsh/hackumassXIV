@@ -4,7 +4,7 @@
  */
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http } from 'msw';
+import { HttpResponse, http } from 'msw';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from '../App';
@@ -178,7 +178,9 @@ describe('Contact sheet', () => {
 
   it('a failed request records nothing and says so', async () => {
     const { user } = await setup();
-    scenarios.networkErrorNext = true;
+    // Fail the approve request itself. (The shared "next request fails" flag could be used up
+    // by a preview image or sheet refresh that is still arriving, which made this test flaky.)
+    server.use(http.post('*/api/books/:id/approve', () => HttpResponse.error(), { once: true }));
     await user.click(card(1).getByRole('button', { name: 'Approve page' }));
     expect(await screen.findByText(/Nothing was recorded: Could not reach the server/)).toBeInTheDocument();
     expect(card(1).getByText('Not approved')).toBeInTheDocument();

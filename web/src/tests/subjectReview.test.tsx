@@ -167,33 +167,35 @@ describe('Subject review', () => {
     expect(card(3).getByText(/Subject:/)).toHaveTextContent('hornbill');
   });
 
-  it('suggestions are numbered and coloured the same on the page and in the chips; pointing at one dims the others', async () => {
-    const { user, id } = await open();
-    // Page 3 has three suggestions: a marker on the page and a chip for each, same number and colour.
-    const onPage = card(3).getAllByTestId('page-marker');
-    expect(onPage).toHaveLength(3);
+  it('chips are numbered and coloured; the picture is asked for in the same colours (palette=1), with nothing drawn over it', async () => {
+    const urls: string[] = [];
+    server.use(
+      http.get('*/api/pages/:id/overlay', ({ request }) => {
+        urls.push(request.url);
+        return undefined;
+      }),
+    );
+    await open();
     const numbers = card(3)
       .getAllByTestId('subject-marker')
       .map((m) => m.dataset.subject)
       .sort();
-    expect(numbers).toEqual(['1', '1', '2', '2', '3', '3']);
-    const beehiveChip = card(3).getByRole('button', { name: /^beehive/ });
-    expect(within(beehiveChip).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
-    expect(within(onPage[1]!).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
-    // Markers are pointer-only duplicates of the chips: hidden from assistive technology.
-    expect(card(3).queryByRole('button', { name: /number 2/ })).not.toBeInTheDocument();
-
-    fireEvent.mouseEnter(onPage[1]!);
-    expect(card(3).getByRole('button', { name: /^hornbill/ })).toHaveClass('opacity-50');
-    expect(beehiveChip).not.toHaveClass('opacity-50');
-    fireEvent.mouseLeave(onPage[1]!);
-    expect(card(3).getByRole('button', { name: /^hornbill/ })).not.toHaveClass('opacity-50');
-
-    // Clicking a marker does what clicking its chip does.
-    const calls = capturePosts();
-    await user.click(onPage[1]!);
-    await waitFor(() => expect(beehiveChip).toHaveAttribute('aria-pressed', 'true'));
-    expect(calls[0]).toEqual({ path: `/api/pages/${id(3)}/subject`, body: { candidate: 1 } });
+    expect(numbers).toEqual(['1', '2', '3']);
+    expect(within(card(3).getByRole('button', { name: /^beehive/ })).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
+    // No markers or numbers on the artwork: the server's overlay carries the colours.
+    expect(card(3).queryByTestId('page-marker')).not.toBeInTheDocument();
+    expect(card(3).getByText(/tinted in its own colour on the page/)).toBeInTheDocument();
+    // Pointing at a chip emphasises that object on the picture: a spotlight at its box, in its colour.
+    const beehive = card(3).getByRole('button', { name: /^beehive/ });
+    expect(card(3).queryByTestId('spotlight')).not.toBeInTheDocument();
+    fireEvent.mouseEnter(beehive);
+    const spot = card(3).getByTestId('spotlight');
+    expect(spot.dataset.subject).toBe('2');
+    expect(spot).toHaveClass('border-subject-2');
+    fireEvent.mouseLeave(beehive);
+    expect(card(3).queryByTestId('spotlight')).not.toBeInTheDocument();
+    await waitFor(() => expect(urls.length).toBeGreaterThan(0));
+    expect(urls.every((u) => new URL(u).searchParams.get('palette') === '1')).toBe(true);
   });
 
   it('Cancel in Confirm all sends nothing', async () => {

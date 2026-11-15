@@ -21,7 +21,10 @@ remote_sha=$(git rev-parse origin/main)
 {
   echo "=== $(date -u +%FT%TZ) deploy ${local_sha:0:7} -> ${remote_sha:0:7}"
   git log --oneline "$local_sha..$remote_sha"
-  if git pull -q --ff-only origin main && docker compose up -d --build 2>&1 | tail -20; then
+  # Fast-forward to the commit fetched above. `git pull` would fetch again into FETCH_HEAD,
+  # which fails with "Cannot fast-forward to multiple branches" if someone pulls by hand
+  # at the same moment, and could deploy a different commit than the one logged.
+  if git merge -q --ff-only "$remote_sha" && docker compose up -d --build 2>&1 | tail -20; then
     echo "=== $(date -u +%FT%TZ) OK now $(git rev-parse --short HEAD)"
   else
     echo "=== $(date -u +%FT%TZ) FAILED; previous containers left running"

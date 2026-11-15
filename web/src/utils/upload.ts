@@ -28,7 +28,7 @@ export function validatePdf(file: File | null): string | null {
   if (!isPdf(file)) return `“${file.name}” is not a PDF. Choose a PDF file.`;
   if (file.size === 0) return `“${file.name}” is empty.`;
   if (file.size > MAX_UPLOAD_BYTES) {
-    return `“${file.name}” is ${formatMegabytes(file.size)}. Mirai accepts PDFs up to 50 MB.`;
+    return `“${file.name}” is ${formatMegabytes(file.size)}. Miraai accepts PDFs up to 50 MB.`;
   }
   return null;
 }

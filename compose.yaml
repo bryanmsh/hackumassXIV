@@ -6,7 +6,7 @@ services:
     env_file: .env
     environment:
       DATA_DIR: /app/data
-      MONGODB_URI: mongodb://mongo:27017/mirai
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/mirai} # Atlas string from .env; empty falls back to the mongo container
     volumes:
       - ./data:/app/data # pages, masks and pre-processed books survive a restart
     depends_on:

@@ -1,4 +1,4 @@
-# Deploying Mirai
+# Deploying Miraai
 
 One Vultr server runs two containers: the API, and Caddy, which serves the built web
 app, forwards `/api` to the API, handles HTTPS and asks for a password on every path.
@@ -32,8 +32,8 @@ Keep the password free of `$` characters, or wrap it in single quotes: Compose r
 ## Deploy
 
 Deploys are automatic. A systemd timer runs `infra/autodeploy.sh` (installed as
-`/usr/local/bin/mirai-autodeploy`) every minute. When `origin/main` has moved, it pulls
-and runs `docker compose up -d --build`. A failed build leaves the old containers
+`/usr/local/bin/mirai-autodeploy`) every minute. When `origin/main` has moved, it fast-forwards
+to the fetched commit (`git merge --ff-only`, never a second pull) and runs `docker compose up -d --build`. A failed build leaves the old containers
 serving. Merging to `main` is deploying: the site updates about a minute later.
 
 ```bash

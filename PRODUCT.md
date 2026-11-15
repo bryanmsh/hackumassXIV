@@ -14,7 +14,7 @@ web
 
 ## Product Purpose
 
-Mirai adapts picture-book pages for children with CVI using the book's own artwork, and keeps the teacher in control of what each child sees. A teacher uploads a PDF; the app finds the subject of each page once, cuts it out of the original page, and re-displays that same cut-out per child profile. The slow AI work happens once per book; everything after is fast, repeatable display from saved parts.
+Miraai adapts picture-book pages for children with CVI using the book's own artwork, and keeps the teacher in control of what each child sees. A teacher uploads a PDF; the app finds the subject of each page once, cuts it out of the original page, and re-displays that same cut-out per child profile. The slow AI work happens once per book; everything after is fast, repeatable display from saved parts.
 
 Success right now (HackUMass XIV demo): a judge watches the six-page *Animal Homes* flow end to end, including the one page the AI gets wrong, the one-click teacher fix, and approval of contact sheets for Maya and Leo, and trusts the tool because it admits uncertainty and keeps a person in charge. A later classroom pilot is not the current goal.
 
@@ -43,7 +43,7 @@ The subject always comes from the original page through a mask; nothing is drawn
 
 ## Brand Commitments
 
-- Name: Mirai.
+- Name: Miraai.
 - Never label a page "verified". Never claim a look matches a clinical CVI phase, recommend a look for a child, or claim a child can see or understand a page. Binding for UI and marketing copy alike.
 
 ## Evidence on Hand

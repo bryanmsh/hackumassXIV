@@ -129,7 +129,7 @@ export const handlers = [
       if (file.size > MAX_BYTES) return fail(413, 'The PDF is larger than 50 MB.');
       if (db.scenarios.uploadTooManyPagesNext) {
         db.scenarios.uploadTooManyPagesNext = false;
-        return fail(422, 'The PDF has 34 pages. Mirai supports up to 30.');
+        return fail(422, 'The PDF has 34 pages. Miraai supports up to 30.');
       }
       const typed = parseCredits(form.get('credits'));
       if (typed === 'invalid') return fail(422, 'Credits must be a JSON object.');
@@ -150,6 +150,14 @@ export const handlers = [
     route(({ params }) => {
       const book = db.findBook(param(params.id));
       return book ? HttpResponse.json(db.publicBook(book)) : notFound('Book');
+    }),
+  ),
+
+  http.delete(
+    `${API}/books/:id`,
+    route(({ params }) => {
+      if (!db.deleteBook(param(params.id))) return notFound('Book');
+      return new HttpResponse(null, { status: 204 });
     }),
   ),
 

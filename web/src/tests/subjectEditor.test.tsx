@@ -310,18 +310,23 @@ describe('Subject editor', () => {
     const hornbillBox = screen.getByRole('button', { name: /^Pick hornbill, number 1/ });
     const beehiveBox = screen.getByRole('button', { name: /^Pick beehive, number 2/ });
     const beehiveRow = screen.getByRole('button', { name: /^beehive/ });
-    const onPage = within(frame).getAllByTestId('subject-marker');
-    expect(onPage.map((m) => m.dataset.subject)).toEqual(['1', '2', '3']);
-    expect(onPage[1]).toHaveClass('bg-subject-2');
+    // The box border carries the colour; no numbers are drawn on the artwork.
+    expect(beehiveBox).toHaveClass('border-subject-2');
+    expect(hornbillBox).toHaveClass('border-subject-1');
+    expect(within(frame).queryAllByTestId('subject-marker')).toHaveLength(0);
     expect(within(beehiveRow).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
-    expect(onPage[0]).toHaveClass('bg-subject-1');
     expect(beehiveRow).toHaveTextContent('58%');
 
     await user.hover(beehiveRow);
     expect(hornbillBox).toHaveClass('opacity-40');
     expect(beehiveBox).not.toHaveClass('opacity-40');
+    // and the beehive is spotlit on the page, at its box (44%, 12%)
+    const spot = within(frame).getByTestId('spotlight');
+    expect(spot).toHaveClass('border-subject-2');
+    expect(spot).toHaveStyle({ left: '44.000%', top: '12.000%' });
     await user.unhover(beehiveRow);
     expect(hornbillBox).not.toHaveClass('opacity-40');
+    expect(within(frame).queryByTestId('spotlight')).not.toBeInTheDocument();
 
     // And the other way round: pointing at a box dims the other rows.
     await user.hover(hornbillBox);

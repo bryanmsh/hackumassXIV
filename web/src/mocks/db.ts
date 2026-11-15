@@ -327,6 +327,16 @@ export function findBook(id: string): MockBook | undefined {
   return state.books.find((b) => b.id === id);
 }
 
+/** Remove a book and everything that hangs off it. False when it does not exist. */
+export function deleteBook(id: string): boolean {
+  const book = findBook(id);
+  if (!book) return false;
+  const pageIds = new Set(book.pages.map((p) => p.id));
+  state.approvals = state.approvals.filter((a) => !pageIds.has(a.page_id));
+  state.books = state.books.filter((b) => b.id !== id);
+  return true;
+}
+
 export function findPage(id: string): MockPage | undefined {
   for (const b of state.books) {
     if (b.state === 'ingesting') continue;

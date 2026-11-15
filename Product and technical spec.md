@@ -1,4 +1,4 @@
-# Mirai Product and Technical Spec
+# Miraai Product and Technical Spec
 
 Nov 13, 2026 · @Andrew Choi
 
@@ -6,7 +6,7 @@ Nov 13, 2026 · @Andrew Choi
 
 ## Summary
 
-Mirai adapts picture-book pages for children with cortical visual impairment (CVI) using the book's original artwork, and gives the teacher control over what each child is shown. The app finds the subject of each page once, then re-displays that same cut-out for each child's profile.
+Miraai adapts picture-book pages for children with cortical visual impairment (CVI) using the book's original artwork, and gives the teacher control over what each child is shown. The app finds the subject of each page once, then re-displays that same cut-out for each child's profile.
 
 **What it guarantees**
 
@@ -311,7 +311,7 @@ The hard page is the point of the demo. It shows a tool that admits uncertainty 
 
 # Part 2: Technical requirements
 
-Mirai is four modules joined by three contracts, which are frozen as written in this part. Each of four owners can start now: everyone makes their own fake inputs, so nobody waits for anyone else's code, and the lanes meet at three scheduled checkpoints.
+Miraai is four modules joined by three contracts, which are frozen as written in this part. Each of four owners can start now: everyone makes their own fake inputs, so nobody waits for anyone else's code, and the lanes meet at three scheduled checkpoints.
 
 ## Architecture
 
@@ -362,11 +362,12 @@ All paths start with `/api` and return JSON unless marked image. Images are WebP
 | `POST /books` | PDF file, optional `credits` | `book_id` at once, with book state `ingesting`. Refuses files over 30 pages or 50 MB |
 | `GET /books`, `GET /books/{id}` | None | Title, credits, book state, and each page's state, reason, flags, page kind, candidates, selected subject, `subject_hash`, confirmed, omitted, second-look result |
 | `PATCH /books/{id}` | `title`, `credits` | Book |
+| `DELETE /books/{id}` | None | 204. Removes the book with its pages, checks, approvals and files; profiles stay. Unknown id: 404 |
 | `POST /pages/{id}/retry` | Optional `{force}` | Page back in Processing. `force` processes an Unsupported page anyway |
 | `POST /pages/{id}/subject` | One of `{candidate}`, `{candidates}` (two or more shown together), `{point}`, `{label, outline}` with optional `tidy` (P1), or `{refine_point}` (P1) | Page with its new `subject_hash` |
 | `POST /pages/{id}/confirm`, `POST /books/{id}/confirm-all` | None | Updated pages; the second look starts in the background |
 | `POST /pages/{id}/omit` | `{omitted}` | Updated page |
-| `GET /pages/{id}/overlay` | None | Image: cut-out tinted over the original |
+| `GET /pages/{id}/overlay` | Optional query `palette=1` | Image: cut-out tinted over the original. With `palette=1`, every candidate is tinted in its own chip colour (selected one ringed) |
 | `GET /profiles`, `POST /profiles`, `PATCH /profiles/{id}` | `name`, `level`, `settings`, `contrast_override_note` | Profile with `settings_hash` |
 | `POST /preview` | `{page_id, settings, level}` | Image for unsaved settings. Stores nothing |
 | `GET /render/{page_id}?profile=&level=&v=` | None | Image for a saved profile, used by the contact sheet. Teacher screens only; the reader never calls it |
@@ -407,6 +408,7 @@ refine_mask(image_path, mask_path, x, y, out_dir) -> Candidate                  
 # render/ and checks/  (Owner B)
 render(image_path, view_path, mask_path, settings, level, text, fmt="webp") -> bytes
 overlay(view_path, mask_path) -> bytes
+overlay_palette(view_path, mask_paths, selected, fmt="webp") -> bytes             # every candidate in its chip colour
 run_checks(image_path, view_path, mask_path, settings, level, text) -> CheckResult   # no network, no stored state
 second_look(image_path, mask_path, label, synonyms) -> SecondLook                 # one AI call
 RENDER_VERSION: str
