@@ -1,14 +1,26 @@
+<div align="center">
+
 # Miraai
 
-**Picture books, adapted for children with cortical visual impairment (CVI), using only the book's own artwork, with a teacher approving every page.**
+### One book. Different ways to see it.
 
-Built at HackUMass XIV in 24 hours by four people.
+Picture books adapted for children with **cortical visual impairment (CVI)**, using the book's original artwork and a teacher's approval for every page.
 
-## Try the demo
+**[Try the live demo](https://jensenhuangexecutiveboard.vip/)** &nbsp; | &nbsp; [How it works](#what-miraai-does) &nbsp; | &nbsp; [Under the hood](#how-the-project-fits-together)
 
-**[Open Miraai](https://jensenhuangexecutiveboard.vip/)**: try it in your browser, with no local installation.
+Built at **HackUMass XIV** in 24 hours by a team of four.
 
-Start in the library, review a book's subjects, choose a child's display settings, and approve the adapted pages before opening the reader. You can also upload a picture-book PDF to try the full workflow.
+</div>
+
+---
+
+| Original artwork | Personal display settings | Teacher control |
+| :---: | :---: | :---: |
+| Cut-outs come directly from the book | Four looks, preferred colors, size, and position | Only approved pages reach the reader |
+
+## Try it in your browser
+
+Open **[Miraai](https://jensenhuangexecutiveboard.vip/)**, choose a book from the library, review its subjects, and set up a child's display preferences. Approve the adapted pages, then open the full-screen reader. You can also upload a picture-book PDF to try the full workflow.
 
 ## Problem
 
@@ -22,14 +34,25 @@ Children with CVI recognize an object far better when it is shown alone, on a pl
 4. **Show it the child's way.** Each child has a profile: a look, preferred colors, background, size, position and text. The same saved cut-out is re-displayed for every child with no new AI work.
 5. **Approve, then read.** The teacher approves a contact sheet per child and look. The full-screen reader shows approved pages only, at the teacher's pace.
 
-The four looks:
+### One page, four looks
 
-| Look | What the child sees |
-| --- | --- |
-| Tinted | The subject alone, tinted in the child's main color, on a plain background |
-| Cut-out | The subject alone, in its real colors, on a plain background |
-| Faded page | The whole page, faded, with the subject kept vivid |
-| Outlined | The original page, with the subject outlined in the child's main color |
+<p align="center">
+  <img src="pitch/tvi_mockups/hornbill_0_original.webp" alt="Original Animal Homes page with a hornbill in its illustrated surroundings" width="300" />
+  <br />
+  <em>The original page from Animal Homes</em>
+</p>
+
+| Tinted | Cut-out |
+| :---: | :---: |
+| ![Hornbill tinted red on a plain background](pitch/tvi_mockups/hornbill_1_tinted_maya.webp) | ![Hornbill in its original colors on a plain background](pitch/tvi_mockups/hornbill_2_cutout_leo.webp) |
+| The subject in the child's preferred color | Original subject colors, less background clutter |
+
+| Faded page | Outlined |
+| :---: | :---: |
+| ![Hornbill kept vivid against a faded page](pitch/tvi_mockups/hornbill_3_faded_maya.webp) | ![Original page with the hornbill outlined in red](pitch/tvi_mockups/hornbill_4_outlined_maya.webp) |
+| Page context with the subject emphasized | Original page with a colored subject outline |
+
+*Illustrative mock-ups using Animal Homes, published by Pratham Books on StoryWeaver, CC BY 4.0. Original artwork adapted through cut-outs, tinting, fading, and outlines. These looks are display choices; the teacher decides which to use.*
 
 ## What it promises, and what it does not
 
@@ -60,6 +83,15 @@ The four looks:
 The four parts meet at three contracts (the HTTP API, a handful of Python functions and the image file formats), all written down in [Product and technical spec.md](Product%20and%20technical%20spec.md).
 
 ## How the project fits together
+
+```mermaid
+flowchart LR
+    A[Picture-book PDF] --> B[Find subjects and save cut-outs]
+    B --> C[Teacher reviews subjects]
+    C --> D[Apply child display settings]
+    D --> E[Teacher approves pages]
+    E --> F[Full-screen reader]
+```
 
 1. **`web/`** provides the teacher's library, subject editor, child profiles, approval sheet, and full-screen reader.
 2. **`api/`** handles uploads, background processing, saved records, and approval checks before serving reader pages.
@@ -95,9 +127,3 @@ The project includes Python and frontend tests covering the API contracts, segme
 | Kevin | Display, checks and pitch | `render/`, `checks/`, `eval/`, `pitch/`, `tests/` |
 | Andrew | API and data | `api/`, `contracts/` |
 | Thomas | Web app | `web/` |
-
-## About me
-
-I'm [Bryan](https://github.com/bryanmsh), and I built Miraai with Kevin, Andrew, and Thomas at HackUMass XIV. My focus was the image-processing pipeline and server: turning uploaded PDFs into page images, connecting subject detection and segmentation, and running the app with Docker Compose and Caddy.
-
-For this project, the key engineering challenge was keeping the book's original artwork reusable across different display settings while giving teachers control over every page a child sees.
