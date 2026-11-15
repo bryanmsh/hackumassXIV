@@ -7,8 +7,10 @@ Every failure leaves this module as GeminiError, or RateLimited for a 429.
 SUBJECT_FINDER picks who answers choose_subjects and label_crop:
   gemini   (the default) Gemini only.
   local    our own subject model (subject_model/, Andrew's) only. No Gemini call.
-  cascade  our model first; Gemini when ours found nothing, is not sure enough
-           (top confidence under SUBJECT_MIN_CONFIDENCE), or is missing or fails.
+  cascade  our model first. Its answer is kept only when the page's rules would pre-select
+           exactly one subject AND the page text names that subject (Andrew's gate: without
+           the text check it was wrong on 4 of 7 Ready pages of Animal Homes). Otherwise, or
+           when our model is missing or fails, Gemini answers.
 subject_model is imported only when it is used, so the app starts on a branch without it.
 SUBJECT_MODEL=standin swaps in a placeholder that never finds anything, so the cascade
 always escalates, until the real model lands. Every routing decision is logged on the
@@ -74,7 +76,9 @@ main subject out to make room for a minor one. Rules for each candidate:
 Page text: <<<{text}>>>"""
 
 SUBJECT_FINDERS = ("gemini", "local", "cascade")
-DEFAULT_SUBJECT_MIN_CONFIDENCE = 0.6  # placeholder: the local model's text-confirmed answers start at 0.6
+# subject_model.local.CONFIRMED: the reason our model gives a subject the page text names.
+# Copied, not imported, so this module loads where subject_model is absent; a test keeps them equal.
+LOCAL_CONFIRMED = "Stands out on the page and the text names it."
 
 log = logging.getLogger("mirai.subjects")
 _route = threading.local()
@@ -241,10 +245,6 @@ def subject_finder() -> str:
     return finder
 
 
-def subject_min_confidence() -> float:
-    return float(os.environ.get("SUBJECT_MIN_CONFIDENCE") or DEFAULT_SUBJECT_MIN_CONFIDENCE)
-
-
 def last_subject_route() -> dict:
     """Who answered the last choose_subjects or label_crop on this thread, and why."""
     return dict(getattr(_route, "value", {}))
@@ -274,14 +274,63 @@ def _local_label(png_bytes: bytes) -> str:
     return local_label(png_bytes)
 
 
-def local_is_enough(answer: SubjectAnswer) -> tuple[bool, str]:
-    """(enough, reason): whether the cascade can keep our model's answer instead of asking Gemini."""
+def local_is_enough(answer: SubjectAnswer, text: str = "") -> tuple[bool, str]:
+    """(enough, reason): whether the cascade can keep our model's answer instead of asking Gemini.
+
+    Kept only when process_page's own rule (decide_state) would pre-select exactly one subject,
+    the page text names it, and the text is not about anything else. Our model finds things
+    that stand out on the page well but names them poorly and misses second subjects, so
+    anything less certain goes to Gemini. Accuracy first: it is fine that Gemini answers most pages.
+    """
     if not answer.candidates:
         return False, "found nothing"
-    top = max(candidate.confidence for candidate in answer.candidates)
-    if top < subject_min_confidence():
-        return False, f"unsure: top confidence {top:.2f}"
-    return True, f"sure: top confidence {top:.2f}"
+    from pipeline.process import decide_state  # here, not at the top: process imports this module
+    state, members, _ = decide_state(answer.page_kind, answer.candidates)
+    if state != "ready" or len(members) != 1:
+        return False, f"would not pre-select one subject ({state}, {len(members)} selected)"
+    chosen = answer.candidates[members[0]]
+    if chosen.reason != LOCAL_CONFIRMED:
+        return False, f'the page text does not name "{chosen.label}"'
+    try:
+        other = _text_names_more(text, chosen)
+    except Exception as error:  # the word lists are part of subject_model; any problem means ask Gemini
+        return False, f"could not check the page text: {type(error).__name__}"
+    if other:
+        return False, f"the page text is about more than one thing ({other})"
+    return True, f'the page text names "{chosen.label}"'
+
+
+LINKING_WORDS = frozenset({"and", "or", "with"})  # "bears and wolves", "and so do tigers", "a cat with kittens"
+
+
+def _text_names_more(text: str, chosen) -> str | None:
+    """Why the page text may be about more than the chosen subject, or None.
+
+    Errs towards Gemini: the text links things ("and", "&", "or", "with"), or names any other
+    thing our model knows. Our model misses second subjects it has no name for (the deer next
+    to the tiger), so the text is the safer judge of whether a page is about one thing.
+    """
+    from subject_model.words import NOT_A_SUBJECT, _words, match  # only reached once subject_model has answered
+    tokens = _words(text or "")
+    if "&" in (text or "") or LINKING_WORDS & set(tokens):
+        return "it links things"
+    own = {name.lower() for name in [chosen.label, *chosen.synonyms]}
+    others = [name for name in _known_names() if name not in own and name not in NOT_A_SUBJECT]
+    named = match(text or "", others)
+    return f'it also names "{named}"' if named else None
+
+
+_known = []
+
+
+def _known_names() -> list[str]:
+    """Every name our subject model can give, from subject_model/classes.txt."""
+    if not _known:
+        import subject_model
+        path = Path(subject_model.__file__).with_name("classes.txt")
+        _known.extend(line.strip().lower() for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    return _known
+
 
 
 def choose_subjects(view_path, text: str) -> SubjectAnswer:
@@ -301,7 +350,7 @@ def choose_subjects(view_path, text: str) -> SubjectAnswer:
     if finder == "local":
         _record("local", "setting")
         return answer
-    enough, reason = local_is_enough(answer)
+    enough, reason = local_is_enough(answer, text)
     if enough:
         _record("local", reason)
         return answer
