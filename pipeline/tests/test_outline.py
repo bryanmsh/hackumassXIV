@@ -151,14 +151,24 @@ def test_tidy_box_is_polygon_bounding_box(page_image, tmp_path, monkeypatch):
     assert len(calls) == 1
     assert calls[0]["shape"] == (900, 1200, 3)
     assert calls[0]["box"] == (300, 200, 900, 700)
+    assert candidate.box == (300, 200, 901, 701)  # the tidied mask's own box; edge pixels are inclusive
+
+
+def test_tidy_prompts_with_box_and_interior_positive_points(page_image, tmp_path, monkeypatch):
+    calls = []
+    polygon = polygon_mask(TRIANGLE, 1200, 900)
+    patch_segmenter(monkeypatch, polygon, calls)
+    mask_from_outline(page_image, "rabbit", TRIANGLE, tmp_path, tidy=True)
+    assert len(calls) == 1
+    assert calls[0]["box"] == (300, 200, 900, 700)
     points = calls[0]["points"]
     assert 2 <= len(points) <= 5
-    polygon = polygon_mask(TRIANGLE, 1200, 900)
+    moments = cv2.moments(polygon, binaryImage=True)
+    assert points[0] == (moments["m10"] / moments["m00"], moments["m01"] / moments["m00"], 1)
     distance = cv2.distanceTransform(polygon, cv2.DIST_L2, 5)
     for x, y, label in points:
         assert label == 1
         assert distance[round(y), round(x)] > 1
-    assert candidate.box == (300, 200, 901, 701)  # the tidied mask's own box; edge pixels are inclusive
 
 
 def test_tidy_box_follows_the_tightened_mask(page_image, tmp_path, monkeypatch):

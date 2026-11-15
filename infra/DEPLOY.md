@@ -1,13 +1,14 @@
 # Deploying Miraai
 
-One Vultr server runs two containers: the API, and Caddy, which serves the built web
-app, forwards `/api` to the API, handles HTTPS and asks for a password on every path.
+One Vultr server (6 vCPU, 15 GB RAM, 300 GB disk, CPU only) runs the API and Caddy, which serves
+the built web app, forwards `/api` to the API, handles HTTPS and asks for a password on every path.
+The database is MongoDB Atlas; book images and masks are on the server's disk.
 
 ## The server
 
 | | |
 | --- | --- |
-| Address | `https://jensenhuangexecutiveboard.vip`, fallback `https://140-82-15-107.sslip.io` (IP `140.82.15.107`) |
+| Address | `https://miraai.study` (and `www.`), also `https://jensenhuangexecutiveboard.vip`, fallback `https://140-82-15-107.sslip.io` (IP `140.82.15.107`) |
 | Log in | `ssh -i ~/.ssh/mirai_vultr root@140.82.15.107` (key only) |
 | Repo | `/opt/mirai`, branch `main`, read-only deploy key |
 | Data | `/opt/mirai/data`, mounted into the API container; survives restarts and rebuilds |
@@ -19,12 +20,14 @@ Copy `.env.example` and fill it in on the server. It is never committed.
 
 | Name | Value on the server |
 | --- | --- |
-| `SITE_ADDRESS` | `jensenhuangexecutiveboard.vip, 140-82-15-107.sslip.io` |
+| `SITE_ADDRESS` | `miraai.study, www.miraai.study, jensenhuangexecutiveboard.vip, 140-82-15-107.sslip.io` |
 | `SITE_USER`, `SITE_PASSWORD` | The site login. Compose refuses to start if either is empty |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | The key and the Flash model name |
-| `SEGMENTER` | `grabcut` until the PyTorch segmenter is added |
+| `SEGMENTER` | `sam2` (SAM 2.1 small on CPU). `cascade` exists but is no faster than SAM on this CPU server at SAM-level accuracy; see `pipeline/README.md` |
+| `SUBJECT_FINDER` | `cascade`: our subject model first, Gemini unless the page is clearly about one thing the text names. Empty means Gemini only |
+| `NAMER_WEIGHTS`, `FINDER_WEIGHTS` | `/app/subject_model/weights/namer.pt` and `finder.pt` (inside the image) |
 | `PIPELINE`, `RENDER` | `stub` or `real`. Start on `stub`; switch one at a time |
-| `MONGODB_URI` | Leave as is; Compose points the API at its own `mongo` container (data in the `mongo_data` volume) |
+| `MONGODB_URI` | The Atlas `mongodb+srv://` string. Empty falls back to the local `mongo` container (data in the `mongo_data` volume) |
 | `DATA_DIR` | Leave as is; Compose sets `/app/data` inside the container |
 
 Keep the password free of `$` characters, or wrap it in single quotes: Compose reads `$` as a variable.
@@ -45,10 +48,13 @@ systemctl start mirai-autodeploy.timer           # resume
 
 After editing `infra/autodeploy.sh`, copy it to `/usr/local/bin/mirai-autodeploy` on the server.
 
+Never edit files in `/opt/mirai` by hand: uncommitted changes block the fast-forward and every
+deploy fails until they are gone. Change `main` instead.
+
 To deploy by hand right away:
 
 ```bash
-cd /opt/mirai && git pull && docker compose up -d --build
+cd /opt/mirai && git pull --ff-only && docker compose up -d --build
 ```
 
 The first build takes a few minutes; later ones reuse the pip and npm layers unless a
@@ -57,13 +63,15 @@ requirements file or `package-lock.json` changed.
 ## Check it
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://140-82-15-107.sslip.io/api/books          # 401
-curl -s -o /dev/null -w "%{http_code}\n" -u USER:PASSWORD https://140-82-15-107.sslip.io/api/books   # 200
+curl -s -o /dev/null -w "%{http_code}\n" https://miraai.study/api/books                     # 401
+curl -s -o /dev/null -w "%{http_code}\n" -u USER:PASSWORD https://miraai.study/api/books   # 200
 docker compose ps
 docker compose logs --tail 50 api
 ```
 
 The first request after a fresh start can take a few seconds while Caddy gets its certificate.
+After a reboot, the first cut-out takes about 24 s while SAM 2.1 loads from disk; later pages take
+about 4-5 s for the first box and 0.15 s for each extra box. Process one page before a demo.
 
 ## Roll back
 
