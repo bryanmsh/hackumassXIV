@@ -65,9 +65,9 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 | `GEMINI_API_KEY` | your key | Read from the environment only. Never printed or logged |
 | `GEMINI_MODEL` | a Flash model name | Empty uses `gemini-3.8-flash` |
 | `SEGMENTER` | `grabcut` (default), `stub`, `sam2`, `edgetam`, `mirai`, `cascade` | `sam2` is the recommended setting on the server. `edgesam` raises: it has no installable package. `mirai` is our own cut-out model alone; `cascade` runs it first and sends unsure boxes to SAM 2 (`pipeline/cascade.py`) |
-| `CASCADE_MIN_CONFIDENCE` | 0 to 1 | Empty means 0.6, a placeholder until `calibrate_cascade` is run. Below it, a box goes to the fallback |
+| `CASCADE_MIN_CONFIDENCE` | 0 to 1 | Empty means 0.65, from `calibrate_cascade` on *Animal Homes* with the run B weights: our model keeps 67% of boxes at 0.919 agreement with SAM 2.1. Below it, a box goes to the fallback |
 | `CASCADE_FALLBACK` | a segmenter name | Empty means `sam2`. Not `cascade` or `mirai` |
-| `CASCADE_FLIP` | `1` (default) or `0` | `0` skips the mirrored-page check, which halves our model's time per box |
+| `CASCADE_FLIP` | `1` (default) or `0` | `0` skips the mirrored-page check, which halves our model's time per box but makes it a worse judge of itself: at the same agreement it keeps 53% of boxes instead of 67% (threshold 0.75) |
 | `CUTOUT_MODEL` | empty or `standin` | `standin` replaces our model with GrabCut with blurred edges, until the weights exist |
 | `SUBJECT_FINDER` | `gemini` (default), `local`, `cascade` | `local` is Andrew's `subject_model` with no Gemini call; `cascade` asks it first and Gemini when it found nothing or is unsure |
 | `SUBJECT_MIN_CONFIDENCE` | 0 to 1 | Empty means 0.6. The cascade keeps our answer when its top candidate is at least this sure |
