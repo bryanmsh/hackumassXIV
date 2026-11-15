@@ -38,13 +38,16 @@ export const BACKGROUNDS: readonly { name: string; hex: string }[] = [
   { name: 'White', hex: '#FFFFFF' },
 ];
 
-/** Defaults for the P1 fields, sent until their controls ship after checkpoint 2. */
+/**
+ * Defaults for a new child. A picture book is words and pictures, so the page's
+ * words are shown below the picture unless the teacher turns them off.
+ */
 export const DEFAULT_SETTINGS: Settings = {
   colors: ['#E53935'],
   background: '#000000',
   size: 'medium',
   position: 'center',
-  text_mode: 'off',
+  text_mode: 'below',
   outline: 'off',
 };
 
@@ -89,8 +92,9 @@ export const CHECK_TONE: Record<CheckStatus, string> = {
   fail: 'bg-rose-50 text-rose-800 ring-rose-200',
 };
 
+/** The AI's own confidence as a whole percentage ("85%"). It is the AI's guess, never a score of correctness. */
 export function formatConfidence(c: number): string {
-  return c.toFixed(2);
+  return `${Math.round(Math.min(1, Math.max(0, c)) * 100)}%`;
 }
 
 /**

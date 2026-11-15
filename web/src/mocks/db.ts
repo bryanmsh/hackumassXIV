@@ -327,6 +327,16 @@ export function findBook(id: string): MockBook | undefined {
   return state.books.find((b) => b.id === id);
 }
 
+/** Remove a book and everything that hangs off it. False when it does not exist. */
+export function deleteBook(id: string): boolean {
+  const book = findBook(id);
+  if (!book) return false;
+  const pageIds = new Set(book.pages.map((p) => p.id));
+  state.approvals = state.approvals.filter((a) => !pageIds.has(a.page_id));
+  state.books = state.books.filter((b) => b.id !== id);
+  return true;
+}
+
 export function findPage(id: string): MockPage | undefined {
   for (const b of state.books) {
     if (b.state === 'ingesting') continue;
@@ -448,15 +458,28 @@ export function subjectRefine(p: MockPage, [x, y]: NormPoint): boolean {
   return true;
 }
 
-export function subjectFromOutline(p: MockPage, label: string, outline: NormPoint[]): void {
+/**
+ * A drawn outline. With `tidy`, the real server lets the segmenter tighten the shape and
+ * keeps the drawing when it cannot (low overlap, error). The mock stands in for that:
+ * a drawing covering at least 2% of the page is "tightened" (its box shrinks by a tenth
+ * on each side); a smaller scribble is kept as drawn, as if nothing was found.
+ */
+export function subjectFromOutline(p: MockPage, label: string, outline: NormPoint[], tidy = false): void {
   const xs = outline.map((pt) => pt[0]);
   const ys = outline.map((pt) => pt[1]);
-  const hash = mockHash(`${p.id}:manual:${label}:${outline.map((pt) => pt.join(',')).join(';')}`);
+  let box: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  const tightened = tidy && (box[2] - box[0]) * (box[3] - box[1]) >= 0.02;
+  if (tightened) {
+    const w = (box[2] - box[0]) * 0.1;
+    const h = (box[3] - box[1]) * 0.1;
+    box = [box[0] + w, box[1] + h, box[2] - w, box[3] - h];
+  }
+  const hash = mockHash(`${p.id}:manual:${label}:${tightened ? 'tidy:' : ''}${outline.map((pt) => pt.join(',')).join(';')}`);
   state.outlines.set(hash, outline.map((pt) => [pt[0], pt[1]]));
   selectNew(p, {
     label,
     synonyms: [],
-    box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+    box,
     confidence: 1,
     source: 'manual',
     mask_hash: hash,

@@ -70,6 +70,7 @@ function defaultMessage(status: number): string {
   if (status === 401) return 'The site password is needed. Reload the page and sign in.';
   if (status === 403) return 'The server refused this request.';
   if (status === 404) return 'Not found on the server.';
+  if (status === 405) return 'This server does not support that action yet.';
   if (status === 409) return 'Something changed on the server. Look again.';
   if (status === 413) return 'The file is too large for the server.';
   if (status === 422) return 'The server could not accept this request.';
@@ -181,6 +182,12 @@ export function createApiClient(base: string = API_BASE) {
     return new ApiError('http', messageFromBody(res.status, body), res.status, body);
   }
 
+  /** A request whose success answer has no body (204, or 200 with nothing to read). */
+  async function empty(method: string, path: string, opts: RequestOptions = {}): Promise<void> {
+    const res = await send(method, path, opts);
+    if (!res.ok) throw await failure(res);
+  }
+
   async function json<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
     const res = await send(method, path, opts);
     if (!res.ok) throw await failure(res);
@@ -223,6 +230,9 @@ export function createApiClient(base: string = API_BASE) {
       return json<UploadBookResponse>('POST', '/books', { body: { form }, signal });
     },
 
+    /** Remove a book with its pages, checks and approvals (additive route, agreed with Andrew). */
+    deleteBook: (bookId: string, signal?: AbortSignal) => empty('DELETE', `/books/${seg(bookId)}`, { signal }),
+
     updateBook: (bookId: string, input: UpdateBookInput, signal?: AbortSignal) =>
       json<Book>('PATCH', `/books/${seg(bookId)}`, { body: { json: input }, signal }),
 
@@ -245,8 +255,10 @@ export function createApiClient(base: string = API_BASE) {
     omitPage: (pageId: string, omitted: boolean, signal?: AbortSignal) =>
       json<Page>('POST', `/pages/${seg(pageId)}/omit`, { body: { json: { omitted } }, signal }),
 
+    // palette=1 asks for every suggestion tinted in its own colour (additive query;
+    // a server without it ignores the parameter and sends the one-colour overlay).
     getOverlay: (pageId: string, signal?: AbortSignal) =>
-      blob('GET', `/pages/${seg(pageId)}/overlay`, { signal }),
+      blob('GET', `/pages/${seg(pageId)}/overlay`, { query: { palette: 1 }, signal }),
 
     // ----- Profiles and display -----
     listProfiles: (signal?: AbortSignal) => json<Profile[]>('GET', '/profiles', { signal }),

@@ -4,7 +4,7 @@ Goal from the plan: **one book flows end to end on the live site**, even if slow
 Run it together on one screen. Tick each step, and write what broke in the last column.
 
 Book: `fixtures/animal-homes-pratham-FKB.pdf` (5 pages, StoryWeaver, CC BY 4.0).
-Expected from Kevin's local run of Bryan's pipeline: page 1 No clear subject, pages 2 to 5 Needs subject, nothing pre-selected, about 1 minute for the whole book. With Bryan's newer pipeline (not in `main` yet at 15:20), most pages arrive Ready with a combined pick such as "beehive, bird and bird nest"; step 6 then switches it to the hornbill alone.
+Expected from Kevin's local run of Bryan's pipeline: page 1 No clear subject, pages 2 to 5 Needs subject, nothing pre-selected, about 1 minute for the whole book. With the pipeline now in `main` (commit 9e09be4), single-subject pages arrive Ready; pages with several subjects arrive Needs subject with nothing selected, and also offer a combined cut-out such as "beehive, bird and bird nest". Step 6 picks the hornbill alone.
 
 | # | Who clicks | Where | Do | Expect | OK? | What broke |
 | --- | --- | --- | --- | --- | --- | --- |

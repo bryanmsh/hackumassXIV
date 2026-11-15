@@ -181,3 +181,19 @@ export const OUTLINE_PROBLEM_TEXT: Record<OutlineProblem, string> = {
 
 /** Round to 5 decimals (about 0.015 px on a 3,000 px master) to keep request bodies short. */
 export const roundPoint = ([x, y]: NormPoint): NormPoint => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5];
+
+/** The axis-aligned box around an outline, in page fractions. */
+export function outlineBox(points: NormPoint[]): NormBox {
+  const xs = points.map((p) => p[0]);
+  const ys = points.map((p) => p[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+/**
+ * True when two boxes are the same shape, within `tol` of the page. Used to tell
+ * whether the server tightened a drawn outline to the object (its box moved) or
+ * kept the drawing as it was.
+ */
+export function sameBox(a: readonly number[], b: readonly number[], tol = 0.005): boolean {
+  return a.length === 4 && b.length === 4 && a.every((v, i) => Math.abs(v - b[i]!) <= tol);
+}

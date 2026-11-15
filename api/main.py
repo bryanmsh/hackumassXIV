@@ -1,4 +1,4 @@
-"""Mirai API. Start with: uvicorn api.main:app --host 0.0.0.0 --port 8000
+"""Miraai API. Start with: uvicorn api.main:app --host 0.0.0.0 --port 8000
 
 Each route is its own function in api/routes/, one router per area.
 """
@@ -17,7 +17,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Mirai API", lifespan=lifespan)
+app = FastAPI(title="Miraai API", lifespan=lifespan)
 
 
 @app.get("/health")  # inside the Docker network, for health checks

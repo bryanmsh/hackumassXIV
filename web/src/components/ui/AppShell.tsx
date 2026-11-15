@@ -13,7 +13,7 @@ export function AppShell() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
           <NavLink to="/" className="text-2xl font-bold tracking-tight text-slate-900">
-            Mirai
+            Miraai
           </NavLink>
           <nav aria-label="Main" className="flex gap-1">
             <NavLink to="/" end className={navClass}>

@@ -62,6 +62,12 @@ def test_render_and_overlay_return_webp(assets, tmp_path):
     assert Image.open(io.BytesIO(stubs.overlay(assets[0].view_path, c.mask_path))).format == "WEBP"
 
 
+def test_overlay_palette_returns_webp(assets, tmp_path):
+    c = stubs.process_page(assets[0], tmp_path).candidates[0]
+    out = stubs.overlay_palette(assets[0].view_path, [c.mask_path], 0)
+    assert Image.open(io.BytesIO(out)).format == "WEBP"
+
+
 def test_render_png_on_request(assets, tmp_path):
     c = stubs.process_page(assets[0], tmp_path).candidates[0]
     out = stubs.render(assets[0].image_path, assets[0].view_path, c.mask_path, Settings(), 2, "", fmt="png")

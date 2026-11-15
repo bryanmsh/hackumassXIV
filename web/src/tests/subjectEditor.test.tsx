@@ -3,9 +3,9 @@
  * agreed bodies with 0-1 positions measured against the drawn image only.
  * jsdom has no layout, so the image frame's on-screen rectangle is set here.
  */
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http } from 'msw';
+import { HttpResponse, http } from 'msw';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
@@ -174,9 +174,11 @@ describe('Subject editor', () => {
     expect(screen.getByTestId('drawn-outline')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Save outline' }));
-    expect(await screen.findByText(/cut out along your outline/)).toBeInTheDocument();
-    const body = bodies[0] as { label: string; outline: NormPoint[] };
-    expect(Object.keys(body).sort()).toEqual(['label', 'outline']);
+    expect(await screen.findByText(/tightened your outline to “termite mound”/)).toBeInTheDocument();
+    const body = bodies[0] as { label: string; outline: NormPoint[]; tidy: boolean };
+    // The drawing is a hint: the server may tighten it to the object (tidy), or keep it when it cannot.
+    expect(Object.keys(body).sort()).toEqual(['label', 'outline', 'tidy']);
+    expect(body.tidy).toBe(true);
     expect(body.label).toBe('termite mound');
     expect(body.outline.length).toBeGreaterThanOrEqual(3);
     expect(body.outline.length).toBeLessThanOrEqual(MAX_OUTLINE_POINTS);
@@ -248,6 +250,88 @@ describe('Subject editor', () => {
     scenarios.networkErrorNext = true;
     await user.click(screen.getByRole('button', { name: 'Cut out the object here' }));
     expect(await screen.findByText(/Could not reach the server/)).toHaveTextContent('You can draw an outline instead.');
+  });
+
+  it('outline: a tightened result offers "Use my outline", which resends the drawing exactly, with no tidy', async () => {
+    const { user, frame } = await openPage(4);
+    const bodies = captureSubjectBodies();
+    await user.click(screen.getByRole('button', { name: 'Draw an outline' }));
+    await user.type(screen.getByLabelText('What is it?'), 'termite mound');
+    draw(frame, circle(60, [0.6, 0.55], 0.2));
+    await user.click(screen.getByRole('button', { name: 'Save outline' }));
+    expect(await screen.findByText(/tightened your outline/)).toBeInTheDocument();
+    expect(screen.getByTestId('sent-outline')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Use my outline' }));
+    expect(await screen.findByText(/Using your outline for “termite mound” exactly as drawn/)).toBeInTheDocument();
+    expect(Object.keys(bodies[1] as object).sort()).toEqual(['label', 'outline']);
+    expect((bodies[1] as { outline: NormPoint[] }).outline).toEqual((bodies[0] as { outline: NormPoint[] }).outline);
+    expect(screen.queryByRole('button', { name: 'Use my outline' })).not.toBeInTheDocument();
+    // Redraw goes back to the outline tool with the label kept and the shape cleared.
+    await user.click(screen.getByRole('button', { name: 'Redraw' }));
+    expect(screen.getByLabelText('What is it?')).toHaveValue('termite mound');
+    expect(screen.queryByTestId('sent-outline')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save outline' })).toBeDisabled();
+  });
+
+  it('outline: when the edges are not found, the drawing is kept and the teacher is told', async () => {
+    const { user, frame } = await openPage(4);
+    await user.click(screen.getByRole('button', { name: 'Draw an outline' }));
+    await user.type(screen.getByLabelText('What is it?'), 'ant');
+    draw(frame, circle(40, [0.3, 0.3], 0.05)); // too small for the mock's stand-in segmenter
+    await user.click(screen.getByRole('button', { name: 'Save outline' }));
+    expect(await screen.findByText(/Couldn’t find the object’s edges\. Using your outline for “ant” as drawn/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use my outline' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Redraw' })).toBeInTheDocument();
+  });
+
+  it('outline: a server without the tidy option gets the plain body, and the drawing is used as drawn', async () => {
+    const { user, frame } = await openPage(4);
+    const bodies: Record<string, unknown>[] = [];
+    server.use(
+      http.post('*/api/pages/:id/subject', async ({ request }) => {
+        const body = (await request.clone().json()) as Record<string, unknown>;
+        bodies.push(body);
+        if ('tidy' in body) return HttpResponse.json({ detail: 'Extra inputs are not permitted' }, { status: 422 });
+        return undefined;
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Draw an outline' }));
+    await user.type(screen.getByLabelText('What is it?'), 'termite mound');
+    draw(frame, circle(60, [0.6, 0.55], 0.2));
+    await user.click(screen.getByRole('button', { name: 'Save outline' }));
+    expect(await screen.findByText(/cut out along your outline/)).toBeInTheDocument();
+    expect(bodies.map((b) => Object.keys(b).sort().join(','))).toEqual(['label,outline,tidy', 'label,outline']);
+    expect(screen.queryByText(/Couldn’t find/)).not.toBeInTheDocument();
+  });
+
+  it('suggestions carry the same number and colour on the page and in the list; pointing at one dims the others', async () => {
+    const { user, frame } = await openPage(3);
+    const hornbillBox = screen.getByRole('button', { name: /^Pick hornbill, number 1/ });
+    const beehiveBox = screen.getByRole('button', { name: /^Pick beehive, number 2/ });
+    const beehiveRow = screen.getByRole('button', { name: /^beehive/ });
+    // The box border carries the colour; no numbers are drawn on the artwork.
+    expect(beehiveBox).toHaveClass('border-subject-2');
+    expect(hornbillBox).toHaveClass('border-subject-1');
+    expect(within(frame).queryAllByTestId('subject-marker')).toHaveLength(0);
+    expect(within(beehiveRow).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
+    expect(beehiveRow).toHaveTextContent('58%');
+
+    await user.hover(beehiveRow);
+    expect(hornbillBox).toHaveClass('opacity-40');
+    expect(beehiveBox).not.toHaveClass('opacity-40');
+    // and the beehive is spotlit on the page, at its box (44%, 12%)
+    const spot = within(frame).getByTestId('spotlight');
+    expect(spot).toHaveClass('border-subject-2');
+    expect(spot).toHaveStyle({ left: '44.000%', top: '12.000%' });
+    await user.unhover(beehiveRow);
+    expect(hornbillBox).not.toHaveClass('opacity-40');
+    expect(within(frame).queryByTestId('spotlight')).not.toBeInTheDocument();
+
+    // And the other way round: pointing at a box dims the other rows.
+    await user.hover(hornbillBox);
+    expect(beehiveRow).toHaveClass('opacity-50');
+    expect(screen.getByRole('button', { name: /^hornbill/ })).not.toHaveClass('opacity-50');
   });
 
   it('positions the frame over the drawn image when the image is letterboxed', async () => {

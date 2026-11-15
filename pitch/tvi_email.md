@@ -7,7 +7,7 @@
 
 Hi (name),
 
-We are a student team at HackUMass building Mirai, a tool that helps a teacher adapt picture-book pages for children with CVI. It uses only the book's own artwork: it finds the subject of each page, cuts it out, and shows it in one of four looks that the teacher chooses for each child. Nothing is drawn or invented by AI, and the teacher approves every page before a child sees it.
+We are a student team at HackUMass building Miraai, a tool that helps a teacher adapt picture-book pages for children with CVI. It uses only the book's own artwork: it finds the subject of each page, cuts it out, and shows it in one of four looks that the teacher chooses for each child. Nothing is drawn or invented by AI, and the teacher approves every page before a child sees it.
 
 No teacher has reviewed it yet, and ten minutes of your judgment would help us a lot. Attached is one page from *Animal Homes* (StoryWeaver, CC BY 4.0), first as printed, then in each look:
 
@@ -25,8 +25,8 @@ Three questions, if you have time:
 Even a one-line reply helps. If we don't hear back before judging on (date), we will say plainly that the tool has not yet been reviewed by a teacher.
 
 Thank you,
-Kevin, for the Mirai team
+Kevin, for the Miraai team
 
 ---
 
-*Image credit: "Animal Homes", written by (author), illustrated by (illustrator), published by Pratham Books on StoryWeaver, CC BY 4.0. Changed by the Mirai team: cut out, tinted, faded or outlined.*
+*Image credit: "Animal Homes", written by (author), illustrated by (illustrator), published by Pratham Books on StoryWeaver, CC BY 4.0. Changed by the Miraai team: cut out, tinted, faded or outlined.*

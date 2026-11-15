@@ -1,5 +1,5 @@
 /** Subject review: each action sends the agreed body, the card shows the server's answer, nothing auto-confirms. */
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { MemoryRouter } from 'react-router';
@@ -47,7 +47,7 @@ describe('Subject review', () => {
   it('shows every page with its state, subject, and the AI’s guess (never styled as correct)', async () => {
     await open();
     expect(card(1).getByText('Ready')).toBeInTheDocument();
-    expect(card(1).getByText(/the AI’s guess, confidence 0\.88/)).toBeInTheDocument();
+    expect(card(1).getByText(/the AI’s guess, confidence 88%/)).toBeInTheDocument();
     expect(card(1).getByText('Ready').className).not.toMatch(/emerald/);
     expect(card(3).getByText('Needs subject')).toBeInTheDocument();
     expect(card(3).getByText('No subject chosen yet.')).toBeInTheDocument();
@@ -165,6 +165,37 @@ describe('Subject review', () => {
     await waitFor(() => expect(chip(/^beehive/)).toHaveAttribute('aria-pressed', 'false'));
     expect(Object.keys(calls[2]!.body as object)).toEqual(['candidate']);
     expect(card(3).getByText(/Subject:/)).toHaveTextContent('hornbill');
+  });
+
+  it('chips are numbered and coloured; the picture is asked for in the same colours (palette=1), with nothing drawn over it', async () => {
+    const urls: string[] = [];
+    server.use(
+      http.get('*/api/pages/:id/overlay', ({ request }) => {
+        urls.push(request.url);
+        return undefined;
+      }),
+    );
+    await open();
+    const numbers = card(3)
+      .getAllByTestId('subject-marker')
+      .map((m) => m.dataset.subject)
+      .sort();
+    expect(numbers).toEqual(['1', '2', '3']);
+    expect(within(card(3).getByRole('button', { name: /^beehive/ })).getByTestId('subject-marker')).toHaveClass('bg-subject-2');
+    // No markers or numbers on the artwork: the server's overlay carries the colours.
+    expect(card(3).queryByTestId('page-marker')).not.toBeInTheDocument();
+    expect(card(3).getByText(/tinted in its own colour on the page/)).toBeInTheDocument();
+    // Pointing at a chip emphasises that object on the picture: a spotlight at its box, in its colour.
+    const beehive = card(3).getByRole('button', { name: /^beehive/ });
+    expect(card(3).queryByTestId('spotlight')).not.toBeInTheDocument();
+    fireEvent.mouseEnter(beehive);
+    const spot = card(3).getByTestId('spotlight');
+    expect(spot.dataset.subject).toBe('2');
+    expect(spot).toHaveClass('border-subject-2');
+    fireEvent.mouseLeave(beehive);
+    expect(card(3).queryByTestId('spotlight')).not.toBeInTheDocument();
+    await waitFor(() => expect(urls.length).toBeGreaterThan(0));
+    expect(urls.every((u) => new URL(u).searchParams.get('palette') === '1')).toBe(true);
   });
 
   it('Cancel in Confirm all sends nothing', async () => {

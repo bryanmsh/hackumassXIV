@@ -1,4 +1,4 @@
-# Mirai 24-Hour Build Plan
+# Miraai 24-Hour Build Plan
 
 Nov 14, 2026 · @Andrew Choi
 
@@ -285,4 +285,4 @@ Each checkpoint is the same routine: run the script on one screen together, writ
 | Hour 15 | The Contact sheet is unfinished | Approve from a simple list of pages, without previews |
 | Hour 20 | Anything is flaky | Cut it from the demo and show a backup book |
 
-**Never cut:** original-artwork cut-outs, two children on one book, teacher approval before reading, and the reader refusing unapproved pages. Those four are what make Mirai more than an image filter.
+**Never cut:** original-artwork cut-outs, two children on one book, teacher approval before reading, and the reader refusing unapproved pages. Those four are what make Miraai more than an image filter.

@@ -209,10 +209,13 @@ def omit_page(page_id: str, body: OmitBody):
 
 
 @router.get("/pages/{page_id}/overlay")
-def page_overlay(page_id: str):
+def page_overlay(page_id: str, palette: bool = False):
     page = db.pages.find_one({"_id": db.oid(page_id)})
     if page is None:
         raise HTTPException(404, "not found")
+    if palette:
+        return images.image(modules.display.overlay_palette(
+            page["view_path"], [c["mask_path"] for c in page["candidates"]], page.get("selected")))
     subject = images.selected(page)
     if subject is None:
         return images.image(images.view_bytes(page))

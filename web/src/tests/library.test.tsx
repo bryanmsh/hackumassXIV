@@ -1,5 +1,5 @@
 /** Library: upload with credits, browser-side checks, server rejections, and the book list. */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { MemoryRouter } from 'react-router';
@@ -100,7 +100,7 @@ describe('Library', () => {
     scenarios.uploadTooManyPagesNext = true;
     await user.upload(fileInput(), pdf());
     await user.click(screen.getByRole('button', { name: 'Upload book' }));
-    expect(await screen.findByText(/The PDF has 34 pages\. Mirai supports up to 30\./)).toBeInTheDocument();
+    expect(await screen.findByText(/The PDF has 34 pages\. Miraai supports up to 30\./)).toBeInTheDocument();
     expect(screen.getByText('The upload was not accepted.')).toBeInTheDocument();
   });
 
@@ -109,6 +109,8 @@ describe('Library', () => {
     const sent = captureUploads();
     await user.upload(fileInput(), pdf());
     await user.type(screen.getByLabelText(/Book title/), 'Owl Homes');
+    // The credit fields are folded away (the PDF fills them); open them to type.
+    await user.click(screen.getByRole('button', { name: 'Type credits now' }));
     await user.type(screen.getByLabelText('Author'), 'R. Writer');
     await user.type(screen.getByLabelText('License'), 'CC BY 4.0');
     await user.click(screen.getByRole('button', { name: 'Upload book' }));
@@ -138,6 +140,89 @@ describe('Library', () => {
     await screen.findByText(/was uploaded/);
     expect(sent[0]!.credits).toBeNull();
     expect(sent[0]!.title).toBeNull();
+  });
+
+  it('an upload with blank credits shows the credits read from the PDF, on the book card', async () => {
+    const user = renderLibrary();
+    await user.upload(fileInput(), pdf('owl.pdf'));
+    await user.click(screen.getByRole('button', { name: 'Upload book' }));
+    const card = within((await screen.findByRole('heading', { name: 'owl' })).closest('li')!);
+    const credits = within(card.getByRole('region', { name: 'Credits of owl' }));
+    expect(credits.getByText('Ashwitha Jayakumar')).toBeInTheDocument();
+    expect(credits.getByText('Nafisa Nandini Crishna')).toBeInTheDocument();
+    expect(credits.getByText('Pratham Books')).toBeInTheDocument();
+    expect(credits.getByText('StoryWeaver')).toBeInTheDocument();
+    expect(credits.getByText('CC BY 4.0')).toBeInTheDocument();
+    expect(credits.queryByText('Not found')).not.toBeInTheDocument();
+    // The upload form says where credits come from, before any field is opened.
+    expect(screen.getByText(/read from the PDF where possible/)).toBeInTheDocument();
+  });
+
+  it('Edit credits saves all five through PATCH /books/{id} {credits}; a blank shows “Not found”', async () => {
+    const user = renderLibrary();
+    await user.upload(fileInput(), pdf('owl.pdf'));
+    await user.click(screen.getByRole('button', { name: 'Upload book' }));
+    const li = (await screen.findByRole('heading', { name: 'owl' })).closest('li')!;
+    const card = within(li);
+    const bodies: unknown[] = [];
+    server.use(
+      http.patch('*/api/books/:id', async ({ request }) => {
+        bodies.push(await request.clone().json());
+        return undefined;
+      }),
+    );
+    await user.click(card.getByRole('button', { name: 'Edit credits of owl' }));
+    const form = within(card.getByRole('form', { name: 'Edit credits of owl' }));
+    expect(form.getByLabelText('Author')).toHaveValue('Ashwitha Jayakumar');
+    await user.clear(form.getByLabelText('Illustrator'));
+    await user.clear(form.getByLabelText('Author'));
+    await user.type(form.getByLabelText('Author'), 'R. Writer');
+    await user.click(form.getByRole('button', { name: 'Save credits' }));
+    expect(await card.findByText('Credits saved.')).toBeInTheDocument();
+    expect(bodies).toEqual([
+      { credits: { author: 'R. Writer', illustrator: null, publisher: 'Pratham Books', source: 'StoryWeaver', license: 'CC BY 4.0' } },
+    ]);
+    const credits = within(card.getByRole('region', { name: 'Credits of owl' }));
+    expect(credits.getByText('R. Writer')).toBeInTheDocument();
+    expect(credits.getByText('Not found')).toBeInTheDocument();
+    expect(credits.getByText(/Type anything marked/)).toBeInTheDocument();
+  });
+
+  it('Delete book asks first and names the book; Cancel sends nothing; Delete sends DELETE and removes the card', async () => {
+    const user = renderLibrary();
+    const heading = await screen.findByRole('heading', { name: 'Animal Homes (mock)' });
+    const card = within(heading.closest('li')!);
+    const deletes: string[] = [];
+    server.use(
+      http.delete('*/api/books/:id', ({ request }) => {
+        deletes.push(new URL(request.url).pathname);
+        return undefined;
+      }),
+    );
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)…' }));
+    const dialog = within(card.getByRole('dialog', { name: 'Delete “Animal Homes (mock)”?' }));
+    expect(dialog.getByText(/cannot be undone/)).toBeInTheDocument();
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }));
+    expect(deletes).toEqual([]);
+    expect(card.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)…' }));
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)' }));
+    expect(await screen.findByText('“Animal Homes (mock)” was deleted.')).toBeInTheDocument();
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]).toMatch(/^\/api\/books\/[^/]+$/);
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Animal Homes (mock)' })).not.toBeInTheDocument());
+  });
+
+  it('a failed delete says so and keeps the book', async () => {
+    const user = renderLibrary();
+    const heading = await screen.findByRole('heading', { name: 'Animal Homes (mock)' });
+    const card = within(heading.closest('li')!);
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)…' }));
+    scenarios.networkErrorNext = true;
+    await user.click(card.getByRole('button', { name: 'Delete Animal Homes (mock)' }));
+    expect(await card.findByText(/Not deleted: Could not reach the server/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Animal Homes (mock)' })).toBeInTheDocument();
   });
 
   it('shows a retry when the list cannot load', async () => {

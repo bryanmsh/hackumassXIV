@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -18,13 +19,16 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from ._types import LocalSettings, coerce_settings
-from .color import RGB, hex_to_rgb, text_color_for
+from .color import RGB, contrast_ratio, hex_to_rgb, text_color_for
 
-RENDER_VERSION = "b1"
+RENDER_VERSION = "b2"
 
 CANVAS_LONG = 1600
-TEXT_BAND = 0.16
-TEXT_SIZE = 0.06
+TEXT_BAND = 0.20
+TEXT_SIZE = 0.075
+TEXT_MIN_PX = 12
+TEXT_CONTRAST_MIN = 4.5  # the main colour is used for text only when it reaches this
+PAGE_NUMBER = re.compile(r"^\s*\d+\s*(/\s*\d+)?\s*$")
 SIZE_FRACTION = {"small": 0.40, "medium": 0.60, "large": 0.80}
 POSITIONS = {
     "center": (0.5, 0.5),
@@ -120,8 +124,22 @@ def canvas_size(master_w: int, master_h: int) -> Tuple[int, int]:
     return max(1, round(CANVAS_LONG * master_w / master_h)), CANVAS_LONG
 
 
+def text_lines(text: Optional[str]) -> List[str]:
+    """The page's own lines, in order: blank lines and lines that are only a page number dropped."""
+    lines = (" ".join(line.split()) for line in (text or "").splitlines())
+    return [line for line in lines if line and not PAGE_NUMBER.match(line)]
+
+
 def shows_text(settings: LocalSettings, text: Optional[str]) -> bool:
-    return settings.text_mode == "below" and bool(text and text.strip())
+    return settings.text_mode == "below" and bool(text_lines(text))
+
+
+def band_text_color(s: LocalSettings, background: RGB) -> RGB:
+    """The child's main colour when it reaches 4.5:1 on the background, else white or black."""
+    main = _main_color(s)
+    if contrast_ratio(main, background) >= TEXT_CONTRAST_MIN:
+        return main
+    return text_color_for(background)
 
 
 def _disk(radius: int) -> np.ndarray:
@@ -207,8 +225,9 @@ def resample(crop: np.ndarray, nw: int, nh: int, scale: float) -> np.ndarray:
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int) -> List[str]:
+    """Each source line stays its own line; a line wraps only when wider than the band."""
     lines: List[str] = []
-    for para in text.split("\n"):
+    for para in text_lines(text):
         words, cur = para.split(), ""
         for w in words:
             trial = f"{cur} {w}".strip()
@@ -222,22 +241,27 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int) -> List[str]:
     return lines
 
 
+def layout_text(draw: ImageDraw.ImageDraw, text: str, width: int, height: int, band_h: int):
+    """(font size, font, lines, line height): the largest size up to TEXT_SIZE that fits the band."""
+    size = max(TEXT_MIN_PX, round(TEXT_SIZE * height))
+    max_w = round(0.92 * width)
+    while True:
+        font = _font(size)
+        lines = _wrap(draw, text, font, max_w)
+        line_h = round(size * 1.2)
+        fits = len(lines) * line_h <= 0.9 * band_h and all(
+            draw.textlength(l, font=font) <= max_w for l in lines)
+        if fits or size <= TEXT_MIN_PX:
+            return size, font, lines, line_h
+        size = max(TEXT_MIN_PX, round(size * 0.9))
+
+
 def draw_text_band(rgb: np.ndarray, top: int, text: str, color: RGB) -> np.ndarray:
     h, w = rgb.shape[:2]
     band_h = h - top
     img = Image.fromarray(rgb)
     draw = ImageDraw.Draw(img)
-    size = max(10, round(TEXT_SIZE * h))
-    max_w = round(0.92 * w)
-    while True:
-        font = _font(size)
-        lines = _wrap(draw, " ".join(text.split()), font, max_w)
-        line_h = round(size * 1.2)
-        fits = len(lines) * line_h <= 0.9 * band_h and all(
-            draw.textlength(l, font=font) <= max_w for l in lines)
-        if fits or size <= 12:
-            break
-        size = max(12, round(size * 0.9))
+    size, font, lines, line_h = layout_text(draw, text, w, h, band_h)
     y = top + (band_h - len(lines) * line_h) / 2
     for line in lines:
         lw = draw.textlength(line, font=font)
@@ -324,7 +348,7 @@ def compose(image_path, view_path, mask_path, settings, level: int,
 
     text_color = None
     if text_on:
-        text_color = text_color_for(bg)
+        text_color = band_text_color(s, bg)
         canvas = draw_text_band(canvas, pic_h, text, text_color)
 
     return Rendered(
