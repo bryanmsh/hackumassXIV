@@ -224,12 +224,15 @@ def segment_cascade(image, box, points) -> np.ndarray:
         return mask
     try:
         prob = ours_probability(image, box)
-        flipped = _flipped_probability(image, box) if use_flip() else None
+        score, parts = mask_confidence(prob, box)
+        # The score is the lowest check, so the mirror check can only lower it: when the first
+        # pass is already under the bar the decision is made, and the second pass is skipped.
+        if use_flip() and score >= min_confidence():
+            score, parts = mask_confidence(prob, box, _flipped_probability(image, box))
     except Exception as error:  # no cutout_model on this branch, no weights, or the model failed
         name, mask = _fallback(image, box, points)
         _record(name, f"our model unavailable: {type(error).__name__}", started)
         return mask
-    score, parts = mask_confidence(prob, box, flipped)
     if score >= min_confidence():
         mask = np.where(prob > 0.5, 255, 0).astype(np.uint8)
         _record("mirai", "sure", started, score, parts)
