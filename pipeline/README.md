@@ -26,6 +26,8 @@ Run everything from the repo root so `contracts` and `pipeline` import.
 | `gemini.py` | `choose_subjects(view_path, text)` and `label_crop(png_bytes)`: the one door to Gemini |
 | `process.py` | `process_page(asset, out_dir, force=False)`: Gemini, a mask per candidate, the state rules. Never raises |
 | `click.py` | `segment_at_point(image_path, x, y, out_dir)` and `refine_mask(image_path, mask_path, x, y, out_dir)` |
+| `cascade.py` | `SEGMENTER=mirai` and `cascade`: our cut-out model, its confidence checks, and the hand-off to SAM 2 |
+| `calibrate_cascade.py` | Command line: measures our cut-out model against SAM 2 and picks `CASCADE_MIN_CONFIDENCE` |
 | `credits.py` | `read_credits(pdf_path)`: author, illustrator, publisher, source and license copied from the PDF's text layer (first 2 and last 4 pages); `None` when not printed, never raises, never guesses |
 | `run_book.py` | Command line: process a whole PDF with no API and no database |
 
@@ -190,3 +192,81 @@ match the server. Measured on a laptop CPU; the server's 4 vCPUs may be somewhat
 - EdgeTAM is 5x faster to encode but less accurate. Use it only if SAM 2 is too slow on the server.
 - EdgeSAM, named in the spec, has no pip package (research-repo code only). EdgeTAM is its
   successor from the same group and is supported in transformers.
+
+## Model cascade
+
+Both AI steps can run a model we trained ourselves first and call the big model only when
+ours is unsure. Each step has a setting to turn this on, and both fall back to the big model
+if our model is missing or fails, so `main` starts without the weights.
+
+| Step | Ours first | Behind it | Setting | On the live server |
+| --- | --- | --- | --- | --- |
+| Cut-out | `cutout_model` (7.8M-parameter U-Net, trained from scratch) | SAM 2.1 small, then GrabCut | `SEGMENTER=cascade` | Off: `SEGMENTER=sam2` |
+| Subject | Andrew's `subject_model` (finder U-Net and namer ResNet-18) | Gemini | `SUBJECT_FINDER=cascade` | On since 2026-11-15 |
+
+### Cut-out cascade
+
+For each box, our model gives a probability map and five checks score it from 0 to 1. The
+mask's confidence is the **lowest** of the five, so one bad sign is enough to hand off:
+
+| Check | What it asks |
+| --- | --- |
+| `sure` | Is the map decided (near 0 or 1) along the mask's outline? |
+| `fill` | Does the mask fill a sensible share of its box (not a speck, not the whole box)? |
+| `pieces` | Is the mask mostly one piece? |
+| `border` | Does it avoid filling the box's edge (background inside the box)? Same rule as `sam.py` |
+| `flip` | Does the model give the same mask on the mirrored page? |
+
+At or above `CASCADE_MIN_CONFIDENCE` our mask is kept; below it the box goes to
+`CASCADE_FALLBACK`. Clicks always go to the fallback. `cascade.last_route()` and
+`cascade.route_counts` say which model answered and why (for example `unsure: flip`).
+
+**Calibration**, done once ahead of time, not per book:
+
+```bash
+python -m pipeline.calibrate_cascade data/runs/animal-homes --fallback sam2
+```
+
+It runs both models on every box, tries thresholds from 0 to 1 in steps of 0.05, and picks
+the one that keeps the most boxes on our model while the mean stays within the margin of the
+fallback alone. It writes `calibration.json`, `.csv` and an `.svg` chart. The source is either a
+hand-masked test set (IoU against the masks) or a `run_book` folder. A book has no hand masks,
+so there it measures **agreement with SAM 2.1, not accuracy**.
+
+Result on *Animal Homes* (36 single-subject Gemini boxes, run B weights, laptop CPU):
+
+| Threshold | Boxes kept by ours | Agreement with SAM 2.1 |
+| --- | --- | --- |
+| 0 (ours alone) | 100% | 0.786 |
+| 0.50 | 89% | 0.842 |
+| 0.60 | 78% | 0.890 |
+| **0.65 (default)** | **67%** | **0.919** |
+| 0.70 | 53% | 0.948 |
+| 1 (SAM alone) | 0% | 1.000 |
+
+Without the mirror check (`CASCADE_FLIP=0`) the best is 53% at 0.930, so the check stays on.
+
+**Speed.** On a CPU the cascade is about as fast as SAM alone (0.92 against 0.90 s a box),
+because our model runs twice (page and mirror) and the unsure third still pays for SAM. The
+win needs a GPU: 0.02 s against 0.10 s a page on an L4 (`cutout_model/README.md`). That is why
+the server stays on `sam2`. To switch on: put the weights at `data/models/cutout.pt` (or set
+`CUTOUT_WEIGHTS`) and set `SEGMENTER=cascade`.
+
+### Subject cascade
+
+Accuracy first: the result must be as good as Gemini alone, even if our model answers few pages.
+Our model's answer is kept only when all three hold; otherwise Gemini answers the page:
+
+1. `process.decide_state` would pre-select exactly one subject;
+2. the page text names it (`subject_model.local.CONFIRMED`);
+3. the text is not about anything else: no "and", "&", "or", "with", and no other name our
+   model knows.
+
+On *Animal Homes* our model answers 1 page of 16 (page 10, crocodile, right) in about 0.3 s
+instead of an 8 to 20 s Gemini call. Without check 3 it kept 3 pages, but on page 11 ("Deer live
+in forests. And so do tigers!") it chose the tiger and never offered the deer.
+`gemini.last_subject_route()` says which model answered and why. `label_crop` follows the same
+setting: in `cascade`, an empty local label asks Gemini.
+
+Rollback on the server: delete the `SUBJECT_FINDER` line from `/opt/mirai/.env` and run
+`docker compose up -d api`.
