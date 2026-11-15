@@ -50,9 +50,6 @@ def testset(tmp_path):
     folder = tmp_path / "testset"
     folder.mkdir()
     Image.new("RGB", (400, 300), "white").save(folder / "ball.png")
-    mask = np.zeros((300, 400), np.uint8)
-    mask[100:200, 100:300] = 255
-    Image.fromarray(mask).save(folder / "ball_mask.png")
-    (folder / "labels.csv").write_text("name,label,text\nball,ball,The ball rolled.\n")
+    (folder / "labels.csv").write_text("name,label,x0,y0,x1,y1,text\nball,ball,100,100,300,200,The ball rolled.\n")
     book(folder / "books" / "tale.pdf", pages=2)
     return folder

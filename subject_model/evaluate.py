@@ -1,5 +1,6 @@
-"""Score the local mode (and Gemini) on hand-labelled pages: what is found, chosen first, named, and what the
-teacher gets.
+"""Score the local mode (and Gemini) on hand-labelled pages: which main subjects are found and named, whether
+the first choice is one of them, and what the teacher gets. A page may have several main subjects; labels.csv has
+one row per subject, `name,label,x0,y0,x1,y1,text`, with the rectangle in the page picture's pixels.
 
 python -m subject_model.evaluate TESTSET_DIR [--modes local gemini] [--plain-crops]
 """
@@ -16,7 +17,6 @@ import pymupdf
 
 from pipeline.gemini import SubjectAnswer, choose_subjects
 from pipeline.ingest import rasterize
-from pipeline.masks import mask_box
 from pipeline.process import call_with_retry, decide_state, gemini_box_to_pixels
 from subject_model import local, namer
 from subject_model.words import match
@@ -30,10 +30,16 @@ def _pages(testset_dir) -> list[Path]:
     return sorted(p for p in Path(testset_dir).glob("*.png") if not p.name.endswith("_mask.png"))
 
 
-def load_labels(testset_dir) -> dict[str, tuple[str, str]]:
-    """Page name to (subject name, typed text), from labels.csv. Every page must have a row."""
+def load_labels(testset_dir) -> dict[str, tuple[list, str]]:
+    """Page name to ([(subject word, (x0, y0, x1, y1)), ...], typed text), from labels.csv, one row per main
+    subject. Every page must have at least one row."""
+    labels = {}
     with open(Path(testset_dir) / "labels.csv", newline="") as f:
-        labels = {row["name"]: (row["label"], row["text"] or "") for row in csv.DictReader(f)}
+        for row in csv.DictReader(f):
+            subjects, typed = labels.setdefault(row["name"], ([], ""))
+            subjects.append((row["label"], tuple(float(row[k]) for k in ("x0", "y0", "x1", "y1"))))
+            if not typed and row.get("text"):
+                labels[row["name"]] = (subjects, row["text"])
     missing = [p.stem for p in _pages(testset_dir) if p.stem not in labels]
     if missing:
         raise ValueError(f"no row in labels.csv for: {', '.join(missing)}")
@@ -69,29 +75,36 @@ def ask_gemini(view_path, text, cache=None) -> SubjectAnswer:
     return answer
 
 
-def _overlaps(answer, hand_box, width, height) -> list[float]:
-    return [box_iou(gemini_box_to_pixels(c.box_2d, width, height), hand_box) for c in answer.candidates]
+def _is_a_subject(candidate, hand_boxes, width, height) -> bool:
+    box = gemini_box_to_pixels(candidate.box_2d, width, height)
+    return any(box_iou(box, hand) >= FOUND_IOU for hand in hand_boxes)
 
 
-def judge(answer, hand_box, hand_label, width, height) -> tuple[bool, bool, bool]:
-    """(found, first, named) for a SubjectAnswer against the hand rectangle and name."""
-    overlaps = _overlaps(answer, hand_box, width, height)
-    if not overlaps or max(overlaps) < FOUND_IOU:
-        return False, False, False
-    best = answer.candidates[overlaps.index(max(overlaps))]
-    named = match(" ".join([best.label, *best.synonyms]), [hand_label]) is not None
-    return True, overlaps[0] >= FOUND_IOU, named
+def judge(answer, subjects, width, height) -> tuple[int, bool, int]:
+    """(subjects found, first choice is a main subject, subjects named) for a SubjectAnswer against the
+    page's main subjects, [(word, (x0, y0, x1, y1)), ...]."""
+    boxes = [gemini_box_to_pixels(c.box_2d, width, height) for c in answer.candidates]
+    found = named = 0
+    for word, hand in subjects:
+        overlaps = [box_iou(box, hand) for box in boxes]
+        if not overlaps or max(overlaps) < FOUND_IOU:
+            continue
+        found += 1
+        best = answer.candidates[overlaps.index(max(overlaps))]
+        named += match(" ".join([best.label, *best.synonyms]), [word]) is not None
+    first = bool(answer.candidates) and _is_a_subject(answer.candidates[0], [h for _, h in subjects], width, height)
+    return found, first, named
 
 
-def outcome(answer, hand_box, width, height) -> str:
-    """What the teacher gets: ready_right, ready_wrong, asked or nothing."""
+def outcome(answer, hand_boxes, width, height) -> str:
+    """What the teacher gets: ready_right (the pre-selected one is a main subject), ready_wrong, asked or nothing."""
     if not answer.candidates:
         return "nothing"
     _, members, _ = decide_state(answer.page_kind, answer.candidates)
     if len(members) != 1:
         return "asked"
-    box = gemini_box_to_pixels(answer.candidates[members[0]].box_2d, width, height)
-    return "ready_right" if box_iou(box, hand_box) >= FOUND_IOU else "ready_wrong"
+    right = _is_a_subject(answer.candidates[members[0]], hand_boxes, width, height)
+    return "ready_right" if right else "ready_wrong"
 
 
 def _working_copy(page: Path, folder: Path) -> Path:
@@ -114,11 +127,12 @@ def _answer(mode, view_path, text, testset_dir, name) -> SubjectAnswer:
 
 
 def score(testset_dir, modes=("local",)) -> dict:
-    """Counts for each mode over the hand-labelled pages; written to results_subjects.json."""
+    """Counts for each mode over the hand-labelled pages; written to results_subjects.json. `found` and `named`
+    count main subjects (of `subjects`); `first` and the outcomes count pages (of `total`)."""
     testset_dir = Path(testset_dir)
     labels = load_labels(testset_dir)
     result = {"pages": [], "found": {}, "first": {}, "named": {}, "candidates": {}, "outcomes": {},
-              "total": 0, "plain_crops": not namer.WHITEN}
+              "total": 0, "subjects": 0, "plain_crops": not namer.WHITEN}
     for mode in modes:
         for key in ("found", "first", "named", "candidates"):
             result[key][mode] = 0
@@ -126,23 +140,22 @@ def score(testset_dir, modes=("local",)) -> dict:
     with tempfile.TemporaryDirectory() as folder:
         for page in _pages(testset_dir):
             name = page.stem
-            hand_label, typed = labels[name]
-            hand_mask = cv2.imread(str(testset_dir / f"{name}_mask.png"), cv2.IMREAD_GRAYSCALE) > 127
-            height, width = hand_mask.shape
-            hand_box = mask_box(hand_mask)
+            subjects, typed = labels[name]
+            height, width = cv2.imread(str(page), cv2.IMREAD_GRAYSCALE).shape
             view_path = _working_copy(page, Path(folder))
             text = page_text(testset_dir, name, fallback=typed)
-            row = {"name": name, "labels": {}, "found": {}, "first": {}, "named": {}, "outcome": {}, "error": {}}
+            row = {"name": name, "subjects": [word for word, _ in subjects], "labels": {}, "found": {},
+                   "first": {}, "named": {}, "outcome": {}, "error": {}}
             for mode in modes:
                 try:
                     answer = _answer(mode, view_path, text, testset_dir, name)
                 except Exception as error:
                     row["error"][mode] = f"{type(error).__name__}: {error}"
                     answer = SubjectAnswer(page_kind="scene")
-                found, first, named = judge(answer, hand_box, hand_label, width, height)
+                found, first, named = judge(answer, subjects, width, height)
                 row["labels"][mode] = [c.label for c in answer.candidates]
                 row["found"][mode], row["first"][mode], row["named"][mode] = found, first, named
-                row["outcome"][mode] = outcome(answer, hand_box, width, height)
+                row["outcome"][mode] = outcome(answer, [box for _, box in subjects], width, height)
                 result["found"][mode] += found
                 result["first"][mode] += first
                 result["named"][mode] += named
@@ -150,6 +163,7 @@ def score(testset_dir, modes=("local",)) -> dict:
                 result["outcomes"][mode][row["outcome"][mode]] += 1
             result["pages"].append(row)
             result["total"] += 1
+            result["subjects"] += len(subjects)
     (testset_dir / "results_subjects.json").write_text(json.dumps(result, indent=2))
     return result
 
@@ -201,8 +215,9 @@ def agree(testset_dir, every=3, limit=20) -> dict:
 
 def _summary(mode, result) -> str:
     o = result["outcomes"][mode]
-    return (f"{mode}: found {result['found'][mode]} of {result['total']}, first {result['first'][mode]}, "
-            f"named {result['named'][mode]}, ready right {o['ready_right']}, ready wrong {o['ready_wrong']}, "
+    return (f"{mode}: found {result['found'][mode]} of {result['subjects']} subjects, named {result['named'][mode]}; "
+            f"first choice a main subject on {result['first'][mode]} of {result['total']} pages, "
+            f"ready right {o['ready_right']}, ready wrong {o['ready_wrong']}, "
             f"asked {o['asked']}, nothing {o['nothing']}, {result['candidates'][mode]} candidates")
 
 
@@ -230,7 +245,7 @@ def main(argv=None) -> None:
     for row in result["pages"]:
         cells = [f"{mode}: {', '.join(row['labels'][mode]) or '-'} ({row['outcome'][mode]})"
                  + (f" [{row['error'][mode]}]" if mode in row["error"] else "") for mode in args.modes]
-        print(f"{row['name']:<24} " + " | ".join(cells), flush=True)
+        print(f"{row['name']:<24} [{', '.join(row['subjects'])}] " + " | ".join(cells), flush=True)
     for mode in args.modes:
         print(_summary(mode, result), flush=True)
 

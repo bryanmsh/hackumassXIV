@@ -7,6 +7,7 @@ from subject_model.evaluate import box_iou, judge, load_labels, outcome, page_te
 NOTHING = SubjectAnswer.model_validate({"page_kind": "scene"})
 HAND = (100, 100, 300, 200)                               # on a 400 by 300 page
 HERE, AWAY = [333, 250, 667, 750], [0, 0, 100, 100]       # the same rectangle as HAND, and a far corner
+DOG, THERE = (300, 0, 400, 100), [0, 750, 333, 1000]     # a second subject at the top right, and its box_2d
 
 
 def answer(label, synonyms, box_2d, confidence=0.9):
@@ -27,31 +28,52 @@ def test_box_iou():
     assert box_iou((0, 0, 10, 10), (20, 20, 30, 30)) == 0.0
 
 
-def test_judge_found_first_and_named():
+def test_judge_counts_subjects_found_and_named_and_the_first_choice():
+    ball = [("ball", HAND)]
     right = answer("toy", ["ball", "thing"], HERE)
-    assert judge(right, HAND, "ball", 400, 300) == (True, True, True)
-    assert judge(answer("dog", ["animal"], HERE), HAND, "ball", 400, 300) == (True, True, False)
-    assert judge(answer("ball", [], AWAY), HAND, "ball", 400, 300) == (False, False, False)
-    assert judge(NOTHING, HAND, "ball", 400, 300) == (False, False, False)
-    assert judge(two(answer("words", [], AWAY), right), HAND, "ball", 400, 300) == (True, False, True)
+    assert judge(right, ball, 400, 300) == (1, True, 1)
+    assert judge(answer("dog", ["animal"], HERE), ball, 400, 300) == (1, True, 0)
+    assert judge(answer("ball", [], AWAY), ball, 400, 300) == (0, False, 0)
+    assert judge(NOTHING, ball, 400, 300) == (0, False, 0)
+    assert judge(two(answer("words", [], AWAY), right), ball, 400, 300) == (1, False, 1)
+
+
+def test_every_main_subject_counts_and_the_first_choice_may_be_any_of_them():
+    girl_and_dog = [("girl", HAND), ("dog", DOG)]
+    both = two(answer("dog", ["puppy"], THERE), answer("person", ["child", "girl"], HERE))
+    assert judge(both, girl_and_dog, 400, 300) == (2, True, 2)
+    assert judge(answer("person", ["child", "girl"], HERE), girl_and_dog, 400, 300) == (1, True, 1)
+    assert judge(answer("cat", [], AWAY), girl_and_dog, 400, 300) == (0, False, 0)
 
 
 def test_outcome_is_what_the_teacher_gets():
-    assert outcome(answer("ball", [], HERE), HAND, 400, 300) == "ready_right"
-    assert outcome(answer("ball", [], AWAY), HAND, 400, 300) == "ready_wrong"
-    assert outcome(answer("ball", [], HERE, confidence=0.4), HAND, 400, 300) == "asked"
-    assert outcome(two(answer("ball", [], HERE), answer("dog", [], AWAY)), HAND, 400, 300) == "asked"
-    assert outcome(NOTHING, HAND, 400, 300) == "nothing"
+    hand = [HAND]
+    assert outcome(answer("ball", [], HERE), hand, 400, 300) == "ready_right"
+    assert outcome(answer("ball", [], AWAY), hand, 400, 300) == "ready_wrong"
+    assert outcome(answer("ball", [], HERE, confidence=0.4), hand, 400, 300) == "asked"
+    assert outcome(two(answer("ball", [], HERE), answer("dog", [], AWAY)), hand, 400, 300) == "asked"
+    assert outcome(NOTHING, hand, 400, 300) == "nothing"
+    assert outcome(answer("dog", [], THERE), [HAND, DOG], 400, 300) == "ready_right"    # any main subject
 
 
 def test_score_counts_and_writes_results(testset, monkeypatch):
     monkeypatch.setattr(evaluate.local, "local_answer", lambda view_path, text: answer("ball", ["toy"], HERE))
     result = score(testset, modes=("local",))
-    assert result["total"] == 1 and result["candidates"] == {"local": 1}
+    assert result["total"] == 1 and result["subjects"] == 1 and result["candidates"] == {"local": 1}
     assert result["found"] == result["first"] == result["named"] == {"local": 1}
     assert result["outcomes"] == {"local": {"ready_right": 1, "ready_wrong": 0, "asked": 0, "nothing": 0}}
-    assert result["pages"][0]["labels"] == {"local": ["ball"]}
+    assert result["pages"][0]["labels"] == {"local": ["ball"]} and result["pages"][0]["subjects"] == ["ball"]
     assert json.load(open(testset / "results_subjects.json")) == result
+
+
+def test_a_page_with_two_subjects_counts_both(testset, monkeypatch):
+    with open(testset / "labels.csv", "a") as f:
+        f.write("ball,dog,300,0,400,100,\n")
+    monkeypatch.setattr(evaluate.local, "local_answer", lambda view_path, text: answer("ball", ["toy"], HERE))
+    result = score(testset, modes=("local",))
+    assert result["total"] == 1 and result["subjects"] == 2
+    assert result["found"] == {"local": 1} and result["first"] == {"local": 1} and result["named"] == {"local": 1}
+    assert result["pages"][0]["subjects"] == ["ball", "dog"]
 
 
 def test_a_mode_that_fails_on_a_page_counts_as_nothing(testset, monkeypatch):
@@ -64,9 +86,16 @@ def test_a_mode_that_fails_on_a_page_counts_as_nothing(testset, monkeypatch):
 
 
 def test_page_without_a_label_row_is_reported(testset):
-    (testset / "labels.csv").write_text("name,label,text\n")
+    (testset / "labels.csv").write_text("name,label,x0,y0,x1,y1,text\n")
     with pytest.raises(ValueError, match="ball"):
         load_labels(testset)
+
+
+def test_labels_group_the_subjects_of_a_page(testset):
+    with open(testset / "labels.csv", "a") as f:
+        f.write("ball,dog,300,0,400,100,\n")
+    assert load_labels(testset) == {"ball": ([("ball", (100.0, 100.0, 300.0, 200.0)),
+                                              ("dog", (300.0, 0.0, 400.0, 100.0))], "The ball rolled.")}
 
 
 def test_page_text_comes_from_the_pdf_when_it_is_there(testset):
