@@ -63,3 +63,38 @@ def test_an_empty_testset_is_an_error(tmp_path):
     (tmp_path / "empty").mkdir()
     with pytest.raises(ValueError, match="no test pages"):
         cal.load_testset(tmp_path / "empty")
+
+
+def test_a_combined_box_is_recognised():
+    a, b = (10, 10, 50, 50), (60, 20, 90, 80)
+    assert cal.is_combined((10, 10, 90, 80), [a, b])
+    assert not cal.is_combined(a, [b, (10, 10, 90, 80)])
+    assert not cal.is_combined((0, 0, 100, 100), [a, b])  # bigger than the union: a real subject around them
+
+
+def make_book_run(folder):
+    (folder / "pages").mkdir(parents=True)
+    image = np.full((480, 640, 3), 255, np.uint8)
+    cv2.ellipse(image, (200, 240), (80, 60), 0, 0, 360, (40, 160, 90), -1)
+    cv2.circle(image, (470, 240), 70, (200, 60, 40), -1)
+    cv2.imwrite(str(folder / "pages" / "1.png"), image)
+    candidates = [{"box": [110, 170, 290, 310]}, {"box": [390, 160, 550, 320]}, {"box": [110, 160, 550, 320]}]
+    pages = [{"page_number": 1, "candidates": candidates}, {"page_number": 2, "candidates": []}]
+    (folder / "summary.json").write_text(json.dumps({"pages": pages}))
+
+
+def test_load_book_run_keeps_single_subjects_only(tmp_path):
+    make_book_run(tmp_path / "run")
+    items, kind = cal.load(tmp_path / "run")
+    assert kind == "book" and [name for name, *_ in items] == ["page1_0", "page1_1"]
+    assert items[0][2] is None and items[0][3] == (110, 170, 290, 310)
+
+
+def test_calibrate_a_book_run_against_the_fallback(tmp_path, monkeypatch):
+    monkeypatch.setenv("CUTOUT_MODEL", "standin")
+    make_book_run(tmp_path / "run")
+    result = cal.calibrate(tmp_path / "run", tmp_path / "out", fallback="grabcut")
+    assert result["kind"] == "book" and result["margin"] == cal.BOOK_MARGIN
+    assert result["fallback_alone"]["mean_iou"] == 1.0  # the fallback is its own reference
+    assert result["ours_alone"]["mean_iou"] > 0.9  # the stand-in is GrabCut with soft edges
+    assert "agreement with SAM" in (tmp_path / "out" / "calibration.svg").read_text(encoding="utf-8")

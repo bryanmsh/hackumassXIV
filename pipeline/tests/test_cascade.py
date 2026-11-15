@@ -174,3 +174,25 @@ def test_the_standin_cuts_the_ellipse_and_is_sure(image, ellipse, monkeypatch):
     mask = segment(image, box=(390, 290, 810, 610))
     assert iou(mask, ellipse) > 0.9
     assert cascade.last_route()["model"] == "mirai"
+
+
+def test_the_real_cutout_model_package_plugs_in(image, tmp_path, monkeypatch):
+    """Runs only where cutout_model/ is present: its predict_prob reaches the cascade."""
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("cutout_model.predict")
+    from cutout_model import predict
+    from cutout_model.model import UNet
+    from cutout_model.train import save_checkpoint
+
+    model = UNet()
+    with torch.no_grad():
+        model.head.weight.zero_()
+        model.head.bias.fill_(10.0)  # every pixel in the crop window is subject
+    save_checkpoint(tmp_path / "all.pt", model, input_size=64, margin=0.25, epoch=0, val_iou=0.0)
+    monkeypatch.setenv("CUTOUT_WEIGHTS", str(tmp_path / "all.pt"))
+    predict._loaded.clear()
+    prob = cascade.ours_probability(image, BOX)
+    assert prob.dtype == np.float32 and prob.shape == (H, W) and 0.0 < prob.mean() < 1.0
+    segment(image, box=BOX)
+    # The whole crop window is "subject", which is the background inside the box: SAM's job.
+    assert cascade.last_route()["model"] == "stub" and cascade.last_route()["parts"]["border"] == 0.0
