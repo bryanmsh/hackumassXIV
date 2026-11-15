@@ -138,8 +138,9 @@ export function ProfileEditor({
         <fieldset>
           <legend className="font-semibold">The page’s words</legend>
           <p className="text-sm text-slate-600">
-            A picture book is words and pictures. The page’s text is shown large in a band under the picture, in white or
-            black against the background, and the picture is scaled so the two never overlap. Pages with no text show none.
+            A picture book is words and pictures. The page’s text is shown large and bold in a band under the picture, in
+            the child’s main colour when it stands out from the background (otherwise white or black), and the picture is
+            scaled so the two never overlap. Pages with no text show none.
           </p>
           <label className="mt-2 flex min-h-11 w-fit cursor-pointer items-center gap-3 rounded-lg px-2 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
             <input
