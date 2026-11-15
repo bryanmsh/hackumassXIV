@@ -37,20 +37,26 @@ def _model(path: str):
     return _loaded[path]
 
 
-def predict(image: np.ndarray, box) -> np.ndarray:
-    """uint8 (height, width) mask, 255 = subject. All zero for an empty or off-page box."""
+def predict_prob(image: np.ndarray, box) -> np.ndarray:
+    """float32 (height, width) map, 0 to 1: how sure the model is that each pixel is the subject.
+    0 outside the crop window, and everywhere for an empty or off-page box. The pipeline's cascade
+    reads it to judge how decided the mask's outline is."""
     height, width = image.shape[:2]
-    mask = np.zeros((height, width), np.uint8)
+    out = np.zeros((height, width), np.float32)
     if crop_window(box, width, height) is None:
-        return mask
+        return out
     with _lock:
         model, size, margin, device = _model(weights_path())
         built = build_input(image, box, margin=margin, size=size)
         if built is None:
-            return mask
+            return out
         x, (x0, y0, x1, y1) = built
         with torch.inference_mode():
             prob = torch.sigmoid(model(torch.from_numpy(x)[None].to(device)))[0, 0].float().cpu().numpy()
-    prob = cv2.resize(prob, (x1 - x0, y1 - y0), interpolation=cv2.INTER_LINEAR)
-    mask[y0:y1, x0:x1] = np.where(prob > 0.5, 255, 0).astype(np.uint8)
-    return mask
+    out[y0:y1, x0:x1] = cv2.resize(prob, (x1 - x0, y1 - y0), interpolation=cv2.INTER_LINEAR)
+    return out
+
+
+def predict(image: np.ndarray, box) -> np.ndarray:
+    """uint8 (height, width) mask, 255 = subject. All zero for an empty or off-page box."""
+    return np.where(predict_prob(image, box) > 0.5, 255, 0).astype(np.uint8)

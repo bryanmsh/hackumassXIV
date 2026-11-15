@@ -3,9 +3,21 @@
 Reads GEMINI_API_KEY and GEMINI_MODEL from the environment on every call.
 The key is never printed, logged or put in an error message.
 Every failure leaves this module as GeminiError, or RateLimited for a 429.
+
+SUBJECT_FINDER picks who answers choose_subjects and label_crop:
+  gemini   (the default) Gemini only.
+  local    our own subject model (subject_model/, Andrew's) only. No Gemini call.
+  cascade  our model first; Gemini when ours found nothing, is not sure enough
+           (top confidence under SUBJECT_MIN_CONFIDENCE), or is missing or fails.
+subject_model is imported only when it is used, so the app starts on a branch without it.
+SUBJECT_MODEL=standin swaps in a placeholder that never finds anything, so the cascade
+always escalates, until the real model lands. Every routing decision is logged on the
+"mirai.subjects" logger and kept per thread in last_subject_route().
 """
 import json
+import logging
 import os
+import threading
 from pathlib import Path
 from typing import Literal
 
@@ -60,6 +72,12 @@ main subject out to make room for a minor one. Rules for each candidate:
 - reason: one short sentence.
 
 Page text: <<<{text}>>>"""
+
+SUBJECT_FINDERS = ("gemini", "local", "cascade")
+DEFAULT_SUBJECT_MIN_CONFIDENCE = 0.6  # placeholder: the local model's text-confirmed answers start at 0.6
+
+log = logging.getLogger("mirai.subjects")
+_route = threading.local()
 
 CROP_PROMPT = ("This is one object cut from a picture-book page. "
                "Name it in one or two lowercase words, as a young child would say it.")
@@ -195,8 +213,8 @@ def _drop_non_subjects(candidates: list[GeminiCandidate]) -> list[GeminiCandidat
             if sum(holds(box[id(c)], box[id(other)]) for other in kept if other is not c) < GROUP_HOLDS]
 
 
-def choose_subjects(view_path, text: str) -> SubjectAnswer:
-    """Ask for every main subject of the page. Candidates come back highest confidence first, at most five."""
+def gemini_subjects(view_path, text: str) -> SubjectAnswer:
+    """Ask Gemini for every main subject. Candidates come back highest confidence first, at most five."""
     prompt = PROMPT.format(text=text.strip()[:MAX_TEXT_CHARS] or "(none)")
     answer = _parse(_generate(Path(view_path).read_bytes(), prompt, SubjectAnswer), SubjectAnswer)
     for candidate in answer.candidates:
@@ -209,6 +227,103 @@ def choose_subjects(view_path, text: str) -> SubjectAnswer:
     return answer
 
 
-def label_crop(png_bytes: bytes) -> str:
-    """Name the object in a cropped picture, in lowercase."""
+def gemini_label_crop(png_bytes: bytes) -> str:
+    """Gemini's name for the object in a cropped picture, in lowercase."""
     return _parse(_generate(png_bytes, CROP_PROMPT, CropLabel), CropLabel).label.strip().lower()
+
+
+# ---------- who answers: Gemini, our own model, or both in a cascade ----------
+
+def subject_finder() -> str:
+    finder = (os.environ.get("SUBJECT_FINDER") or "gemini").strip().lower()
+    if finder not in SUBJECT_FINDERS:
+        raise GeminiError("SUBJECT_FINDER must be gemini, local or cascade")
+    return finder
+
+
+def subject_min_confidence() -> float:
+    return float(os.environ.get("SUBJECT_MIN_CONFIDENCE") or DEFAULT_SUBJECT_MIN_CONFIDENCE)
+
+
+def last_subject_route() -> dict:
+    """Who answered the last choose_subjects or label_crop on this thread, and why."""
+    return dict(getattr(_route, "value", {}))
+
+
+def _record(model: str, reason: str) -> None:
+    _route.value = {"model": model, "reason": reason}
+    log.info("subjects by %s (%s)", model, reason)
+
+
+def _standin() -> bool:
+    return (os.environ.get("SUBJECT_MODEL") or "").strip().lower() == "standin"
+
+
+def _local_subjects(view_path, text: str) -> SubjectAnswer:
+    """Our own subject model's answer, in Gemini's shape. Placeholder until subject_model lands."""
+    if _standin():
+        return SubjectAnswer(things_on_page=[], page_kind="scene", candidates=[])
+    from subject_model.local import local_answer  # not on every branch; ImportError reaches the caller
+    return local_answer(view_path, text)
+
+
+def _local_label(png_bytes: bytes) -> str:
+    if _standin():
+        return ""
+    from subject_model.local import label_crop as local_label
+    return local_label(png_bytes)
+
+
+def local_is_enough(answer: SubjectAnswer) -> tuple[bool, str]:
+    """(enough, reason): whether the cascade can keep our model's answer instead of asking Gemini."""
+    if not answer.candidates:
+        return False, "found nothing"
+    top = max(candidate.confidence for candidate in answer.candidates)
+    if top < subject_min_confidence():
+        return False, f"unsure: top confidence {top:.2f}"
+    return True, f"sure: top confidence {top:.2f}"
+
+
+def choose_subjects(view_path, text: str) -> SubjectAnswer:
+    """Every main subject of the page, from whoever SUBJECT_FINDER names. At most five, most confident first."""
+    finder = subject_finder()
+    if finder == "gemini":
+        _record("gemini", "setting")
+        return gemini_subjects(view_path, text)
+    try:
+        answer = _local_subjects(view_path, text)
+    except Exception as error:  # no subject_model on this branch, no weights, or the model failed
+        if finder == "local":
+            # A plain sentence: the web app hides any reason that contains "Error:".
+            raise GeminiError("The local subject finder is not set up on this server") from None
+        _record("gemini", f"our model unavailable: {type(error).__name__}")
+        return gemini_subjects(view_path, text)
+    if finder == "local":
+        _record("local", "setting")
+        return answer
+    enough, reason = local_is_enough(answer)
+    if enough:
+        _record("local", reason)
+        return answer
+    _record("gemini", reason)
+    return gemini_subjects(view_path, text)
+
+
+def label_crop(png_bytes: bytes) -> str:
+    """Name the object in a cropped picture, in lowercase. "" means nobody was sure: the teacher types it."""
+    finder = subject_finder()
+    if finder == "gemini":
+        _record("gemini", "setting")
+        return gemini_label_crop(png_bytes)
+    try:
+        label = _local_label(png_bytes)
+    except Exception as error:
+        if finder == "local":
+            raise GeminiError("The local subject finder is not set up on this server") from None
+        _record("gemini", f"our model unavailable: {type(error).__name__}")
+        return gemini_label_crop(png_bytes)
+    if finder == "local" or label:
+        _record("local", "setting" if finder == "local" else "named it")
+        return label
+    _record("gemini", "our model was not sure of a name")
+    return gemini_label_crop(png_bytes)

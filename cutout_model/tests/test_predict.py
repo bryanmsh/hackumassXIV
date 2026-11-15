@@ -65,3 +65,12 @@ def test_four_threads_load_once_and_agree(all_subject):
     [t.join() for t in threads]
     assert len(predict._loaded) == 1
     assert all(np.array_equal(results[0], other) for other in results[1:])
+
+
+def test_probability_map_matches_the_mask(all_subject):
+    image, box = page(), (100, 100, 200, 180)
+    prob = predict.predict_prob(image, box)
+    assert prob.shape == (300, 400) and prob.dtype == np.float32
+    assert prob[80:200, 75:225].min() > 0.99 and prob[:80].max() == 0.0   # sure inside the window, 0 outside
+    assert np.array_equal(predict.predict(image, box), np.where(prob > 0.5, 255, 0).astype(np.uint8))
+    assert not predict.predict_prob(image, (50, 50, 50, 50)).any()
