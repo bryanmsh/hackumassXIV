@@ -106,6 +106,44 @@ def test_a_single_page_with_extra_unsure_things_still_counts_as_one(page_image, 
     assert calls == ["local"]
 
 
+def named(label, page_kind="single"):
+    return SubjectAnswer(page_kind=page_kind, candidates=[
+        {"label": label, "box_2d": [100, 100, 500, 500], "confidence": 0.9, "reason": CONFIRMED}])
+
+
+def test_one_subject_the_text_names_alone_is_kept(page_image, calls, monkeypatch):
+    pytest.importorskip("subject_model.words")
+    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
+    calls.use_local(named("crocodile"))
+    assert choose_subjects(page_image, "10/12\nCrocodiles live in swamps.").candidates[0].label == "crocodile"
+    assert calls == ["local"]
+
+
+@pytest.mark.parametrize("label, text, why", [
+    ("bear", "9/12\nBears and wolves live in dens.", "it links things"),              # Animal Homes p9
+    ("tiger", "11/12\nDeer live in forests.\nAnd so do tigers!", "it links things"),  # p11: the deer is missed
+    ("cat", "A cat & a hat.", "it links things"),
+    ("bear", "A bear sleeps under a tree.", 'it also names "tree"'),
+])
+def test_text_about_more_than_one_thing_goes_to_gemini(page_image, calls, monkeypatch, label, text, why):
+    pytest.importorskip("subject_model.words")
+    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
+    calls.use_local(named(label))
+    assert choose_subjects(page_image, text).candidates[0].label == "crocodile"
+    assert calls == ["local", "gemini"]
+    assert gemini.last_subject_route()["reason"] == f"the page text is about more than one thing ({why})"
+
+
+def test_a_failing_text_check_goes_to_gemini(page_image, calls, monkeypatch):
+    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
+    calls.use_local(named("crocodile"))
+    def broken(text, chosen):
+        raise ImportError("no subject_model")
+    monkeypatch.setattr(gemini, "_text_names_more", broken)
+    assert choose_subjects(page_image, "Crocodiles live in swamps.").candidates[0].label == "crocodile"
+    assert gemini.last_subject_route()["reason"] == "could not check the page text: ImportError"
+
+
 def test_the_confirmed_reason_matches_the_subject_model():
     local_module = pytest.importorskip("subject_model.local")
     assert gemini.LOCAL_CONFIRMED == local_module.CONFIRMED

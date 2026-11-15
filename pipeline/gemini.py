@@ -274,12 +274,13 @@ def _local_label(png_bytes: bytes) -> str:
     return local_label(png_bytes)
 
 
-def local_is_enough(answer: SubjectAnswer) -> tuple[bool, str]:
+def local_is_enough(answer: SubjectAnswer, text: str = "") -> tuple[bool, str]:
     """(enough, reason): whether the cascade can keep our model's answer instead of asking Gemini.
 
-    Kept only when process_page's own rule (decide_state) would pre-select exactly one subject
-    and the page text names it. Our model finds things that stand out on the page well but
-    names them poorly, so a pre-selected subject the text does not confirm goes to Gemini.
+    Kept only when process_page's own rule (decide_state) would pre-select exactly one subject,
+    the page text names it, and the text is not about anything else. Our model finds things
+    that stand out on the page well but names them poorly and misses second subjects, so
+    anything less certain goes to Gemini. Accuracy first: it is fine that Gemini answers most pages.
     """
     if not answer.candidates:
         return False, "found nothing"
@@ -290,7 +291,45 @@ def local_is_enough(answer: SubjectAnswer) -> tuple[bool, str]:
     chosen = answer.candidates[members[0]]
     if chosen.reason != LOCAL_CONFIRMED:
         return False, f'the page text does not name "{chosen.label}"'
+    try:
+        other = _text_names_more(text, chosen)
+    except Exception as error:  # the word lists are part of subject_model; any problem means ask Gemini
+        return False, f"could not check the page text: {type(error).__name__}"
+    if other:
+        return False, f"the page text is about more than one thing ({other})"
     return True, f'the page text names "{chosen.label}"'
+
+
+LINKING_WORDS = frozenset({"and", "or", "with"})  # "bears and wolves", "and so do tigers", "a cat with kittens"
+
+
+def _text_names_more(text: str, chosen) -> str | None:
+    """Why the page text may be about more than the chosen subject, or None.
+
+    Errs towards Gemini: the text links things ("and", "&", "or", "with"), or names any other
+    thing our model knows. Our model misses second subjects it has no name for (the deer next
+    to the tiger), so the text is the safer judge of whether a page is about one thing.
+    """
+    from subject_model.words import NOT_A_SUBJECT, _words, match  # only reached once subject_model has answered
+    tokens = _words(text or "")
+    if "&" in (text or "") or LINKING_WORDS & set(tokens):
+        return "it links things"
+    own = {name.lower() for name in [chosen.label, *chosen.synonyms]}
+    others = [name for name in _known_names() if name not in own and name not in NOT_A_SUBJECT]
+    named = match(text or "", others)
+    return f'it also names "{named}"' if named else None
+
+
+_known = []
+
+
+def _known_names() -> list[str]:
+    """Every name our subject model can give, from subject_model/classes.txt."""
+    if not _known:
+        import subject_model
+        path = Path(subject_model.__file__).with_name("classes.txt")
+        _known.extend(line.strip().lower() for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    return _known
 
 
 
@@ -311,7 +350,7 @@ def choose_subjects(view_path, text: str) -> SubjectAnswer:
     if finder == "local":
         _record("local", "setting")
         return answer
-    enough, reason = local_is_enough(answer)
+    enough, reason = local_is_enough(answer, text)
     if enough:
         _record("local", reason)
         return answer
