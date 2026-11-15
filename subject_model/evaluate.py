@@ -15,6 +15,7 @@ import cv2
 import pymupdf
 
 from pipeline.gemini import SubjectAnswer, choose_subjects
+from pipeline.ingest import rasterize
 from pipeline.masks import mask_box
 from pipeline.process import call_with_retry, decide_state, gemini_box_to_pixels
 from subject_model import local, namer
@@ -153,6 +154,51 @@ def score(testset_dir, modes=("local",)) -> dict:
     return result
 
 
+def _xyxy(box_2d):
+    ymin, xmin, ymax, xmax = box_2d
+    return min(xmin, xmax), min(ymin, ymax), max(xmin, xmax), max(ymin, ymax)
+
+
+def agree(testset_dir, every=3, limit=20) -> dict:
+    """How often the local mode's first choice is one of Gemini's subjects, on pages nobody picked:
+    every `every`-th page of each book, leaving out hand-labelled pages, at most `limit` pages.
+    Written to results_agreement.json."""
+    testset_dir = Path(testset_dir)
+    result = {"pages": [], "agree": 0, "named": 0, "total": 0, "failed": []}
+    taken = 0
+    for pdf in sorted((testset_dir / "books").glob("*.pdf")):
+        if taken >= limit:
+            break
+        for asset in rasterize(pdf, testset_dir / "agreement" / pdf.stem):
+            name = f"{pdf.stem}_{asset.page_number}"
+            if asset.page_number % every or (testset_dir / f"{name}.png").exists():
+                continue
+            if taken >= limit:
+                break
+            taken += 1
+            try:
+                mine = local.local_answer(asset.view_path, asset.text)
+                theirs = ask_gemini(asset.view_path, asset.text, cache=testset_dir / "gemini" / f"{name}.json")
+            except Exception:
+                result["failed"].append(name)
+                continue
+            agrees, named = not mine.candidates and not theirs.candidates, False
+            if mine.candidates:
+                first = mine.candidates[0]
+                for other in theirs.candidates:
+                    if box_iou(_xyxy(first.box_2d), _xyxy(other.box_2d)) >= FOUND_IOU:
+                        agrees = True
+                        if match(" ".join([other.label, *other.synonyms]), [first.label]):
+                            named = True
+                            break
+            result["pages"].append({"name": name, "agree": agrees, "named": named})
+            result["agree"] += agrees
+            result["named"] += named
+            result["total"] += 1
+    (testset_dir / "results_agreement.json").write_text(json.dumps(result, indent=2))
+    return result
+
+
 def _summary(mode, result) -> str:
     o = result["outcomes"][mode]
     return (f"{mode}: found {result['found'][mode]} of {result['total']}, first {result['first'][mode]}, "
@@ -165,9 +211,21 @@ def main(argv=None) -> None:
     parser.add_argument("testset_dir")
     parser.add_argument("--modes", nargs="+", default=["local"], choices=["local", "gemini"])
     parser.add_argument("--plain-crops", action="store_true", help="name plain rectangles, not whitened cut-outs")
+    parser.add_argument("--agree", action="store_true", help="agreement with Gemini on pages nobody picked")
+    parser.add_argument("--every", type=int, default=3)
+    parser.add_argument("--limit", type=int, default=20)
     args = parser.parse_args(argv)
     if args.plain_crops:
         namer.WHITEN = False
+    if args.agree:
+        result = agree(args.testset_dir, every=args.every, limit=args.limit)
+        for row in result["pages"]:
+            print(f"{row['name']:<24} agree {row['agree']!s:<5} named {row['named']}", flush=True)
+        if result["failed"]:
+            print(f"failed: {', '.join(result['failed'])}", flush=True)
+        print(f"agreement: {result['agree']} of {result['total']} pages, names agree on {result['named']}",
+              flush=True)
+        return
     result = score(args.testset_dir, modes=tuple(args.modes))
     for row in result["pages"]:
         cells = [f"{mode}: {', '.join(row['labels'][mode]) or '-'} ({row['outcome'][mode]})"

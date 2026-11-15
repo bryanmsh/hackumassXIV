@@ -83,3 +83,30 @@ def test_gemini_is_asked_once_for_a_page(tmp_path, monkeypatch):
     cache = tmp_path / "gemini" / "page.json"
     assert evaluate.ask_gemini("page.png", "", cache=cache) == evaluate.ask_gemini("page.png", "", cache=cache)
     assert len(calls) == 1
+
+
+from subject_model.evaluate import agree
+from subject_model.tests.conftest import book
+
+
+def test_agreement_takes_every_third_unlabelled_page(testset, monkeypatch):
+    book(testset / "books" / "story.pdf", pages=10)
+    (testset / "story_3.png").write_bytes((testset / "ball.png").read_bytes())      # page 3 is hand-labelled
+    ball, dog = answer("ball", ["toy"], [100, 100, 500, 500]), answer("dog", [], [600, 600, 900, 900])
+    local_answers = iter([ball, dog])
+    monkeypatch.setattr(evaluate.local, "local_answer", lambda view_path, text: next(local_answers))
+    monkeypatch.setattr(evaluate, "ask_gemini", lambda view_path, text, cache=None: ball)
+    (testset / "books" / "tale.pdf").unlink()
+    result = agree(testset)
+    assert [page["name"] for page in result["pages"]] == ["story_6", "story_9"]
+    assert result["total"] == 2 and result["agree"] == 1 and result["named"] == 1 and result["failed"] == []
+    assert json.load(open(testset / "results_agreement.json")) == result
+
+
+def test_two_empty_answers_agree(testset, monkeypatch):
+    book(testset / "books" / "story.pdf", pages=3)
+    (testset / "books" / "tale.pdf").unlink()
+    monkeypatch.setattr(evaluate.local, "local_answer", lambda view_path, text: NOTHING)
+    monkeypatch.setattr(evaluate, "ask_gemini", lambda view_path, text, cache=None: NOTHING)
+    result = agree(testset)
+    assert result["total"] == 1 and result["agree"] == 1 and result["named"] == 0
