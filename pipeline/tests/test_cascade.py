@@ -255,3 +255,23 @@ def test_flip_check_on_a_crop_matches_with_the_real_model(image, monkeypatch):
         crop = cascade._flipped_probability(image, box) > 0.5
         whole = _flipped_whole_page(image, box) > 0.5
         assert iou(crop.astype(np.uint8) * 255, whole.astype(np.uint8) * 255) > 0.999
+
+
+def test_the_mirror_pass_is_skipped_when_the_first_pass_is_already_unsure(image, monkeypatch):
+    monkeypatch.setenv("CASCADE_FLIP", "1")
+    speck = np.zeros((H, W), np.uint8)
+    speck[440:450, 590:600] = 255  # far too small for its box: fill fails before any mirror check
+    fake_model(monkeypatch, as_prob(speck))
+    def mirror(image, box):
+        raise AssertionError("the mirror pass ran although the decision was already made")
+    monkeypatch.setattr(cascade, "_flipped_probability", mirror)
+    segment(image, box=BOX)
+    route = cascade.last_route()
+    assert route["model"] == "stub" and route["reason"].startswith("unsure: ") and "flip" not in route["parts"]
+
+
+def test_the_mirror_pass_still_runs_when_the_first_pass_clears_the_bar(image, ellipse, monkeypatch):
+    monkeypatch.setenv("CASCADE_FLIP", "1")
+    box_model(monkeypatch, 0.0, (0.5, 0.5))
+    segment(image, box=BOX)
+    assert "flip" in cascade.last_route()["parts"]

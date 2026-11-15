@@ -67,12 +67,15 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 | `SEGMENTER` | `grabcut` (default), `stub`, `sam2`, `edgetam`, `mirai`, `cascade` | `sam2` is the recommended setting on the server. `edgesam` raises: it has no installable package. `mirai` is our own cut-out model alone; `cascade` runs it first and sends unsure boxes to SAM 2 (`pipeline/cascade.py`) |
 | `CASCADE_MIN_CONFIDENCE` | 0 to 1 | Empty means 0.65, from `calibrate_cascade` on *Animal Homes* with the run B weights: our model keeps 67% of boxes at 0.919 agreement with SAM 2.1. Below it, a box goes to the fallback |
 | `CASCADE_FALLBACK` | a segmenter name | Empty means `sam2`. Not `cascade` or `mirai` |
-| `CASCADE_FLIP` | `1` (default) or `0` | `0` skips the mirrored-page check, which halves our model's time per box but makes it a worse judge of itself: at the same agreement it keeps 53% of boxes instead of 67% (threshold 0.75) |
+| `CASCADE_FLIP` | `1` (default) or `0` | `0` skips the mirrored-page check, which halves our model's time per box but makes it a worse judge of itself: at the same agreement it keeps 53% of boxes instead of 67% (threshold 0.75). The mirror pass runs only when the first pass clears the threshold, since it can only lower the score |
 | `CUTOUT_MODEL` | empty or `standin` | `standin` replaces our model with GrabCut with blurred edges, until the weights exist |
 | `SUBJECT_FINDER` | `gemini` (default), `local`, `cascade` | `local` is Andrew's `subject_model` with no Gemini call; `cascade` asks it first and keeps its answer only when exactly one subject would be pre-selected, the page text names it, and the text is not about anything else (no "and", "&", "or", "with", and no other name our model knows); otherwise Gemini answers. Accuracy first: on *Animal Homes* our model answers 1 page of 16. Weights: `NAMER_WEIGHTS` and `FINDER_WEIGHTS`, else `$DATA_DIR/models/`; the trained ones are in `subject_model/weights/` |
 | `SUBJECT_MODEL` | empty or `standin` | `standin` is a placeholder that finds nothing, so the cascade always asks Gemini |
 | `MODEL_CACHE_DIR` | a folder | Where model weights download on first use. Empty means `$DATA_DIR/models` (the mounted `data/` folder in Docker) |
 | `TORCH_THREADS` | a number | Threads torch may use. Empty means every core |
+
+**Cut-out cascade speed on CPU (measured on *Animal Homes*, 36 boxes, 13 pages).** SAM 2.1 spends about 2.1 s studying a page once, then about 0.29 s per extra box; one pass of our model is about 0.27 s per box. So on a CPU server no cascade setting is meaningfully faster than SAM alone while staying as accurate: box-by-box at threshold 0.65 it is 1.03x SAM's speed at 0.947 agreement, and any stricter setting is slower than SAM. The speed-up needs a GPU (our model 0.02 s vs SAM 0.10 s a box on an L4). Leave `SEGMENTER=sam2` on a CPU server.
+
 
 ## How subjects are found
 
