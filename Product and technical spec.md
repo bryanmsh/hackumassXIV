@@ -406,7 +406,7 @@ mask_from_outline(image_path, label, points, out_dir, tidy=False) -> Candidate  
 refine_mask(image_path, mask_path, x, y, out_dir) -> Candidate                   # P1
 
 # render/ and checks/  (Owner B)
-render(image_path, view_path, mask_path, settings, level, text, fmt="webp") -> bytes
+render(image_path, view_path, mask_path, settings, level, text, fmt="webp", text_boxes=None) -> bytes   # text_boxes: the page's text blocks as 0 to 1 fractions (additive)
 overlay(view_path, mask_path) -> bytes
 overlay_palette(view_path, mask_paths, selected, fmt="webp") -> bytes             # every candidate in its chip colour
 run_checks(image_path, view_path, mask_path, settings, level, text) -> CheckResult   # no network, no stored state
@@ -532,7 +532,7 @@ The API is the only part that touches the database, and it owns every rule about
 | Collection | Key fields |
 | --- | --- |
 | `books` | `title`, `credits` {author, illustrator, publisher, source, license}, `state` (ingesting, ready, failed), `page_count`, `created_at` |
-| `pages` | `book_id`, `number`, `image_path`, `view_path`, `text`, `flags`, `state`, `reason`, `page_kind`, `candidates[]`, `selected`, `subject_hash`, `confirmed`, `omitted`, `processing_started_at`, `second_look` {subject\_hash, status, answer} |
+| `pages` | `book_id`, `number`, `image_path`, `view_path`, `text`, `text_boxes` (0 to 1 boxes of the page's text blocks), `flags`, `state`, `reason`, `page_kind`, `candidates[]`, `selected`, `subject_hash`, `confirmed`, `omitted`, `processing_started_at`, `second_look` {subject\_hash, status, answer} |
 | `profiles` | `name`, `level`, `settings`, `settings_hash`, `contrast_override_note` |
 | `checks` | `page_id`, `subject_hash`, `settings_hash`, `level`, `render_version`, `result` |
 | `approvals` | `page_id`, `profile_id`, `subject_hash`, `settings_hash`, `level`, `render_version`, `decision` (approve, reject), `at`, and `copied_from` on records the re-approve tool wrote |

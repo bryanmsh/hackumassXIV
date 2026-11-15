@@ -25,6 +25,9 @@ class PageAsset(BaseModel):
     text: str
     text_source: Literal["layer", "none"]
     flags: list[str] = []  # known so far: "spread", "low_quality"
+    # Where the words sit on the page: one box per text block, fractions 0 to 1 of the page,
+    # top-left origin (additive; the display keeps these areas vivid).
+    text_boxes: list[tuple[float, float, float, float]] = []
 
 
 class Candidate(BaseModel):

@@ -38,6 +38,7 @@ def rasterize(pdf_path, out_dir) -> list[PageAsset]:
             _fit(master, VIEW_MAX).save(view_path)
 
             text = page.get_text().strip()
+            text_boxes = _text_boxes(page)
             flags = []
             if master.width > SPREAD_RATIO * master.height:
                 flags.append("spread")
@@ -49,5 +50,24 @@ def rasterize(pdf_path, out_dir) -> list[PageAsset]:
             assets.append(PageAsset(
                 page_number=number, image_path=str(image_path), view_path=str(view_path),
                 width=master.width, height=master.height,
-                text=text, text_source="layer" if text else "none", flags=flags))
+                text=text, text_source="layer" if text else "none", flags=flags,
+                text_boxes=text_boxes))
     return assets
+
+
+def _text_boxes(page) -> list[tuple[float, float, float, float]]:
+    """Each text block's box as fractions of the rendered (rotated) page, top-left origin."""
+    rect = page.rect  # the page as rendered, rotation applied
+    if rect.width <= 0 or rect.height <= 0:
+        return []
+    boxes = []
+    for block in page.get_text("blocks"):
+        x0, y0, x1, y1, content, _, kind = block[:7]
+        if kind != 0 or not str(content).strip():  # 0 = text, 1 = image
+            continue
+        r = pymupdf.Rect(x0, y0, x1, y1) * page.rotation_matrix
+        fx0, fy0 = max(0.0, r.x0 / rect.width), max(0.0, r.y0 / rect.height)
+        fx1, fy1 = min(1.0, r.x1 / rect.width), min(1.0, r.y1 / rect.height)
+        if fx1 > fx0 and fy1 > fy0:
+            boxes.append((round(fx0, 4), round(fy0, 4), round(fx1, 4), round(fy1, 4)))
+    return boxes

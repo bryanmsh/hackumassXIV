@@ -38,7 +38,7 @@ def render_page(page: dict, settings: Settings, level: int) -> bytes:
     if subject is None:
         raise HTTPException(409, "This page has no subject yet.")
     return modules.display.render(page["image_path"], page["view_path"], subject["mask_path"],
-                                  settings, level, page["text"])
+                                  settings, level, page["text"], text_boxes=page.get("text_boxes"))
 
 
 def cached_render(page: dict, profile: dict, level: int) -> bytes:

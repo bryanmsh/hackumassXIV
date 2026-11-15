@@ -43,6 +43,13 @@ EDGE_MARGIN = 0.04
 # Ring widths on the 1,600 px canvas. Outlined (level 4) always rings the subject: "thick"
 # unless the profile asks for thin. The extra ring at Cut-out and Faded page follows the profile.
 OUTLINE_PX = {"off": 0, "thin": 8, "thick": 20}
+# A subject in several pieces far apart (two animals, a child and an ant) would stay tiny if its
+# whole box were scaled, so at levels 1 and 2 the pieces are gathered: cut from the original as
+# they are, kept in left-to-right order and at one common scale, laid out side by side.
+GATHER_EMPTY_RATIO = 2.5  # gather when the union box is this many times the pieces' own boxes
+GATHER_PART_MIN = 0.02  # a piece under this share of the largest piece is mask noise, not drawn
+GATHER_GAP = 0.08  # gap between gathered pieces, as a share of the widest piece
+GATHER_ROW_MAX = 4  # more pieces than this go on two rows
 SOFTEN_SIGMA = 1.0  # about a 2 px edge blur
 FADE_SATURATION = 0.20
 FADE_PAGE_WEIGHT = 0.30
@@ -109,7 +116,7 @@ def load_mask(path) -> np.ndarray:
 
 @lru_cache(maxsize=8)
 def _font(size: int) -> ImageFont.ImageFont:
-    for name in ("AtkinsonHyperlegible-Regular.ttf",):
+    for name in ("AtkinsonHyperlegible-Bold.ttf", "AtkinsonHyperlegible-Regular.ttf"):
         f = FONT_DIR / name
         if f.exists():
             return ImageFont.truetype(str(f), size)
@@ -134,8 +141,34 @@ def text_lines(text: Optional[str]) -> List[str]:
     return [line for line in lines if line and not PAGE_NUMBER.match(line)]
 
 
-def shows_text(settings: LocalSettings, text: Optional[str]) -> bool:
-    return settings.text_mode == "below" and bool(text_lines(text))
+TEXT_BOX_PAD = 0.004  # the kept area around each text block, as a share of the page's longer side
+TEXT_BOX_FEATHER = 6.0  # soft edge (px) where a kept text block meets the faded page
+
+
+def shows_text(settings: LocalSettings, text: Optional[str], level: int = 1) -> bool:
+    """The band under the picture. A picture book is words and pictures, so at Tinted and
+    Cut-out (where the page itself is gone) the words are always drawn below; at Faded page and
+    Outlined they stay on the page, and the profile's text option adds the band as a second copy."""
+    if not text_lines(text):
+        return False
+    return int(level) in (1, 2) or settings.text_mode == "below"
+
+
+def text_box_alpha(text_boxes, page_w: int, page_h: int) -> Optional[np.ndarray]:
+    """1.0 inside the page's text blocks (padded, soft-edged), 0 elsewhere; None when there are none."""
+    if not text_boxes:
+        return None
+    keep = np.zeros((page_h, page_w), dtype=np.float32)
+    pad = round(TEXT_BOX_PAD * max(page_w, page_h))
+    for box in text_boxes:
+        x0, y0, x1, y1 = [float(v) for v in box[:4]]
+        a, b = max(0, int(x0 * page_w) - pad), max(0, int(y0 * page_h) - pad)
+        c, d = min(page_w, int(np.ceil(x1 * page_w)) + pad), min(page_h, int(np.ceil(y1 * page_h)) + pad)
+        if c > a and d > b:
+            keep[b:d, a:c] = 1.0
+    if not keep.any():
+        return None
+    return cv2.GaussianBlur(keep, (0, 0), TEXT_BOX_FEATHER)
 
 
 def band_text_color(s: LocalSettings, background: RGB) -> RGB:
@@ -227,6 +260,62 @@ def subject_placement(box_w: int, box_h: int, canvas_w: int, picture_h: int,
     return scale, nw, nh, left, top
 
 
+def subject_parts(mask: np.ndarray):
+    """Connected pieces of the mask worth drawing, left to right: (x, y, w, h, label), and the label map."""
+    n, labels, stats, _ = cv2.connectedComponentsWithStats((mask >= 128).astype(np.uint8), connectivity=8)
+    if n <= 1:
+        return [], labels
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    floor = GATHER_PART_MIN * float(areas.max())
+    parts = [(int(stats[i, cv2.CC_STAT_LEFT]), int(stats[i, cv2.CC_STAT_TOP]), int(stats[i, cv2.CC_STAT_WIDTH]),
+              int(stats[i, cv2.CC_STAT_HEIGHT]), i) for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= floor]
+    parts.sort(key=lambda p: (p[0], p[1]))
+    return parts, labels
+
+
+def should_gather(parts, union_w: int, union_h: int) -> bool:
+    """True when the pieces sit far apart: scaling their union box would leave each one small."""
+    if len(parts) < 2:
+        return False
+    own = sum(w * h for _, _, w, h, _ in parts)
+    return union_w * union_h > GATHER_EMPTY_RATIO * own
+
+
+def gather_layout(parts, canvas_w: int, picture_h: int, size: str, position: str):
+    """One common scale and a canvas spot for each piece, side by side (two rows past GATHER_ROW_MAX).
+
+    Returns (scale, [(label, x, y, w, h, left, top, nw, nh), ...]) with master-pixel boxes and
+    canvas placements. Relative sizes between pieces are kept: one scale for all.
+    """
+    rows = [parts] if len(parts) <= GATHER_ROW_MAX else [parts[: (len(parts) + 1) // 2], parts[(len(parts) + 1) // 2:]]
+    gap = GATHER_GAP * max(w for _, _, w, _, _ in parts)
+    row_w = [sum(w for _, _, w, _, _ in row) + gap * (len(row) - 1) for row in rows]
+    row_h = [max(h for _, _, _, h, _ in row) for row in rows]
+    block_w, block_h = max(row_w), sum(row_h) + gap * (len(rows) - 1)
+    scale = SIZE_FRACTION[size] * min(canvas_w / block_w, picture_h / block_h)
+    bw, bh = max(1, round(block_w * scale)), max(1, round(block_h * scale))
+    fx, fy = POSITIONS[position]
+    mx, my = round(EDGE_MARGIN * canvas_w), round(EDGE_MARGIN * picture_h)
+
+    def clamp(start: int, length: int, total: int, margin: int) -> int:
+        lo, hi = margin, total - margin - length
+        return (total - length) // 2 if hi < lo else int(min(max(start, lo), hi))
+
+    block_left = clamp(round(fx * canvas_w - bw / 2), bw, canvas_w, mx)
+    block_top = clamp(round(fy * picture_h - bh / 2), bh, picture_h, my)
+    spots = []
+    y = block_top
+    for row, rw, rh in zip(rows, row_w, row_h):
+        x = block_left + (bw - round(rw * scale)) / 2  # each row centred in the block
+        for px, py, w, h, label in row:
+            nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
+            top = y + (round(rh * scale) - nh) // 2  # centred in its row
+            spots.append((label, px, py, w, h, int(round(x)), int(top), nw, nh))
+            x += (w + gap) * scale
+        y += round((rh + gap) * scale)
+    return scale, spots
+
+
 def resample(crop: np.ndarray, nw: int, nh: int, scale: float) -> np.ndarray:
     interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
     return cv2.resize(crop, (nw, nh), interpolation=interp)
@@ -282,7 +371,7 @@ def draw_text_band(rgb: np.ndarray, top: int, text: str, color: RGB) -> np.ndarr
 
 
 def compose(image_path, view_path, mask_path, settings, level: int,
-            text: Optional[str] = None) -> Rendered:
+            text: Optional[str] = None, text_boxes=None) -> Rendered:
     s = coerce_settings(settings)
     level = int(level)
     if level not in (1, 2, 3, 4):
@@ -291,7 +380,7 @@ def compose(image_path, view_path, mask_path, settings, level: int,
     mask = load_mask(mask_path)
     mh, mw = mask.shape[:2]
     W, H = canvas_size(mw, mh)
-    text_on = shows_text(s, text)
+    text_on = shows_text(s, text, level)
     pic_h = H - round(TEXT_BAND * H) if text_on else H
     bg = hex_to_rgb(s.background)
     canvas = np.empty((H, W, 3), dtype=np.uint8)
@@ -308,16 +397,26 @@ def compose(image_path, view_path, mask_path, settings, level: int,
             master = load_rgb(image_path)
             if master.shape[:2] != mask.shape[:2]:
                 raise ValueError("mask and master page differ in size")
-            scale, nw, nh, left, top = subject_placement(bw, bh, W, pic_h, s.size, s.position)
-            crop = master[by:by + bh, bx:bx + bw]
-            mcrop = mask[by:by + bh, bx:bx + bw]
-            sub = resample(crop, nw, nh, scale)
-            hard = cv2.resize(mcrop, (nw, nh), interpolation=cv2.INTER_LINEAR) >= 128
-            if level == 1:
-                sub = tint(sub, hard, _main_color(s))
-            subject[top:top + nh, left:left + nw] = hard
-            roi = canvas[top:top + nh, left:left + nw]
-            canvas[top:top + nh, left:left + nw] = _blend(sub, roi, _soften(hard))
+
+            def draw_piece(mcrop: np.ndarray, px: int, py: int, w: int, h: int,
+                           left: int, top: int, nw: int, nh: int, k: float) -> None:
+                sub = resample(master[py:py + h, px:px + w], nw, nh, k)
+                hard = cv2.resize(mcrop, (nw, nh), interpolation=cv2.INTER_LINEAR) >= 128
+                if level == 1:
+                    sub = tint(sub, hard, _main_color(s))
+                subject[top:top + nh, left:left + nw] |= hard
+                roi = canvas[top:top + nh, left:left + nw]
+                canvas[top:top + nh, left:left + nw] = _blend(sub, roi, _soften(hard))
+
+            parts, labels = subject_parts(mask)
+            if should_gather(parts, bw, bh):
+                scale, spots = gather_layout(parts, W, pic_h, s.size, s.position)
+                for label, px, py, w, h, left, top, nw, nh in spots:
+                    piece = (labels[py:py + h, px:px + w] == label).astype(np.uint8) * 255
+                    draw_piece(piece, px, py, w, h, left, top, nw, nh, scale)
+            else:
+                scale, nw, nh, left, top = subject_placement(bw, bh, W, pic_h, s.size, s.position)
+                draw_piece(mask[by:by + bh, bx:bx + bw], bx, by, bw, bh, left, top, nw, nh, scale)
         if level == 2:
             outline_px = OUTLINE_PX[s.outline]
             outline_color = _second_color(s)
@@ -342,6 +441,9 @@ def compose(image_path, view_path, mask_path, settings, level: int,
             faded = cv2.addWeighted(faded, FADE_PAGE_WEIGHT, plain, 1 - FADE_PAGE_WEIGHT, 0)
             alpha = cv2.GaussianBlur(soft, (0, 0), SOFTEN_SIGMA)
             alpha[alpha > 0.999] = 1.0
+            words = text_box_alpha(text_boxes, pw, ph)
+            if words is not None:  # the page's words stay as vivid as the subject
+                alpha = np.maximum(alpha, words)
             canvas[py:py + ph, px:px + pw] = _blend(page, faded, alpha)
             outline_px = OUTLINE_PX[s.outline]
             outline_color = _second_color(s)
