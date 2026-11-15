@@ -8,7 +8,7 @@ Picture books adapted for children with **cortical visual impairment (CVI)**, us
 
 **[Try the live demo](https://jensenhuangexecutiveboard.vip/)** &nbsp; | &nbsp; [How it works](#what-miraai-does) &nbsp; | &nbsp; [Under the hood](#how-the-project-fits-together)
 
-Built at **HackUMass XIV** in 24 hours by a team of four.
+Built at HackUMass XIV
 
 </div>
 
@@ -37,22 +37,22 @@ Children with CVI recognize an object far better when it is shown alone, on a pl
 ### One page, four looks
 
 <p align="center">
-  <img src="pitch/tvi_mockups/hornbill_0_original.webp" alt="Original Animal Homes page with a hornbill in its illustrated surroundings" width="300" />
+  <img src="pitch/readme_examples/fish_0_original.webp" alt="Original Animal Homes pond page with fish and frogs" width="300" />
   <br />
   <em>The original page from Animal Homes</em>
 </p>
 
 | Tinted | Cut-out |
 | :---: | :---: |
-| ![Hornbill tinted red on a plain background](pitch/tvi_mockups/hornbill_1_tinted_maya.webp) | ![Hornbill in its original colors on a plain background](pitch/tvi_mockups/hornbill_2_cutout_leo.webp) |
+| ![Fish tinted red on a plain background](pitch/readme_examples/fish_1_tinted.webp) | ![Fish in its original colors on a plain background](pitch/readme_examples/fish_2_cutout.webp) |
 | The subject in the child's preferred color | Original subject colors, less background clutter |
 
 | Faded page | Outlined |
 | :---: | :---: |
-| ![Hornbill kept vivid against a faded page](pitch/tvi_mockups/hornbill_3_faded_maya.webp) | ![Original page with the hornbill outlined in red](pitch/tvi_mockups/hornbill_4_outlined_maya.webp) |
+| ![Fish kept vivid against a faded page](pitch/readme_examples/fish_3_faded.webp) | ![Original page with the fish outlined in red](pitch/readme_examples/fish_4_outlined.webp) |
 | Page context with the subject emphasized | Original page with a colored subject outline |
 
-*Illustrative mock-ups using Animal Homes, published by Pratham Books on StoryWeaver, CC BY 4.0. Original artwork adapted through cut-outs, tinting, fading, and outlines. These looks are display choices; the teacher decides which to use.*
+*Example made with the app's manual-outline tool using Animal Homes (PDF page 6), published by Pratham Books on StoryWeaver, CC BY 4.0. Original artwork adapted through cut-outs, tinting, fading, and outlines. These looks are display choices; the teacher decides which to use.*
 
 ## What it promises, and what it does not
 
