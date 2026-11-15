@@ -109,6 +109,8 @@ describe('Library', () => {
     const sent = captureUploads();
     await user.upload(fileInput(), pdf());
     await user.type(screen.getByLabelText(/Book title/), 'Owl Homes');
+    // The credit fields are folded away (the PDF fills them); open them to type.
+    await user.click(screen.getByRole('button', { name: 'Type credits now' }));
     await user.type(screen.getByLabelText('Author'), 'R. Writer');
     await user.type(screen.getByLabelText('License'), 'CC BY 4.0');
     await user.click(screen.getByRole('button', { name: 'Upload book' }));
@@ -152,8 +154,8 @@ describe('Library', () => {
     expect(credits.getByText('StoryWeaver')).toBeInTheDocument();
     expect(credits.getByText('CC BY 4.0')).toBeInTheDocument();
     expect(credits.queryByText('Not found')).not.toBeInTheDocument();
-    // The upload form says where blank credits come from.
-    expect(screen.getByText(/Leave blank to read them from the PDF/)).toBeInTheDocument();
+    // The upload form says where credits come from, before any field is opened.
+    expect(screen.getByText(/read from the PDF where possible/)).toBeInTheDocument();
   });
 
   it('Edit credits saves all five through PATCH /books/{id} {credits}; a blank shows “Not found”', async () => {

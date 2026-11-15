@@ -10,6 +10,7 @@ import { Button } from '../ui/Button';
 import { errorMessage } from '../ui/LoadState';
 import { Badge } from '../ui/StatusBadge';
 import { BookCredits } from './BookCredits';
+import { OverlayImage } from './OverlayImage';
 
 const STATE_ORDER: PageState[] = ['processing', 'ready', 'needs_subject', 'no_clear_subject', 'failed', 'unsupported'];
 
@@ -44,26 +45,43 @@ export function BookCard({ book: initial, onDeleted }: { book: Book; onDeleted?:
   const processed = processedCount(book.pages);
   const confirmed = book.pages.filter((p) => p.confirmed).length;
   const omitted = book.pages.filter((p) => p.omitted).length;
+  /** The first page, as the book's cover in the list. */
+  const cover = book.pages.find((p) => p.number === 1) ?? book.pages[0];
 
   return (
     <li className="flex flex-col gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      {/* Title and state. Delete sits up here, quiet and far from the main action below. */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="break-words text-xl font-bold">{book.title}</h2>
-          {book.state === 'ingesting' && <Badge tone={PAGE_STATE_TONE.processing}>Reading PDF</Badge>}
-          {book.state === 'failed' && <Badge tone={PAGE_STATE_TONE.failed}>Failed</Badge>}
+      {/* Cover, title and state. Delete is a small red × up here, far from the main action below. */}
+      <div className="flex items-start gap-4">
+        <div className="w-28 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200">
+          {cover ? <OverlayImage page={cover} compact /> : <div className="aspect-[4/3]" aria-hidden />}
         </div>
-        {onDeleted && !askingDelete && (
-          <Button
-            variant="ghost"
-            className="-me-2 -mt-1 shrink-0 text-rose-800 hover:bg-rose-50"
-            onClick={() => setAskingDelete(true)}
-            aria-label={`Delete ${book.title}…`}
-          >
-            Delete…
-          </Button>
-        )}
+        <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="break-words text-xl font-bold">{book.title}</h2>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {book.state === 'ingesting' && <Badge tone={PAGE_STATE_TONE.processing}>Reading PDF</Badge>}
+              {book.state === 'failed' && <Badge tone={PAGE_STATE_TONE.failed}>Failed</Badge>}
+              {book.state === 'ready' && (
+                <span className="text-slate-600">
+                  {total} {total === 1 ? 'page' : 'pages'}
+                </span>
+              )}
+            </div>
+          </div>
+          {onDeleted && !askingDelete && (
+            <Button
+              variant="ghost"
+              className="-me-2 -mt-1 size-11 shrink-0 rounded-full! px-0! text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-50 hover:text-rose-900"
+              onClick={() => setAskingDelete(true)}
+              aria-label={`Delete ${book.title}…`}
+              title={`Delete ${book.title}…`}
+            >
+              <svg viewBox="0 0 20 20" className="size-5" aria-hidden fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round">
+                <path d="M5 5l10 10M15 5L5 15" />
+              </svg>
+            </Button>
+          )}
+        </div>
       </div>
 
       {askingDelete && (

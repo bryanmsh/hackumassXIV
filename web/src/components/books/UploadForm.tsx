@@ -24,6 +24,8 @@ export function UploadForm({ onUploaded }: { onUploaded: (res: UploadBookRespons
   const [serverError, setServerError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  /** Credits are read from the PDF, so the five fields stay out of the way until asked for. */
+  const [typingCredits, setTypingCredits] = useState(false);
 
   useEffect(() => () => ctrl.current?.abort(), []);
 
@@ -59,6 +61,7 @@ export function UploadForm({ onUploaded }: { onUploaded: (res: UploadBookRespons
       setFile(null);
       setTitle('');
       setCredits(EMPTY_CREDITS);
+      setTypingCredits(false);
       if (fileInput.current) fileInput.current.value = '';
     } catch (err) {
       if (isAbortError(err)) return;
@@ -122,7 +125,19 @@ export function UploadForm({ onUploaded }: { onUploaded: (res: UploadBookRespons
         <input id={`${ids}-title`} className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} autoComplete="off" />
       </div>
 
-      <fieldset className="mt-4">
+      {!typingCredits && (
+        <div className="mt-4">
+          <p className="font-semibold">Credits</p>
+          <p className="text-slate-600">
+            Author, illustrator, publisher, source and license are read from the PDF where possible. You can check and
+            change them after upload.
+          </p>
+          <Button variant="ghost" className="-ms-2 mt-1" onClick={() => setTypingCredits(true)}>
+            Type credits now
+          </Button>
+        </div>
+      )}
+      <fieldset className={typingCredits ? 'mt-4' : 'hidden'} disabled={!typingCredits}>
         <legend className="font-semibold">Credits</legend>
         <p className="text-slate-600">Shown on the last page of the reader, with a note that the pages were adapted.</p>
         <p className="text-slate-600">Leave blank to read them from the PDF. You can check and change them after upload.</p>
