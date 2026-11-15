@@ -67,7 +67,7 @@ Children with CVI recognize an object far better when it is shown alone, on a pl
 | Step | Model | Notes |
 | --- | --- | --- |
 | Choosing the subject | Our own subject model first, then Gemini (Flash), JSON output | Our model answers only when the page is clearly about one thing the page text names; every other page goes to Gemini, so results are as accurate as Gemini alone (see [Our own models](#our-own-models-the-model-cascade)). Up to 5 suggestions per page with a self-reported confidence. Confidence only screens out weak guesses; when a page has several subjects, the teacher chooses |
-| Tracing the cut-out | SAM 2.1 small on CPU | Runs once per suggestion. OpenCV GrabCut is the fallback when PyTorch is not installed. Our own cut-out model can run first (`SEGMENTER=cascade`), but on our CPU server it is no faster than SAM at the same accuracy, so the live site uses SAM |
+| Tracing the cut-out | **Our own cut-out model first**, then SAM 2.1 small on CPU | Our model, trained from scratch, cuts each suggestion first and keeps its mask only when its confidence checks score at least 0.75; otherwise SAM 2.1 cuts it. Clicks always go to SAM. OpenCV GrabCut is the last fallback (see [Our own models](#our-own-models-the-model-cascade)) |
 | Second look | Gemini | Shown only the adapted page, it names the subject. A warning only; it never blocks or grants approval |
 | Display and checks | None | NumPy, OpenCV and Pillow. The same input always gives the same picture |
 
@@ -89,7 +89,7 @@ exactly. Every decision is logged with the reason (`gemini.last_subject_route()`
 | Step | Our model (trained from scratch) | Behind it | Setting | On the live site |
 | --- | --- | --- | --- | --- |
 | Choosing the subject | `subject_model/` (Andrew): a finder U-Net and a namer ResNet-18 | Gemini Flash | `SUBJECT_FINDER=cascade` | **On** |
-| Tracing the cut-out | `cutout_model/` (Kevin and Bryan): a 7.8M-parameter U-Net | SAM 2.1 small, then GrabCut | `SEGMENTER=cascade` | Off (`SEGMENTER=sam2`) |
+| Tracing the cut-out | `cutout_model/` (Kevin and Bryan): a 7.8M-parameter U-Net | SAM 2.1 small, then GrabCut | `SEGMENTER=cascade`, `CASCADE_MIN_CONFIDENCE=0.75` | **On** |
 
 ### Cascade 1: choosing the subject (live)
 
@@ -121,7 +121,7 @@ under a second instead of an 8 to 20 second Gemini call. The other 15 pages, inc
 page it would have got wrong, go to Gemini. Accuracy comes first: it is fine that Gemini answers
 most pages, and every page our model answers is one Gemini call saved.
 
-### Cascade 2: tracing the cut-out (built and calibrated, off on the server)
+### Cascade 2: tracing the cut-out (live)
 
 **Our model.** A U-Net with 7.8M parameters that takes a 320 px crop around a subject's box
 (red, green, blue, plus one channel marking the box) and returns that subject's mask. Like every
@@ -171,18 +171,19 @@ picks the one that keeps the most boxes on our model while staying within a marg
 | 0.60 | 78% | 0.890 |
 | **0.65 (default)** | **67%** | **0.919** |
 | 0.70 | 53% | 0.948 |
+| **0.75 (live)** | **42%** | **0.967** |
 | SAM alone | 0% | 1.000 |
 
 Without the mirror check, the best setting keeps only 53% of boxes at the same agreement, so the
 mirror check makes our model a better judge of its own masks.
 
-**Why it is off on the live server.** Our model is 2 to 5 times faster than SAM on a GPU, but the
-server has none. On its 6 CPUs, SAM studies a page once (about 4 to 5 s) and then cuts each
-further box on that page in 0.15 s, while our model takes 0.5 s a box. We simulated every
-cascade policy with the server's own timings: at best it matches SAM's speed at 0.947
-agreement, and every setting as accurate as SAM is slower. So the server keeps SAM 2.1 for
-cut-outs. On a GPU the same switch, `SEGMENTER=cascade`, would cut two thirds of boxes with our
-model.
+**On the live server.** The cut-out cascade is on with a stricter threshold than the
+calibrated default: 0.75 instead of 0.65. Accuracy comes first, so our model keeps only the
+masks it is most sure of: on *Animal Homes* that is about 42% of boxes, at 0.967 agreement with
+SAM, and SAM cuts everything else. Our model needs no outside service and is 2 to 5 times faster
+than SAM on a GPU. The server has no GPU: on its 6 CPUs, SAM studies a page once (about 4 to 5 s)
+and then cuts each further box on that page in 0.15 s, while our model takes 0.5 s a box, so
+there the cascade runs at about SAM's speed rather than faster. Rollback: `SEGMENTER=sam2`.
 
 **Where to look.** `pipeline/cascade.py` and `pipeline/calibrate_cascade.py` (cut-outs),
 `pipeline/gemini.py` (subjects), `cutout_model/README.md` and `subject_model/README.md` (training
@@ -225,7 +226,7 @@ flowchart LR
     U[Teacher's browser] -->|HTTPS, site password| C[Caddy]
     C -->|static files| W[Built web app]
     C -->|/api| A[FastAPI API]
-    A --> P[Pipeline: PyMuPDF, subject cascade, SAM 2.1]
+    A --> P[Pipeline: PyMuPDF, subject cascade, cut-out cascade]
     P -->|subject when unsure| G[Gemini API]
     A --> M[(MongoDB Atlas)]
     A --> D[(Server disk: pages, masks, renders)]
@@ -238,13 +239,13 @@ flowchart LR
 | Server | One Vultr VM, 6 vCPU, 15 GB RAM, 300 GB disk, CPU only | Runs everything below in Docker Compose |
 | Addresses | [miraai.study](https://miraai.study/), www.miraai.study, jensenhuangexecutiveboard.vip | Caddy gets Let's Encrypt certificates for each name |
 | Caddy | `Caddyfile`, `infra/caddy.Dockerfile` | HTTPS, a password on every path, the built web app, and `/api` forwarded to the API. Refuses to start without a password |
-| API and pipeline | `Dockerfile` (Python 3.11) | FastAPI, background processing of up to 4 pages at a time, SAM 2.1 and both of our models on CPU |
+| API and pipeline | `Dockerfile` (Python 3.11) | FastAPI, background processing of up to 4 pages at a time, both of our models and SAM 2.1 behind them, all on CPU |
 | Database | MongoDB Atlas | Books, pages, profiles, approvals, checks. A local `mongo` container is the fallback when no Atlas address is set |
 | Files | `/opt/mirai/data` on the server, mounted into the API | Page images, masks and renders; survive restarts and rebuilds |
 | Deploys | `infra/autodeploy.sh`, a systemd timer | Every minute it checks `main`; when it moved, it fast-forwards and rebuilds. A failed build leaves the old version serving, so **merging to `main` is deploying** |
 
 Settings live in the server's `.env`, never in git: the site password, the Gemini key, the Atlas address,
-`SEGMENTER=sam2` and `SUBJECT_FINDER=cascade`. The runbook (deploy, check, roll back, pause auto-deploy) is in
+`SEGMENTER=cascade` with `CASCADE_MIN_CONFIDENCE=0.75`, and `SUBJECT_FINDER=cascade`. The runbook (deploy, check, roll back, pause auto-deploy) is in
 [infra/DEPLOY.md](infra/DEPLOY.md).
 
 ## Validation

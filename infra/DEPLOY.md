@@ -23,7 +23,7 @@ Copy `.env.example` and fill it in on the server. It is never committed.
 | `SITE_ADDRESS` | `miraai.study, www.miraai.study, jensenhuangexecutiveboard.vip, 140-82-15-107.sslip.io` |
 | `SITE_USER`, `SITE_PASSWORD` | The site login. Compose refuses to start if either is empty |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | The key and the Flash model name |
-| `SEGMENTER` | `sam2` (SAM 2.1 small on CPU). `cascade` exists but is no faster than SAM on this CPU server at SAM-level accuracy; see `pipeline/README.md` |
+| `SEGMENTER` | `cascade`: our cut-out model first, SAM 2.1 small when it is unsure. With `CASCADE_MIN_CONFIDENCE=0.75`, `CASCADE_FALLBACK=sam2`, `CASCADE_FLIP=1`, `CUTOUT_WEIGHTS=/app/data/models/cutout.pt` (the run B weights, on the data disk, not in git). Rollback: `sam2` |
 | `SUBJECT_FINDER` | `cascade`: our subject model first, Gemini unless the page is clearly about one thing the text names. Empty means Gemini only |
 | `NAMER_WEIGHTS`, `FINDER_WEIGHTS` | `/app/subject_model/weights/namer.pt` and `finder.pt` (inside the image) |
 | `PIPELINE`, `RENDER` | `stub` or `real`. Start on `stub`; switch one at a time |
