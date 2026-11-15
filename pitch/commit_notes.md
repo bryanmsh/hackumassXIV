@@ -2,6 +2,18 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## README team row matches what Kevin built (plus merge main)
+
+**What changed**
+- Merged `origin/main` into `kevin` (clean; brings in Bryan's README, the model branch work and Thomas's Spotlight).
+- `README.md` Team table, Kevin's row only: "Display, checks, pitch, and the cut-out model code (with Bryan)", folders `render/`, `checks/`, `pitch/`, `tests/`, `cutout_model/`. Dropped `eval/`, which holds only a `.gitkeep`.
+
+**Why**
+- The row came from the build plan's ownership, not from the work done: no evaluation exists yet, and the cut-out model code is not listed.
+
+**Still open**
+- Put `eval/` back in the row if the 20-page evaluation gets done.
+
 ## model: first set of labelled real-book pages
 
 **What changed**
