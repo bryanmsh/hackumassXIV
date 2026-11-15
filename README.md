@@ -6,7 +6,7 @@
 
 Picture books adapted for children with **cortical visual impairment (CVI)**, using the book's original artwork and a teacher's approval for every page.
 
-**[Try the live demo](https://miraai.study/)** &nbsp; | &nbsp; [How it works](#what-miraai-does) &nbsp; | &nbsp; [Under the hood](#how-the-project-fits-together) &nbsp; | &nbsp; [Infrastructure](#infrastructure)
+**[Try the live demo](https://miraai.study/)** &nbsp; | &nbsp; [How it works](#what-miraai-does) &nbsp; | &nbsp; [Under the hood](#how-the-project-fits-together) &nbsp; | &nbsp; [Our own models](#our-own-models-the-model-cascade) &nbsp; | &nbsp; [Infrastructure](#infrastructure)
 
 Built at HackUMass XIV
 
@@ -66,44 +66,127 @@ Children with CVI recognize an object far better when it is shown alone, on a pl
 
 | Step | Model | Notes |
 | --- | --- | --- |
-| Choosing the subject | Our own subject model first, then Gemini (Flash), JSON output | Our model answers only when the page is clearly about one thing the page text names; every other page goes to Gemini, so results are as accurate as Gemini alone (see [Our own models](#our-own-models)). Up to 5 suggestions per page with a self-reported confidence. Confidence only screens out weak guesses; when a page has several subjects, the teacher chooses |
+| Choosing the subject | Our own subject model first, then Gemini (Flash), JSON output | Our model answers only when the page is clearly about one thing the page text names; every other page goes to Gemini, so results are as accurate as Gemini alone (see [Our own models](#our-own-models-the-model-cascade)). Up to 5 suggestions per page with a self-reported confidence. Confidence only screens out weak guesses; when a page has several subjects, the teacher chooses |
 | Tracing the cut-out | SAM 2.1 small on CPU | Runs once per suggestion. OpenCV GrabCut is the fallback when PyTorch is not installed. Our own cut-out model can run first (`SEGMENTER=cascade`), but on our CPU server it is no faster than SAM at the same accuracy, so the live site uses SAM |
 | Second look | Gemini | Shown only the adapted page, it names the subject. A warning only; it never blocks or grants approval |
 | Display and checks | None | NumPy, OpenCV and Pillow. The same input always gives the same picture |
 
-## Our own models
+## Our own models: the model cascade
 
-Alongside the off-the-shelf models, the team trained two small models from random weights (no pretrained
-weights) during the hackathon, and wired each in front of the big model as a **cascade**: ours answers when it
-is sure, the big model takes everything else, and the result stays as accurate as the big model alone.
+The team trained two small models **from scratch** (random starting weights, no pretrained
+weights anywhere) during the hackathon, and put each one in front of a large off-the-shelf
+model as a **cascade**:
 
-| Step | Our model | Behind it | On the live site |
-| --- | --- | --- | --- |
-| Choosing the subject | `subject_model/` (Andrew): a U-Net that finds what stands out on the page and a ResNet-18 that names it | Gemini | **On** (`SUBJECT_FINDER=cascade`) |
-| Tracing the cut-out | `cutout_model/` (Kevin and Bryan): a 7.8M-parameter U-Net that turns a box into a mask | SAM 2.1 small | Off (`SEGMENTER=sam2`) |
+1. Our small model tries first. It is fast and needs no outside service.
+2. A strict check decides whether its answer can be trusted.
+3. If the check passes, we keep our answer and the large model is never called.
+4. If it fails, or our model is missing or errors, the large model answers, exactly as before.
 
-**Subject cascade.** Our model's answer is kept only when the page rules would pre-select exactly one subject,
-the page text names it, and the text is not about anything else (no "and", "&", "or", "with", no other name
-our model knows). On *Animal Homes* it answers 1 page of 16 (the crocodile, correctly) in under a second
-instead of an 8 to 20 second Gemini call; every other page, including every page it would have got wrong,
-goes to Gemini. Accuracy comes first: it is fine that Gemini answers most pages.
+Each step is switched with one setting, and turning it off restores the previous behaviour
+exactly. Every decision is logged with the reason (`gemini.last_subject_route()`,
+`cascade.last_route()`), so you can see which model answered each page and why.
 
-**Cut-out model.** Trained on Google Colab (one NVIDIA L4) on DUTS photos, then photos plus drawn cut-outs
-pasted on scenes. Scored on 100 held-out drawn test pages against the true masks, with the same box prompt
-for every model:
+| Step | Our model (trained from scratch) | Behind it | Setting | On the live site |
+| --- | --- | --- | --- | --- |
+| Choosing the subject | `subject_model/` (Andrew): a finder U-Net and a namer ResNet-18 | Gemini Flash | `SUBJECT_FINDER=cascade` | **On** |
+| Tracing the cut-out | `cutout_model/` (Kevin and Bryan): a 7.8M-parameter U-Net | SAM 2.1 small, then GrabCut | `SEGMENTER=cascade` | Off (`SEGMENTER=sam2`) |
+
+### Cascade 1: choosing the subject (live)
+
+**Our model.** Two networks that together return the same answer shape as Gemini (up to five
+subjects, each with a name, a box and a confidence):
+
+- **Finder:** a half-width U-Net (16 to 256 channels) that marks what stands out on a page.
+  Trained for 37 epochs at 256 px on DUTS-TR (10,025 photos with hand-drawn masks; 3 in 10 placed
+  on paper with printed words so it learns to ignore text). Validation IoU 0.827.
+- **Namer:** a ResNet-18 that names each blob with one of 347 names. Trained for 30 epochs at
+  128 px on DomainNet clipart, painting and sketch (181,092 training images) plus person and
+  text examples. Validation top-1 accuracy 0.590.
+- The page's own text then confirms or rejects each name.
+
+**The trust check.** Our answer is kept only when all three hold; otherwise Gemini answers:
+
+1. the page's own rules (`decide_state`) would pre-select **exactly one** subject;
+2. the page text **names** that subject;
+3. the text is **not about anything else**: no "and", "&", "or" or "with", and no other name
+   our model knows.
+
+Checks 1 and 2 came from measuring: without them our model pre-selected a wrong cut-out on 4 of
+7 pages it marked Ready (the whole pond, a burrow, printed text, a banner). Check 3 came from
+*Animal Homes* page 11, "Deer live in forests. And so do tigers!", where our model chose the
+tiger and never offered the deer.
+
+**Result on *Animal Homes* (16 pages).** Our model answers 1 page (the crocodile), correctly, in
+under a second instead of an 8 to 20 second Gemini call. The other 15 pages, including every
+page it would have got wrong, go to Gemini. Accuracy comes first: it is fine that Gemini answers
+most pages, and every page our model answers is one Gemini call saved.
+
+### Cascade 2: tracing the cut-out (built and calibrated, off on the server)
+
+**Our model.** A U-Net with 7.8M parameters that takes a 320 px crop around a subject's box
+(red, green, blue, plus one channel marking the box) and returns that subject's mask. Like every
+cut-out in Miraai, the subject is then copied from the original page through the mask; the model
+never draws. Trained on Google Colab on one NVIDIA L4:
+
+- **Run A:** DUTS-TR photos with hand-drawn masks, 27 epochs, about 1 hour.
+- **Run B:** the same photos plus as many drawn cut-outs (anime-segmentation) pasted onto scenes,
+  where each mask comes free from the cut-out's transparency, 16 epochs from run A's best,
+  about 72 minutes. No mask anywhere was made by SAM.
+
+Scored on 100 held-out drawn test pages (built from archives never used in training) against
+the true masks, with the same box prompt for every model:
 
 | Model | Mean IoU | Pages under 0.5 | Time per box (L4 GPU) |
 | --- | --- | --- | --- |
 | GrabCut | 0.776 | 11 | 2.5 s (CPU) |
 | SAM 2.1 small | 0.906 | 1 | 0.10 s |
-| Ours, photos only | 0.768 | 2 | 0.018 s |
-| **Ours, photos and drawings** | **0.897** | **1** | **0.020 s** |
+| Ours, run A (photos) | 0.768 | 2 | 0.018 s |
+| **Ours, run B (photos and drawings)** | **0.897** | **1** | **0.020 s** |
 
-On the real *Animal Homes* boxes it agrees with SAM 2.1 at 0.786 IoU (GrabCut 0.688), and as a cascade it
-handles two-thirds of boxes at 0.92 agreement with SAM. It is 2 to 5 times faster than SAM on a GPU, but on
-our CPU server SAM studies a page once (about 4 to 5 s) and then cuts each further box in 0.15 s, while our
-model takes 0.5 s a box, so the server keeps SAM 2.1. Details: `cutout_model/README.md` and
-`pipeline/README.md`.
+On the 36 real subject boxes of *Animal Homes* (no hand masks there, so this is agreement with
+SAM, not accuracy) it agrees with SAM 2.1 at 0.786 IoU, against 0.688 for GrabCut, and finds 5
+small subjects GrabCut misses entirely.
+
+**The trust check.** A confidence score, the lowest of five checks on our own mask, so a low
+score always names the reason:
+
+- **sure:** how decided the model is along the mask's outline;
+- **fill:** the mask fills a sensible share of its box, neither a speck nor the whole box;
+- **pieces:** most of the mask is one piece;
+- **border:** the mask does not fill the box's edge band (that means background);
+- **mirror:** the model draws the same outline when the crop is mirrored. A model that is sure of
+  a subject agrees with itself either way round. Because the score is the lowest check, the
+  mirror pass only runs when the other four already clear the bar.
+
+Under the threshold, the box goes to SAM 2.1. Clicks always go to SAM, because our model only
+takes boxes.
+
+**Calibration.** `python -m pipeline.calibrate_cascade` tries every threshold on real boxes and
+picks the one that keeps the most boxes on our model while staying within a margin of SAM. On
+*Animal Homes*:
+
+| Threshold | Boxes cut by our model | Agreement with SAM 2.1 |
+| --- | --- | --- |
+| our model alone | 100% | 0.786 |
+| 0.60 | 78% | 0.890 |
+| **0.65 (default)** | **67%** | **0.919** |
+| 0.70 | 53% | 0.948 |
+| SAM alone | 0% | 1.000 |
+
+Without the mirror check, the best setting keeps only 53% of boxes at the same agreement, so the
+mirror check makes our model a better judge of its own masks.
+
+**Why it is off on the live server.** Our model is 2 to 5 times faster than SAM on a GPU, but the
+server has none. On its 6 CPUs, SAM studies a page once (about 4 to 5 s) and then cuts each
+further box on that page in 0.15 s, while our model takes 0.5 s a box. We simulated every
+cascade policy with the server's own timings: at best it matches SAM's speed at 0.947
+agreement, and every setting as accurate as SAM is slower. So the server keeps SAM 2.1 for
+cut-outs. On a GPU the same switch, `SEGMENTER=cascade`, would cut two thirds of boxes with our
+model.
+
+**Where to look.** `pipeline/cascade.py` and `pipeline/calibrate_cascade.py` (cut-outs),
+`pipeline/gemini.py` (subjects), `cutout_model/README.md` and `subject_model/README.md` (training
+and full results), `pipeline/README.md` (settings and rollback).
 
 ## Tech stack
 
@@ -176,7 +259,7 @@ The project includes Python and frontend tests covering the API contracts, segme
 - On the live server (6 vCPU, no GPU), SAM 2.1 takes about 4 to 5 seconds for a page's first cut-out and 0.15 seconds for each further one. The first cut-out after a server restart takes about 24 seconds while the model loads.
 - The 16-page *Animal Homes* runs through the whole pipeline in about 65 seconds on a laptop with Gemini.
 - Our subject model answers a page in under a second on the server; a Gemini call takes 8 to 20 seconds.
-- Our cut-out model scores 0.897 mean IoU on 100 held-out drawn pages against SAM 2.1's 0.906, 5 times faster on a GPU (see [Our own models](#our-own-models)).
+- Our cut-out model scores 0.897 mean IoU on 100 held-out drawn pages against SAM 2.1's 0.906, 5 times faster on a GPU (see [Our own models](#our-own-models-the-model-cascade)).
 
 **Evaluation is not run yet.** The plan is a set of 20 StoryWeaver pages, hand-labeled before any AI output is seen and never used for tuning, reported as counts: correct subjects, correctly flagged pages, confidently wrong pages and cut-out defects.
 
