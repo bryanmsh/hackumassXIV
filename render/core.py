@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 from ._types import LocalSettings, coerce_settings
 from .color import RGB, contrast_ratio, hex_to_rgb, text_color_for
 
-RENDER_VERSION = "b2"
+RENDER_VERSION = "b3"
 
 CANVAS_LONG = 1600
 TEXT_BAND = 0.20
@@ -29,7 +29,9 @@ TEXT_SIZE = 0.075
 TEXT_MIN_PX = 12
 TEXT_CONTRAST_MIN = 4.5  # the main colour is used for text only when it reaches this
 PAGE_NUMBER = re.compile(r"^\s*\d+\s*(/\s*\d+)?\s*$")
-SIZE_FRACTION = {"small": 0.40, "medium": 0.60, "large": 0.80}
+# Levels 1 and 2: the subject is scaled to fit a box this fraction of the picture's width AND
+# height, so a wide subject fills the width and a tall one the height (not the shorter side only).
+SIZE_FRACTION = {"small": 0.50, "medium": 0.70, "large": 0.90}
 POSITIONS = {
     "center": (0.5, 0.5),
     "left": (0.3, 0.5),
@@ -38,7 +40,9 @@ POSITIONS = {
     "lower": (0.5, 0.7),
 }
 EDGE_MARGIN = 0.04
-OUTLINE_PX = {"off": 0, "thin": 4, "thick": 8}
+# Ring widths on the 1,600 px canvas. Outlined (level 4) always rings the subject: "thick"
+# unless the profile asks for thin. The extra ring at Cut-out and Faded page follows the profile.
+OUTLINE_PX = {"off": 0, "thin": 8, "thick": 20}
 SOFTEN_SIGMA = 1.0  # about a 2 px edge blur
 FADE_SATURATION = 0.20
 FADE_PAGE_WEIGHT = 0.30
@@ -201,9 +205,13 @@ def tint(sub: np.ndarray, hard: np.ndarray, color: RGB) -> np.ndarray:
 
 def subject_placement(box_w: int, box_h: int, canvas_w: int, picture_h: int,
                       size: str, position: str) -> Tuple[float, int, int, int, int]:
-    """Scale and top-left position of the subject at levels 1 and 2."""
-    target = SIZE_FRACTION[size] * min(canvas_w, picture_h)
-    scale = target / max(box_w, box_h)
+    """Scale and top-left position of the subject at levels 1 and 2.
+
+    The subject fits inside a box SIZE_FRACTION wide and high of the picture area, so it is
+    as large as that box allows in whichever direction binds first.
+    """
+    frac = SIZE_FRACTION[size]
+    scale = frac * min(canvas_w / box_w, picture_h / box_h)
     nw, nh = max(1, round(box_w * scale)), max(1, round(box_h * scale))
     fx, fy = POSITIONS[position]
     mx, my = round(EDGE_MARGIN * canvas_w), round(EDGE_MARGIN * picture_h)
