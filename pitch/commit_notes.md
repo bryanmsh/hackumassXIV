@@ -2,6 +2,22 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## render: text band reads like the page
+
+**What changed**
+- `render/core.py`: the band keeps the book's line breaks. Each non-empty source line is its own line, wrapped only when wider than the band. Lines that are only a page number (`^\s*\d+\s*(/\s*\d+)?\s*$`, e.g. "4/12", "12") are dropped; nothing else is removed, so "4/12 Spiders spin" stays whole. Text that is only a page number shows no band at all.
+- Bigger type: `TEXT_SIZE` 0.06 to 0.075, `TEXT_BAND` 0.16 to 0.20; shrink-to-fit kept, floor 12 px (start size floor raised from 10 to 12 to match).
+- Text is drawn in the child's main colour when it reaches 4.5:1 on the background, else white or black as before. `Rendered.text_color` is the drawn colour, so the `text_contrast` check measures what the child sees.
+- `RENDER_VERSION` "b1" to "b2". New helpers `text_lines`, `band_text_color`, `layout_text` (no contract change).
+- 4 new tests; existing band test reads `TEXT_BAND`. 65 pass across render, checks and tests.
+
+**Why**
+- PDF text arrives with page numbers and line breaks; collapsing it into one paragraph read unlike the book, and page numbers are noise for a CVI reader. Larger type and the child's own colour make the band easier to see.
+- The band looks different, so old approvals must stop matching.
+
+**Still open**
+- Andrew: `RENDER_VERSION` is now "b2"; every existing approval with text on goes back to needing approval.
+
 ## render: overlay_palette, one colour per candidate on the review image
 
 **What changed**

@@ -8,8 +8,8 @@ from PIL import Image
 
 from render import RENDER_VERSION, SUBJECT_PALETTE, overlay, overlay_palette, render
 from render.color import contrast_ratio, hex_to_rgb
-from render.core import (CANVAS_LONG, compose, load_mask, load_rgb, resample,
-                         subject_placement)
+from render.core import (CANVAS_LONG, TEXT_BAND, TEXT_SIZE, compose, layout_text, load_mask, load_rgb,
+                         resample, subject_placement, text_lines)
 
 SAMPLES = Path(__file__).resolve().parents[1] / "samples"
 PAGES = [
@@ -119,7 +119,7 @@ def test_extra_outline_uses_second_color_at_cutout_and_faded():
 
 def test_text_band_only_when_text_is_on():
     on = compose(*PAGES[0], {"text_mode": "below", "background": "#000080"}, 2, TEXT)
-    assert on.picture_height == on.rgb.shape[0] - round(0.16 * on.rgb.shape[0])
+    assert on.picture_height == on.rgb.shape[0] - round(TEXT_BAND * on.rgb.shape[0])
     assert on.text_color == (255, 255, 255)
     assert contrast_ratio(on.text_color, on.background) >= 4.5
     band = on.rgb[on.picture_height:]
@@ -133,6 +133,43 @@ def test_text_band_only_when_text_is_on():
 def test_white_background_gets_black_text():
     r = compose(*PAGES[0], {"text_mode": "below", "background": "#FFFFFF"}, 1, TEXT)
     assert r.text_color == (0, 0, 0)
+
+
+def band_lines(text, width=1600, height=1200):
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(Image.new("RGB", (width, height)))
+    return layout_text(draw, text, width, height, round(TEXT_BAND * height))
+
+
+def test_text_band_keeps_the_book_line_breaks():
+    size, _, lines, _ = band_lines("Birds build their homes up high.\n\nAnd so do bees.")
+    assert lines == ["Birds build their homes up high.", "And so do bees."]
+
+
+def test_text_band_drops_lines_that_are_only_a_page_number():
+    assert text_lines("4/12") == []
+    assert text_lines(" 12 ") == []
+    assert text_lines("4/12\nSpiders spin") == ["Spiders spin"]
+    assert text_lines("4/12 Spiders spin") == ["4/12 Spiders spin"]   # only whole-line numbers go
+    assert not compose(*PAGES[0], {"text_mode": "below"}, 2, "4/12").text_color   # no band at all
+
+
+def test_text_band_size_matches_the_constants():
+    r = compose(*PAGES[0], {"text_mode": "below"}, 2, "Hi.")
+    h = r.rgb.shape[0]
+    assert r.picture_height == h - round(TEXT_BAND * h)
+    size, _, _, _ = band_lines("Hi.", r.rgb.shape[1], h)
+    assert size == round(TEXT_SIZE * h)
+    assert TEXT_BAND == 0.20 and TEXT_SIZE == 0.075
+
+
+def test_text_uses_the_main_colour_only_when_it_reaches_4_5():
+    yellow = "#FDD835"
+    on_black = compose(*PAGES[0], {"text_mode": "below", "colors": [yellow], "background": "#000000"}, 1, TEXT)
+    assert on_black.text_color == hex_to_rgb(yellow)
+    on_white = compose(*PAGES[0], {"text_mode": "below", "colors": [yellow], "background": "#FFFFFF"}, 1, TEXT)
+    assert on_white.text_color == (0, 0, 0)
+    assert contrast_ratio(on_white.text_color, on_white.background) >= 4.5
 
 
 def test_overlay_matches_view_size():
