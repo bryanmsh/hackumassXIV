@@ -2,6 +2,23 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Demo script matches the app on main (16-page book, words band, cascade)
+
+**What changed**
+- Pulled `main` (fast-forward to 8a90127). `pitch/demo_script.md` rewritten against it and the team's notes:
+  - 16-page *Animal Homes*: the hard page is now **page 3** (page 1 is the cover; 13 to 16 have no subject).
+  - Words: always shown below at Tinted and Cut-out, in book line breaks, no page number, in the child's main colour when readable; the profile option is now "extra words below" for Faded page and Outlined.
+  - Credits read from the book's own credits page on upload, and named in step 12.
+  - Reader keys: B blanks the screen, Esc closes the bar. Hover spotlight on suggestions. Live URL miraai.study.
+  - New "If a judge asks how the AI works": subject cascade (our model first, Gemini otherwise; 1 of 16 pages on Animal Homes), SAM 2.1 for cut-outs, our cut-out model ready but not live (0.897 vs 0.906 IoU), credits with no AI.
+  - Open decisions: after a reset most pages arrive Needs subject, so step 6 leaves most out unless more are picked live.
+
+**Why**
+- The script still described the 5-page book (hard page 2), text as a profile toggle, and Gemini as the only subject finder.
+
+**Still open**
+- Decide step 6 with Andrew before the first judge. `pitch/checkpoint1_steps.md` still says 5 pages.
+
 ## README team row matches what Kevin built (plus merge main)
 
 **What changed**
