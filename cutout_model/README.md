@@ -19,6 +19,19 @@ Hardware: Google Colab, NVIDIA L4 (23 GB), torch 2.14.1+cu130, bf16, batch 32. G
 
 **What it does not say.** The test pages are made the same way as run B's drawn training examples (from different archives), so run B is tested on the kind of picture it trained on. That flatters it. These are drawn subjects on drawn scenes, not picture-book pages; the gap to SAM 2.1 on real books is unmeasured. Say "held-out drawings" on any slide.
 
+## Spot check on a real picture book
+
+*Animal Homes* (the demo book; never used for training or for the scores above): the 45 subject boxes Gemini found on its 16 pages, given to run B, SAM 2.1 and GrabCut. There are no hand masks for this book, so this measures agreement with SAM 2.1 (IoU against SAM's mask), not accuracy.
+
+| boxes | run B vs SAM 2.1 (mean / median) | GrabCut vs SAM 2.1 (mean / median) | run B under 0.5 |
+| --- | --- | --- | --- |
+| 36 single-subject boxes | **0.786 / 0.835** | 0.688 / 0.764 | 4 |
+| 9 combined boxes ("frog and fish") | 0.306 | – | – |
+
+Run B is closer to SAM than GrabCut is on 23 of the 36 single-subject boxes. GrabCut returns nothing at all on 5 small subjects (a snail, an ant, a fish); run B finds all of them. Looking at the outlines: run B matches SAM closely on clear animals (tortoises, frogs, bears, crocodile, gibbons, tiger, woodpecker, lizard) and is weaker in busy scenes (deer among trees bleeds into the forest, a cluster of tiny ants, an abstract "home"). Combined boxes do not apply: the pipeline builds a combined cut-out by joining the single ones, never from one big box. Median time per box at 3,000 px: run B 0.074 s, SAM 2.1 0.151 s (L4). Contact sheet and per-box numbers: `MyDrive/mirai-train/book_check/`.
+
+**Verdict:** on real book pages run B is a clear step up from GrabCut but not a replacement for SAM 2.1. Keep SAM 2.1 on the server; run B is a credible fast fallback where SAM is unavailable.
+
 ## Training
 
 | run | data | epochs | s/epoch | best val IoU (DUTS) |
