@@ -139,3 +139,14 @@ def test_two_empty_answers_agree(testset, monkeypatch):
     monkeypatch.setattr(evaluate, "ask_gemini", lambda view_path, text, cache=None: NOTHING)
     result = agree(testset)
     assert result["total"] == 1 and result["agree"] == 1 and result["named"] == 0
+
+
+def test_a_subject_may_list_several_accepted_names(testset, monkeypatch):
+    officer = [("police officer/officer/woman", HAND)]
+    assert judge(answer("person", ["child", "woman"], HERE), officer, 400, 300) == (1, True, 1)
+    assert judge(answer("police officer", ["cop"], HERE), officer, 400, 300) == (1, True, 1)
+    assert judge(answer("dog", ["animal"], HERE), officer, 400, 300) == (1, True, 0)
+    (testset / "labels.csv").write_text("name,label,x0,y0,x1,y1,text\nball,ball/toy,100,100,300,200,\n")
+    monkeypatch.setattr(evaluate.local, "local_answer", lambda view_path, text: answer("toy", [], HERE))
+    result = score(testset, modes=("local",))
+    assert result["named"] == {"local": 1} and result["pages"][0]["subjects"] == ["ball"]   # shown by its first name

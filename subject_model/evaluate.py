@@ -1,6 +1,7 @@
 """Score the local mode (and Gemini) on hand-labelled pages: which main subjects are found and named, whether
 the first choice is one of them, and what the teacher gets. A page may have several main subjects; labels.csv has
-one row per subject, `name,label,x0,y0,x1,y1,text`, with the rectangle in the page picture's pixels.
+one row per subject, `name,label,x0,y0,x1,y1,text`, with the rectangle in the page picture's pixels. A label may
+list several accepted names with `/` ("police officer/officer/woman"), so a general and a specific name both count.
 
 python -m subject_model.evaluate TESTSET_DIR [--modes local gemini] [--plain-crops]
 """
@@ -91,7 +92,7 @@ def judge(answer, subjects, width, height) -> tuple[int, bool, int]:
             continue
         found += 1
         best = answer.candidates[overlaps.index(max(overlaps))]
-        named += match(" ".join([best.label, *best.synonyms]), [word]) is not None
+        named += match(" ".join([best.label, *best.synonyms]), word.split("/")) is not None
     first = bool(answer.candidates) and _is_a_subject(answer.candidates[0], [h for _, h in subjects], width, height)
     return found, first, named
 
@@ -144,7 +145,7 @@ def score(testset_dir, modes=("local",)) -> dict:
             height, width = cv2.imread(str(page), cv2.IMREAD_GRAYSCALE).shape
             view_path = _working_copy(page, Path(folder))
             text = page_text(testset_dir, name, fallback=typed)
-            row = {"name": name, "subjects": [word for word, _ in subjects], "labels": {}, "found": {},
+            row = {"name": name, "subjects": [word.split("/")[0] for word, _ in subjects], "labels": {}, "found": {},
                    "first": {}, "named": {}, "outcome": {}, "error": {}}
             for mode in modes:
                 try:
