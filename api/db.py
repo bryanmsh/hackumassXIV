@@ -6,7 +6,7 @@ from pymongo import MongoClient
 
 from api import settings
 
-client = MongoClient(settings.MONGODB_URI or "mongodb://localhost:27017/mirai", serverSelectionTimeoutMS=2000)
+client = MongoClient(settings.MONGODB_URI or "mongodb://localhost:27017/mirai", serverSelectionTimeoutMS=5000)
 database = client.get_default_database(default="mirai")
 
 books = database["books"]
