@@ -84,7 +84,7 @@ export function ProfilesPage() {
               <p className="mt-2 text-sm text-slate-700">
                 {SIZES.find((s) => s.value === p.settings.size)?.name ?? p.settings.size} ·{' '}
                 {POSITIONS.find((o) => o.value === p.settings.position)?.name ?? p.settings.position} · text{' '}
-                {p.settings.text_mode === 'below' ? 'below the picture' : 'off'}
+                {p.settings.text_mode === 'below' ? 'below the picture' : 'off (words not shown)'}
               </p>
               {lowContrast({ colors: p.settings.colors, background: p.settings.background }) && (
                 <p className="mt-2 text-sm text-amber-900">

@@ -38,13 +38,16 @@ export const BACKGROUNDS: readonly { name: string; hex: string }[] = [
   { name: 'White', hex: '#FFFFFF' },
 ];
 
-/** Defaults for the P1 fields, sent until their controls ship after checkpoint 2. */
+/**
+ * Defaults for a new child. A picture book is words and pictures, so the page's
+ * words are shown below the picture unless the teacher turns them off.
+ */
 export const DEFAULT_SETTINGS: Settings = {
   colors: ['#E53935'],
   background: '#000000',
   size: 'medium',
   position: 'center',
-  text_mode: 'off',
+  text_mode: 'below',
   outline: 'off',
 };
 

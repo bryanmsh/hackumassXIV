@@ -136,6 +136,24 @@ export function ProfileEditor({
         </fieldset>
 
         <fieldset>
+          <legend className="font-semibold">The page’s words</legend>
+          <p className="text-sm text-slate-600">
+            A picture book is words and pictures. The page’s text is shown large in a band under the picture, in white or
+            black against the background, and the picture is scaled so the two never overlap. Pages with no text show none.
+          </p>
+          <label className="mt-2 flex min-h-11 w-fit cursor-pointer items-center gap-3 rounded-lg px-2 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
+            <input
+              type="checkbox"
+              className="size-6"
+              checked={draft.textMode === 'below'}
+              onChange={(e) => set({ textMode: e.target.checked ? 'below' : 'off' })}
+            />
+            Show the text below the picture
+          </label>
+          {draft.textMode === 'off' && <p className="mt-1 text-sm text-amber-900">Off: the words are not shown; the picture stands alone.</p>}
+        </fieldset>
+
+        <fieldset>
           <legend className="font-semibold">Colors</legend>
           <p className="text-sm text-slate-600">
             Choose 1 to 3. The first is the main color: it tints the subject in Tinted and draws the outline in Outlined.
@@ -307,23 +325,6 @@ export function ProfileEditor({
               </label>
             ))}
           </div>
-        </fieldset>
-
-        <fieldset>
-          <legend className="font-semibold">Text below the picture</legend>
-          <p className="text-sm text-slate-600">
-            The page’s words, large, in a band under the picture. The picture is scaled so the two never overlap. Pages with no
-            text show none.
-          </p>
-          <label className="mt-2 flex min-h-11 w-fit cursor-pointer items-center gap-3 rounded-lg px-2 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
-            <input
-              type="checkbox"
-              className="size-6"
-              checked={draft.textMode === 'below'}
-              onChange={(e) => set({ textMode: e.target.checked ? 'below' : 'off' })}
-            />
-            Show the text below the picture
-          </label>
         </fieldset>
 
         {low && ratio !== null && (
