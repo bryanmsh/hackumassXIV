@@ -96,8 +96,9 @@ export function ContactSheetPage() {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
-    // Picking a child starts on that child's own look; the teacher can change it.
-    if (key === 'profile' && value && !next.get('level')) {
+    // Picking a child starts on that child's own look (even if another look is already
+    // selected); the teacher can change it afterwards.
+    if (key === 'profile' && value) {
       const p = profiles.data?.find((x) => x.id === value);
       if (p) next.set('level', String(p.level));
     }

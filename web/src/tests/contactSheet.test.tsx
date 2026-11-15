@@ -206,6 +206,14 @@ describe('Contact sheet', () => {
     expect(await screen.findByRole('heading', { name: 'Page 1' })).toBeInTheDocument();
   });
 
+  it('switching to another child moves the look to that child’s own look, even when a look is already set', async () => {
+    const { user } = await setup(); // Maya, Tinted
+    expect(screen.getByLabelText('Look')).toHaveDisplayValue('Tinted');
+    const child = screen.getByLabelText('Child');
+    await user.selectOptions(child, within(child).getByRole('option', { name: 'Leo (Cut-out)' }));
+    expect(screen.getByLabelText('Look')).toHaveDisplayValue('Cut-out');
+  });
+
   it('the Reader link appears only once a page is approved', async () => {
     const { user } = await setup();
     expect(screen.queryByRole('link', { name: /Read with/ })).not.toBeInTheDocument();
