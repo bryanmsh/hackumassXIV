@@ -1,8 +1,10 @@
 """The one door to the segmenter. Nothing outside this file knows which one is in use.
 
-SEGMENTER picks it: `stub`, `grabcut` (the default), `sam2` or `edgetam`.
+SEGMENTER picks it: `stub`, `grabcut` (the default), `sam2`, `edgetam`, `mirai` or `cascade`.
 `sam2` (SAM 2.1 small) and `edgetam` need torch and live in pipeline/sam.py, the only
-file that imports it; `stub` and `grabcut` run without torch installed.
+pipeline file that imports it; `stub` and `grabcut` run without torch installed.
+`mirai` is our own cut-out model and `cascade` runs it with SAM 2 behind it for the boxes it
+is unsure of; both live in pipeline/cascade.py.
 The setting is read on every call, so it can be changed without a restart.
 """
 import os
@@ -139,4 +141,17 @@ def _edgesam(image, box, points) -> np.ndarray:
     raise NotImplementedError("EdgeSAM has no installable package; set SEGMENTER=edgetam (its successor) or sam2")
 
 
-_SEGMENTERS = {"stub": _stub, "grabcut": _grabcut, "sam2": _sam2, "edgetam": _edgetam, "edgesam": _edgesam}
+def _mirai(image, box, points) -> np.ndarray:
+    """Our own cut-out model alone (cutout_model/). See pipeline/cascade.py."""
+    from pipeline import cascade
+    return cascade.segment_ours(image, box, points)
+
+
+def _cascade(image, box, points) -> np.ndarray:
+    """Our model first, SAM 2 for the boxes it is unsure of. See pipeline/cascade.py."""
+    from pipeline import cascade
+    return cascade.segment_cascade(image, box, points)
+
+
+_SEGMENTERS = {"stub": _stub, "grabcut": _grabcut, "sam2": _sam2, "edgetam": _edgetam, "edgesam": _edgesam,
+               "mirai": _mirai, "cascade": _cascade}
