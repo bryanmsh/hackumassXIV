@@ -1,0 +1,13 @@
+# Training and scoring only. Not named requirements.txt on purpose: the Dockerfile installs
+# every */requirements.txt, and a second torch pin would break the server image.
+# On Colab, skip the four pins: keep Colab's own CUDA torch.
+torch==2.15.0
+torchvision==0.29.2
+transformers==5.22.1
+timm==1.0.31
+numpy
+opencv-python-headless
+pillow
+pymupdf
+pydantic>=2,<3
+pytest
