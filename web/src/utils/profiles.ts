@@ -22,9 +22,9 @@ export interface ProfileDraft {
 }
 
 export const SIZES: readonly { value: SubjectSize; name: string; hint: string }[] = [
-  { value: 'small', name: 'Small', hint: '40% of the picture area' },
-  { value: 'medium', name: 'Medium', hint: '60% of the picture area' },
-  { value: 'large', name: 'Large', hint: '80% of the picture area' },
+  { value: 'small', name: 'Small', hint: 'fits half the picture area' },
+  { value: 'medium', name: 'Medium', hint: 'fits 70% of the picture area' },
+  { value: 'large', name: 'Large', hint: 'fits 90% of the picture area' },
 ];
 
 export const POSITIONS: readonly { value: SubjectPosition; name: string }[] = [

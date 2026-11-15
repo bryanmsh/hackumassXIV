@@ -141,7 +141,7 @@ A profile holds the display choices a teacher makes for one child. The teacher s
 | Level | Tinted, Cut-out, Faded page, Outlined | None; the teacher chooses | P0 |
 | Preferred colors | 1 to 3 of 8 swatches; the first is the main color | Red | P0 |
 | Background color | Black, dark gray, navy, white | Black | P0 |
-| Subject size | Small, medium, large (40%, 60%, 80% of the picture area) | Medium | P1 |
+| Subject size | Small, medium, large (the subject fits a box 50%, 70% or 90% of the picture area's width and height) | Medium | P1 |
 | Subject position | Center, left, right, upper, lower | Center | P1 |
 | Text | Off, or large below the picture | Off | P1 |
 | Extra outline | Off, thin, thick; applies at Cut-out and Faded page | Off | P1 |
@@ -487,9 +487,9 @@ The output canvas is 1,600 px on its longer side, in the page's own proportions.
 | 1 Tinted | Crop the subject from the master through its mask. Convert to light and dark values, stretched to the subject's own range. Multiply the main color by `0.35 + 0.65 x value` so shading survives. Scale, place, and fill the rest with the background color. |
 | 2 Cut-out | As level 1 without the tint: the subject keeps its own colors. |
 | 3 Faded page | On the working copy, cut saturation to 20%, then blend 30% page with 70% background color. Paste the subject back at its original place and full color. |
-| 4 Outlined | Leave the working copy unchanged. Grow the mask by the outline width, subtract the mask, and fill that ring with the main color. |
+| 4 Outlined | Leave the working copy unchanged. Grow the mask by the outline width (20 px on the 1,600 px canvas; 8 px when the profile asks for thin), subtract the mask, and fill that ring with the main color. |
 
-- **Size (levels 1 and 2):** the subject's longer side becomes 40%, 60% or 80% of the picture area's shorter side, so a large subject always fits above the text band.
+- **Size (levels 1 and 2):** the subject is scaled to fit a box 50%, 70% or 90% of the picture area's width and height, so a wide subject fills the width, a tall one the height, and a large subject always fits above the text band.
 - **Position (levels 1 and 2):** the subject's center goes to (0.5, 0.5), left (0.3, 0.5), right (0.7, 0.5), upper (0.5, 0.3) or lower (0.5, 0.7) of the picture area, kept 4% inside every edge.
 - **Outline at level 4:** always drawn, in the main color. Thick (8 px) unless the profile's outline is set to thin (4 px). The profile's Off does not apply here.
 - **Extra outline at levels 2 and 3:** drawn only when the profile's outline is thin or thick, in the second preferred color, or the main color when there is only one.
