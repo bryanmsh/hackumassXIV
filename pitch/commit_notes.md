@@ -2,6 +2,18 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## model: first set of labelled real-book pages
+
+**What changed**
+- `training_images_set_1/`: 11 picture-book pages (PNG, about 9 MB) from StoryWeaver-style books.
+- `significant_subjects.json` (repo root): for each page file, the list of subjects that matter on it (e.g. `catch-that-cat-pg3.png`: boy, dog, cat).
+
+**Why**
+- Real picture-book pages with named subjects, to spot-check and later evaluate the cut-out model and subject choice beyond DUTS.
+
+**Still open**
+- No masks yet, only subject names. Check each book's licence before using pages in slides.
+
 ## Fidelity check accepts combined cut-outs; demo script for pre-selected pages
 
 **What changed**
