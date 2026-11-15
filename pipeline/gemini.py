@@ -7,8 +7,10 @@ Every failure leaves this module as GeminiError, or RateLimited for a 429.
 SUBJECT_FINDER picks who answers choose_subjects and label_crop:
   gemini   (the default) Gemini only.
   local    our own subject model (subject_model/, Andrew's) only. No Gemini call.
-  cascade  our model first; Gemini when ours found nothing, is not sure enough
-           (top confidence under SUBJECT_MIN_CONFIDENCE), or is missing or fails.
+  cascade  our model first. Its answer is kept only when the page's rules would pre-select
+           exactly one subject AND the page text names that subject (Andrew's gate: without
+           the text check it was wrong on 4 of 7 Ready pages of Animal Homes). Otherwise, or
+           when our model is missing or fails, Gemini answers.
 subject_model is imported only when it is used, so the app starts on a branch without it.
 SUBJECT_MODEL=standin swaps in a placeholder that never finds anything, so the cascade
 always escalates, until the real model lands. Every routing decision is logged on the
@@ -74,7 +76,9 @@ main subject out to make room for a minor one. Rules for each candidate:
 Page text: <<<{text}>>>"""
 
 SUBJECT_FINDERS = ("gemini", "local", "cascade")
-DEFAULT_SUBJECT_MIN_CONFIDENCE = 0.6  # placeholder: the local model's text-confirmed answers start at 0.6
+# subject_model.local.CONFIRMED: the reason our model gives a subject the page text names.
+# Copied, not imported, so this module loads where subject_model is absent; a test keeps them equal.
+LOCAL_CONFIRMED = "Stands out on the page and the text names it."
 
 log = logging.getLogger("mirai.subjects")
 _route = threading.local()
@@ -241,10 +245,6 @@ def subject_finder() -> str:
     return finder
 
 
-def subject_min_confidence() -> float:
-    return float(os.environ.get("SUBJECT_MIN_CONFIDENCE") or DEFAULT_SUBJECT_MIN_CONFIDENCE)
-
-
 def last_subject_route() -> dict:
     """Who answered the last choose_subjects or label_crop on this thread, and why."""
     return dict(getattr(_route, "value", {}))
@@ -275,13 +275,23 @@ def _local_label(png_bytes: bytes) -> str:
 
 
 def local_is_enough(answer: SubjectAnswer) -> tuple[bool, str]:
-    """(enough, reason): whether the cascade can keep our model's answer instead of asking Gemini."""
+    """(enough, reason): whether the cascade can keep our model's answer instead of asking Gemini.
+
+    Kept only when process_page's own rule (decide_state) would pre-select exactly one subject
+    and the page text names it. Our model finds things that stand out on the page well but
+    names them poorly, so a pre-selected subject the text does not confirm goes to Gemini.
+    """
     if not answer.candidates:
         return False, "found nothing"
-    top = max(candidate.confidence for candidate in answer.candidates)
-    if top < subject_min_confidence():
-        return False, f"unsure: top confidence {top:.2f}"
-    return True, f"sure: top confidence {top:.2f}"
+    from pipeline.process import decide_state  # here, not at the top: process imports this module
+    state, members, _ = decide_state(answer.page_kind, answer.candidates)
+    if state != "ready" or len(members) != 1:
+        return False, f"would not pre-select one subject ({state}, {len(members)} selected)"
+    chosen = answer.candidates[members[0]]
+    if chosen.reason != LOCAL_CONFIRMED:
+        return False, f'the page text does not name "{chosen.label}"'
+    return True, f'the page text names "{chosen.label}"'
+
 
 
 def choose_subjects(view_path, text: str) -> SubjectAnswer:

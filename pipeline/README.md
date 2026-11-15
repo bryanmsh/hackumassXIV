@@ -69,8 +69,7 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 | `CASCADE_FALLBACK` | a segmenter name | Empty means `sam2`. Not `cascade` or `mirai` |
 | `CASCADE_FLIP` | `1` (default) or `0` | `0` skips the mirrored-page check, which halves our model's time per box but makes it a worse judge of itself: at the same agreement it keeps 53% of boxes instead of 67% (threshold 0.75) |
 | `CUTOUT_MODEL` | empty or `standin` | `standin` replaces our model with GrabCut with blurred edges, until the weights exist |
-| `SUBJECT_FINDER` | `gemini` (default), `local`, `cascade` | `local` is Andrew's `subject_model` with no Gemini call; `cascade` asks it first and Gemini when it found nothing or is unsure |
-| `SUBJECT_MIN_CONFIDENCE` | 0 to 1 | Empty means 0.6. The cascade keeps our answer when its top candidate is at least this sure |
+| `SUBJECT_FINDER` | `gemini` (default), `local`, `cascade` | `local` is Andrew's `subject_model` with no Gemini call; `cascade` asks it first and keeps its answer only when exactly one subject would be pre-selected and the page text names it; otherwise Gemini answers. Weights: `NAMER_WEIGHTS` and `FINDER_WEIGHTS`, else `$DATA_DIR/models/`; the trained ones are in `subject_model/weights/` |
 | `SUBJECT_MODEL` | empty or `standin` | `standin` is a placeholder that finds nothing, so the cascade always asks Gemini |
 | `MODEL_CACHE_DIR` | a folder | Where model weights download on first use. Empty means `$DATA_DIR/models` (the mounted `data/` folder in Docker) |
 | `TORCH_THREADS` | a number | Threads torch may use. Empty means every core |
