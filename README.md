@@ -4,6 +4,12 @@
 
 Built at HackUMass XIV in 24 hours by four people.
 
+## Try the demo
+
+**[Open Miraai](https://jensenhuangexecutiveboard.vip/)**: try it in your browser, with no local installation.
+
+Start in the library, review a book's subjects, choose a child's display settings, and approve the adapted pages before opening the reader. You can also upload a picture-book PDF to try the full workflow.
+
 ## Problem
 
 Children with CVI recognize an object far better when it is shown alone, on a plain background, with strong contrast. Picture-book pages are the opposite. Today a teacher of students with visual impairments (TVI) rebuilds pages by hand, often with scissors and black card, so each child gets only a few adapted books.
@@ -53,48 +59,18 @@ The four looks:
 
 The four parts meet at three contracts (the HTTP API, a handful of Python functions and the image file formats), all written down in [Product and technical spec.md](Product%20and%20technical%20spec.md).
 
-## Run it locally
+## How the project fits together
 
-Run every command from the repo root.
+1. **`web/`** provides the teacher's library, subject editor, child profiles, approval sheet, and full-screen reader.
+2. **`api/`** handles uploads, background processing, saved records, and approval checks before serving reader pages.
+3. **`pipeline/`** turns PDFs into page images, identifies subjects, and saves masks cut from the original artwork.
+4. **`render/` and `checks/`** build each child's adapted view and report technical checks for teacher review.
 
-```bash
-# 1. Python packages: one requirements file per folder, as the Dockerfile installs them
-python3.11 -m venv .venv
-for f in */requirements.txt; do .venv/bin/pip install -r "$f"; done
+MongoDB stores records; the filesystem stores page images, masks, and rendered views. Shared interfaces live in `contracts/`, and `infra/` contains deployment automation. Processing happens once per book; saved cut-outs can then be reused across child profiles.
 
-# 2. A local database
-docker run -d --name mirai-mongo -p 127.0.0.1:27017:27017 mongo:7
+## Validation
 
-# 3. Settings
-cp .env.example .env
-#    In .env set:  MONGODB_URI=mongodb://localhost:27017/mirai
-#    For the real pipeline also set:  GEMINI_API_KEY=...  PIPELINE=real  RENDER=real
-#    Leave PIPELINE=stub and RENDER=stub to run with stand-ins and no AI calls.
-
-# 4. The API, on port 8000
-.venv/bin/uvicorn api.main:app --env-file .env
-
-# 5. The web app, in a second terminal
-cd web && npm install
-npm run dev                                                           # mock data, no API needed
-VITE_API_URL=/ API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev     # against the local API
-```
-
-Run only one API process per database. On startup the API marks every page still processing as failed ("interrupted, retry"), so a second server pointed at the same database interrupts the first one's work.
-
-To process a book with no API and no database: `.venv/bin/python -m pipeline.run_book fixtures/animal-homes-pratham-FKB.pdf data/books/animal-homes`. This calls Gemini once per page.
-
-Deploying to the server is covered in [infra/DEPLOY.md](infra/DEPLOY.md).
-
-## Tests
-
-```bash
-.venv/bin/python -m pytest api contracts tests -q    # API, contracts, reader over HTTP; needs MongoDB running
-.venv/bin/python -m pytest pipeline render checks -q # offline; Gemini is mocked
-cd web && npm test
-```
-
-On Nov 14, 2026 these ran 212, 219 and 178 tests, all passing. The reader tests cover the promise above: an approved page is served, a never-approved page is refused, and a page approved and then changed (profile, subject, left out, rejected or a new render version) is refused until it is approved again.
+The project includes Python and frontend tests covering the API contracts, segmentation and display behavior, teacher review, and the reader's approval rules. Reader tests check that unapproved pages are refused and that changes to a profile, subject, or render version require approval again.
 
 ## Measured so far
 
@@ -119,3 +95,9 @@ On Nov 14, 2026 these ran 212, 219 and 178 tests, all passing. The reader tests 
 | Kevin | Display, checks and pitch | `render/`, `checks/`, `eval/`, `pitch/`, `tests/` |
 | Andrew | API and data | `api/`, `contracts/` |
 | Thomas | Web app | `web/` |
+
+## About me
+
+I'm [Bryan](https://github.com/bryanmsh), and I built Miraai with Kevin, Andrew, and Thomas at HackUMass XIV. My focus was the image-processing pipeline and server: turning uploaded PDFs into page images, connecting subject detection and segmentation, and running the app with Docker Compose and Caddy.
+
+For this project, the key engineering challenge was keeping the book's original artwork reusable across different display settings while giving teachers control over every page a child sees.
