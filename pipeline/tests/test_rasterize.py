@@ -119,3 +119,19 @@ def test_only_one_pdf_is_rasterized_at_a_time(make_pdf, tmp_path, monkeypatch):
     for thread in threads:
         thread.join()
     assert peak[0] == 1
+
+
+def test_text_boxes_mark_where_the_words_are(make_pdf, tmp_path):
+    with_text, without = rasterize(make_pdf([{"size": LETTER, "text": "The rabbit sat."}, {"size": LETTER}]), tmp_path / "b")
+    assert without.text_boxes == []
+    assert len(with_text.text_boxes) == 1
+    x0, y0, x1, y1 = with_text.text_boxes[0]
+    assert 0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1
+    assert y1 < 0.25 and x0 < 0.2  # the words were placed near the top-left corner
+    assert (x1 - x0) * (y1 - y0) < 0.2  # a block, not the page
+
+
+def test_text_boxes_follow_the_page_rotation(make_pdf, tmp_path):
+    asset = rasterize(make_pdf([{"size": LETTER, "text": "Turned", "rotate": 90}]), tmp_path / "b")[0]
+    assert len(asset.text_boxes) == 1
+    assert all(0 <= v <= 1 for v in asset.text_boxes[0])

@@ -1,0 +1,8 @@
+# torch and torchvision are not listed: Colab ships a CUDA build; on the laptop install them first (see README).
+numpy
+opencv-python-headless
+pillow
+pymupdf
+google-genai
+pydantic>=2,<3
+pytest

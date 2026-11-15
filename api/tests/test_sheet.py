@@ -28,7 +28,7 @@ def test_sheet_rows():
 def test_checks_run_once_per_version(monkeypatch):
     calls = []
     real = modules.display.run_checks
-    monkeypatch.setattr(modules.display, "run_checks", lambda *a: calls.append(a[4]) or real(*a))
+    monkeypatch.setattr(modules.display, "run_checks", lambda *a, **k: calls.append(a[4]) or real(*a, **k))
     book, p = confirmed_book(), make_profile()
     sheet(book, p); sheet(book, p)
     assert calls == [1]

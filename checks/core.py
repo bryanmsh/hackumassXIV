@@ -161,7 +161,7 @@ def check_text_contrast(r: Rendered) -> Optional[LocalCheck]:
     return _check("pass", ratio, f"Text contrast is {ratio:.1f} to 1.")
 
 
-def run_checks(image_path, view_path, mask_path, settings, level, text=None):
+def run_checks(image_path, view_path, mask_path, settings, level, text=None, text_boxes=None):
     """Contract 2: every check returns status, value and detail. Never raises."""
     try:
         mask = load_mask(mask_path)
@@ -171,7 +171,8 @@ def run_checks(image_path, view_path, mask_path, settings, level, text=None):
     render_error = "mask unreadable" if mask is None else ""
     if mask is not None:
         try:
-            rendered = compose(image_path, view_path, mask_path, coerce_settings(settings), int(level), text)
+            rendered = compose(image_path, view_path, mask_path, coerce_settings(settings), int(level), text,
+                               text_boxes)
         except Exception as e:  # noqa: BLE001
             render_error = str(e)
 

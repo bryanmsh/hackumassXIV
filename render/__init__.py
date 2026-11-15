@@ -28,9 +28,12 @@ __all__ = ["RENDER_VERSION", "render", "overlay", "overlay_palette"]
 
 
 def render(image_path, view_path, mask_path, settings, level, text: Optional[str] = None,
-           fmt: str = "webp") -> bytes:
-    """Adapted page for one profile and level, as WebP (or PNG for tests)."""
-    return encode(compose(image_path, view_path, mask_path, settings, level, text).rgb, fmt)
+           fmt: str = "webp", text_boxes=None) -> bytes:
+    """Adapted page for one profile and level, as WebP (or PNG for tests).
+
+    text_boxes: where the page's words sit, as 0 to 1 fractions of the page (additive; may be None).
+    """
+    return encode(compose(image_path, view_path, mask_path, settings, level, text, text_boxes).rgb, fmt)
 
 
 def overlay(view_path, mask_path, fmt: str = "webp") -> bytes:

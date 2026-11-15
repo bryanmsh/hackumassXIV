@@ -130,7 +130,11 @@ def test_text_band_only_when_text_is_on():
     assert contrast_ratio(on.text_color, on.background) >= 4.5
     band = on.rgb[on.picture_height:]
     assert (band == 255).all(axis=2).any()
-    off = compose(*PAGES[0], {"text_mode": "off"}, 2, TEXT)
+    # Tinted and Cut-out always carry the words below (the page itself is gone there).
+    forced = compose(*PAGES[0], {"text_mode": "off"}, 2, TEXT)
+    assert forced.text_color is not None and forced.picture_height < forced.rgb.shape[0]
+    # Faded page and Outlined keep the words on the page; the band is the profile's extra copy.
+    off = compose(*PAGES[0], {"text_mode": "off"}, 3, TEXT)
     assert off.picture_height == off.rgb.shape[0] and off.text_color is None
     empty = compose(*PAGES[0], {"text_mode": "below"}, 2, "  ")
     assert empty.text_color is None
@@ -285,3 +289,46 @@ def test_settings_accept_model_or_dict_and_bad_level_raises():
 
 def test_render_version_is_a_string():
     assert isinstance(RENDER_VERSION, str) and RENDER_VERSION
+
+
+def test_scattered_pieces_are_gathered_large_at_cutout_and_tinted():
+    """Several small pieces far apart are laid side by side at one scale, not left tiny in a big box."""
+    scattered = str(SAMPLES / "bad_scattered_mask.png")
+    for level in (1, 2):
+        r = compose(PAGES[0][0], PAGES[0][1], scattered, {"colors": ["#FDD835"], "background": "#000000"}, level)
+        share = r.subject.mean()
+        assert share > 0.2, share  # five pieces now fill a fifth of the canvas or more
+        assert r.scale > 1.0  # enlarged, not shrunk with the page
+        # Only the background outside the pieces; nothing is drawn where no piece sits.
+        assert (r.rgb[~r.subject] == 0).all()
+    # A single-piece subject is unchanged by the rule.
+    one = compose(*PAGES[0], {"colors": ["#FDD835"]}, 2)
+    from render.core import subject_parts, should_gather
+    parts, _ = subject_parts(load_mask(PAGES[0][2]))
+    assert not should_gather(parts, *one.subject_box[2:])
+
+
+def test_gather_layout_keeps_order_and_one_scale():
+    from render.core import gather_layout
+    parts = [(100, 500, 200, 200, 1), (1500, 100, 400, 300, 2), (900, 900, 100, 100, 3)]
+    scale, spots = gather_layout(parts, 1600, 1200, "medium", "center")
+    lefts = [sp[5] for sp in spots]
+    assert lefts == sorted(lefts)  # left-to-right order of the page is kept
+    assert [sp[7] for sp in spots] == [round(w * scale) for _, _, w, _, _ in parts]  # one common scale
+    right = max(sp[5] + sp[7] for sp in spots)
+    assert right - min(lefts) <= round(0.7 * 1600) + 2
+
+
+def test_faded_page_keeps_the_words_as_vivid_as_the_subject():
+    """With the page's text boxes known, Faded page leaves those areas untouched."""
+    view = load_rgb(PAGES[0][1])
+    box = (0.05, 0.05, 0.35, 0.12)  # a strip far from the sample's subject
+    r = compose(*PAGES[0], {"background": "#000000", "text_mode": "off"}, 3, TEXT, [box])
+    px, py, pw, ph = r.page_rect
+    x0, y0 = px + int(box[0] * pw) + 12, py + int(box[1] * ph) + 12
+    x1, y1 = px + int(box[2] * pw) - 12, py + int(box[3] * ph) - 12
+    assert np.array_equal(r.rgb[y0:y1, x0:x1], view[y0 - py:y1 - py, x0 - px:x1 - px])
+    plain = compose(*PAGES[0], {"background": "#000000", "text_mode": "off"}, 3, TEXT)
+    assert not np.array_equal(plain.rgb[y0:y1, x0:x1], view[y0 - py:y1 - py, x0 - px:x1 - px])
+    # No band at Faded page unless asked; the words are already on the page.
+    assert r.text_color is None
