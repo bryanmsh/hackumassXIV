@@ -2,6 +2,17 @@
 
 One entry per commit, newest first: what changed, why, and what is still open.
 
+## Demo script kept local only
+
+**What changed**
+- `pitch/demo_script.md` is no longer tracked (`git rm --cached`; the local file is kept) and is ignored by a new `pitch/.gitignore`.
+
+**Why**
+- Kevin's call: the word-for-word script stays on his laptop.
+
+**Still open**
+- When this reaches `main`, the file disappears from `main` and from teammates' checkouts on their next pull. Thomas drives the demo, so send him the script another way. Earlier versions stay in git history.
+
 ## Demo script matches the app on main (16-page book, words band, cascade)
 
 **What changed**
