@@ -319,16 +319,20 @@ def test_gather_layout_keeps_order_and_one_scale():
     assert right - min(lefts) <= round(0.7 * 1600) + 2
 
 
-def test_faded_page_keeps_the_words_as_vivid_as_the_subject():
-    """With the page's text boxes known, Faded page leaves those areas untouched."""
-    view = load_rgb(PAGES[0][1])
-    box = (0.05, 0.05, 0.35, 0.12)  # a strip far from the sample's subject
-    r = compose(*PAGES[0], {"background": "#000000", "text_mode": "off"}, 3, TEXT, [box])
+def test_faded_page_repaints_the_words_in_the_main_colour_where_they_sit():
+    """With the page's text boxes known, Faded page paints the letters bright, in place, and nothing else."""
+    yellow = "#FDD835"
+    box = (0.05, 0.05, 0.35, 0.20)  # a patch of sky with white clouds: the clouds stand in for letters
+    settings = {"background": "#000000", "colors": [yellow], "text_mode": "off"}
+    r = compose(*PAGES[0], settings, 3, TEXT, [box])
+    plain = compose(*PAGES[0], settings, 3, TEXT)
     px, py, pw, ph = r.page_rect
-    x0, y0 = px + int(box[0] * pw) + 12, py + int(box[1] * ph) + 12
-    x1, y1 = px + int(box[2] * pw) - 12, py + int(box[3] * ph) - 12
-    assert np.array_equal(r.rgb[y0:y1, x0:x1], view[y0 - py:y1 - py, x0 - px:x1 - px])
-    plain = compose(*PAGES[0], {"background": "#000000", "text_mode": "off"}, 3, TEXT)
-    assert not np.array_equal(plain.rgb[y0:y1, x0:x1], view[y0 - py:y1 - py, x0 - px:x1 - px])
-    # No band at Faded page unless asked; the words are already on the page.
-    assert r.text_color is None
+    strip = (slice(py + int(box[1] * ph), py + int(box[3] * ph)), slice(px + int(box[0] * pw), px + int(box[2] * pw)))
+    painted = (r.rgb[strip] == hex_to_rgb(yellow)).all(axis=2)
+    assert painted.any()  # the "letters" are now the main colour
+    assert np.array_equal(r.rgb[strip][~painted], plain.rgb[strip][~painted])  # the rest of the block is the faded page
+    outside = np.ones(r.rgb.shape[:2], dtype=bool)
+    margin = 12  # the block's small padding and the letter thickening may reach just past the box
+    outside[strip[0].start - margin:strip[0].stop + margin, strip[1].start - margin:strip[1].stop + margin] = False
+    assert np.array_equal(r.rgb[outside], plain.rgb[outside])  # nothing changes away from the text block
+    assert r.text_color is None  # no band at Faded page unless asked

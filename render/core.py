@@ -141,8 +141,9 @@ def text_lines(text: Optional[str]) -> List[str]:
     return [line for line in lines if line and not PAGE_NUMBER.match(line)]
 
 
-TEXT_BOX_PAD = 0.004  # the kept area around each text block, as a share of the page's longer side
-TEXT_BOX_FEATHER = 6.0  # soft edge (px) where a kept text block meets the faded page
+TEXT_BOX_PAD = 0.004  # margin around each text block, as a share of the page's longer side
+TEXT_GLYPH_CONTRAST = 0.30  # a pixel this far (share of 255) from the block's paper tone is part of a letter
+TEXT_GLYPH_BOLDEN_PX = 1  # letters are thickened this much so they read at a distance
 
 
 def shows_text(settings: LocalSettings, text: Optional[str], level: int = 1) -> bool:
@@ -154,21 +155,32 @@ def shows_text(settings: LocalSettings, text: Optional[str], level: int = 1) -> 
     return int(level) in (1, 2) or settings.text_mode == "below"
 
 
-def text_box_alpha(text_boxes, page_w: int, page_h: int) -> Optional[np.ndarray]:
-    """1.0 inside the page's text blocks (padded, soft-edged), 0 elsewhere; None when there are none."""
+def word_pixels(page: np.ndarray, text_boxes) -> Optional[np.ndarray]:
+    """The letters inside the page's text blocks, as a bool mask the size of `page`; None when none.
+
+    Inside each block the paper is the median tone; pixels far from it are the letters (dark type on
+    light paper, or light type on dark). They are thickened by TEXT_GLYPH_BOLDEN_PX.
+    """
     if not text_boxes:
         return None
-    keep = np.zeros((page_h, page_w), dtype=np.float32)
-    pad = round(TEXT_BOX_PAD * max(page_w, page_h))
+    h, w = page.shape[:2]
+    gray = cv2.cvtColor(page, cv2.COLOR_RGB2GRAY)
+    letters = np.zeros((h, w), dtype=bool)
+    pad = round(TEXT_BOX_PAD * max(w, h))
     for box in text_boxes:
         x0, y0, x1, y1 = [float(v) for v in box[:4]]
-        a, b = max(0, int(x0 * page_w) - pad), max(0, int(y0 * page_h) - pad)
-        c, d = min(page_w, int(np.ceil(x1 * page_w)) + pad), min(page_h, int(np.ceil(y1 * page_h)) + pad)
-        if c > a and d > b:
-            keep[b:d, a:c] = 1.0
-    if not keep.any():
+        a, b = max(0, int(x0 * w) - pad), max(0, int(y0 * h) - pad)
+        c, d = min(w, int(np.ceil(x1 * w)) + pad), min(h, int(np.ceil(y1 * h)) + pad)
+        if c <= a or d <= b:
+            continue
+        region = gray[b:d, a:c].astype(np.int16)
+        paper = int(np.median(region))
+        letters[b:d, a:c] |= np.abs(region - paper) > TEXT_GLYPH_CONTRAST * 255
+    if not letters.any():
         return None
-    return cv2.GaussianBlur(keep, (0, 0), TEXT_BOX_FEATHER)
+    if TEXT_GLYPH_BOLDEN_PX > 0:
+        letters = cv2.dilate(letters.astype(np.uint8), _disk(TEXT_GLYPH_BOLDEN_PX)) > 0
+    return letters
 
 
 def band_text_color(s: LocalSettings, background: RGB) -> RGB:
@@ -441,10 +453,12 @@ def compose(image_path, view_path, mask_path, settings, level: int,
             faded = cv2.addWeighted(faded, FADE_PAGE_WEIGHT, plain, 1 - FADE_PAGE_WEIGHT, 0)
             alpha = cv2.GaussianBlur(soft, (0, 0), SOFTEN_SIGMA)
             alpha[alpha > 0.999] = 1.0
-            words = text_box_alpha(text_boxes, pw, ph)
-            if words is not None:  # the page's words stay as vivid as the subject
-                alpha = np.maximum(alpha, words)
             canvas[py:py + ph, px:px + pw] = _blend(page, faded, alpha)
+            letters = word_pixels(page, text_boxes)
+            if letters is not None:  # the page's words, repainted as bright as the subject, where they sit
+                region = canvas[py:py + ph, px:px + pw]
+                region[letters & ~hard] = band_text_color(s, bg)
+                canvas[py:py + ph, px:px + pw] = region
             outline_px = OUTLINE_PX[s.outline]
             outline_color = _second_color(s)
         else:
