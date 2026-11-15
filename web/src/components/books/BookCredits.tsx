@@ -34,10 +34,12 @@ export function BookCredits({ book, onSaved }: { book: Book; onSaved: () => void
   }
 
   return (
-    <section className="mt-3" aria-label={`Credits of ${book.title}`}>
+    <section aria-label={`Credits of ${book.title}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-700">Credits</h3>
         <Button
+          variant="ghost"
+          className="-me-2 px-2"
           onClick={() => {
             setNotice(null);
             setEditing(true);
@@ -56,7 +58,7 @@ export function BookCredits({ book, onSaved }: { book: Book; onSaved: () => void
         ))}
       </dl>
       {missing > 0 && (
-        <p className="mt-1 text-sm text-slate-600">Read from the PDF where possible. Type anything marked “Not found” with Edit credits.</p>
+        <p className="mt-1 text-sm text-slate-600">Read from the PDF where possible. Type anything marked “Not found”.</p>
       )}
       {notice && (
         <p role="status" className="mt-1 text-sm text-emerald-900">
@@ -86,7 +88,7 @@ function CreditsForm({ book, onCancel, onSaved }: { book: Book; onCancel: () => 
   }
 
   return (
-    <form onSubmit={submit} noValidate aria-labelledby={`${ids}-h`} className="mt-3 rounded-lg bg-slate-50 p-3 ring-1 ring-inset ring-slate-200">
+    <form onSubmit={submit} noValidate aria-labelledby={`${ids}-h`} className="rounded-lg bg-slate-50 p-3 ring-1 ring-inset ring-slate-200">
       <h3 id={`${ids}-h`} className="text-sm font-semibold text-slate-700">
         Edit credits of {book.title}
       </h3>
