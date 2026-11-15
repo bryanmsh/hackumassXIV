@@ -76,7 +76,7 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 | `MODEL_CACHE_DIR` | a folder | Where model weights download on first use. Empty means `$DATA_DIR/models` (the mounted `data/` folder in Docker) |
 | `TORCH_THREADS` | a number | Threads torch may use. Empty means every core |
 
-**Cut-out cascade speed on CPU (measured on *Animal Homes*, 36 boxes, 13 pages).** SAM 2.1 spends about 2.1 s studying a page once, then about 0.29 s per extra box; one pass of our model is about 0.27 s per box. So on a CPU server no cascade setting is meaningfully faster than SAM alone while staying as accurate: box-by-box at threshold 0.65 it is 1.03x SAM's speed at 0.947 agreement, and any stricter setting is slower than SAM. The speed-up needs a GPU (our model 0.02 s vs SAM 0.10 s a box on an L4). Leave `SEGMENTER=sam2` on a CPU server.
+**Cut-out cascade speed on CPU (measured on *Animal Homes*, 36 boxes, 13 pages).** SAM 2.1 spends about 2.1 s studying a page once, then about 0.29 s per extra box; one pass of our model is about 0.27 s per box. So on a CPU server no cascade setting is meaningfully faster than SAM alone while staying as accurate: box-by-box at threshold 0.65 it is 1.03x SAM's speed at 0.947 agreement, and any stricter setting is slower than SAM. The speed-up needs a GPU (our model 0.02 s vs SAM 0.10 s a box on an L4). The live server runs `SEGMENTER=cascade` at threshold 0.75 anyway, to cut with our own model where it is sure, at about SAM's speed.
 
 
 ## How subjects are found
@@ -204,7 +204,7 @@ if our model is missing or fails, so `main` starts without the weights.
 
 | Step | Ours first | Behind it | Setting | On the live server |
 | --- | --- | --- | --- | --- |
-| Cut-out | `cutout_model` (7.8M-parameter U-Net, trained from scratch) | SAM 2.1 small, then GrabCut | `SEGMENTER=cascade` | Off: `SEGMENTER=sam2` |
+| Cut-out | `cutout_model` (7.8M-parameter U-Net, trained from scratch) | SAM 2.1 small, then GrabCut | `SEGMENTER=cascade` | On, with `CASCADE_MIN_CONFIDENCE=0.75` (about 42% of boxes ours at 0.967 agreement on *Animal Homes*) |
 | Subject | Andrew's `subject_model` (finder U-Net and namer ResNet-18) | Gemini | `SUBJECT_FINDER=cascade` | On since 2026-11-15 |
 
 ### Cut-out cascade
