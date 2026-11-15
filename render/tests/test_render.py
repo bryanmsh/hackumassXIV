@@ -67,11 +67,17 @@ def test_source_fidelity_by_construction(page, size, position):
 
 def test_size_and_position_follow_the_profile():
     W, H = 1600, 1200
-    for size, frac in (("small", 0.4), ("medium", 0.6), ("large", 0.8)):
+    for size, frac in (("small", 0.5), ("medium", 0.7), ("large", 0.9)):
+        # A wide subject fills the fraction of the width; a tall one the fraction of the height.
         scale, nw, nh, _, _ = subject_placement(500, 300, W, H, size, "center")
-        assert max(nw, nh) == round(frac * H)
-    _, nw, nh, left, top = subject_placement(500, 300, W, H, "medium", "left")
+        assert nw == round(frac * W) and nh <= round(frac * H)
+        scale, nw, nh, _, _ = subject_placement(300, 500, W, H, size, "center")
+        assert nh == round(frac * H) and nw <= round(frac * W)
+    # Position holds when the subject leaves room for it; a subject too wide to sit at 30 % stays on the page.
+    _, nw, nh, left, top = subject_placement(500, 300, W, H, "small", "left")
     assert abs((left + nw / 2) / W - 0.3) < 0.01
+    _, nw, nh, left, top = subject_placement(500, 300, W, H, "medium", "left")
+    assert left >= round(0.04 * W) and left + nw <= W - round(0.04 * W)
     _, nw, nh, left, top = subject_placement(500, 500, W, H, "large", "upper")
     assert top >= round(0.04 * H)
 
@@ -99,7 +105,7 @@ def test_faded_page_keeps_subject_vivid_and_fades_the_rest():
 
 def test_outlined_keeps_page_and_draws_main_color_ring():
     view = load_rgb(PAGES[1][1])
-    for outline, width in (("off", 8), ("thin", 4), ("thick", 8)):
+    for outline, width in (("off", 20), ("thin", 8), ("thick", 20)):
         r = compose(*PAGES[1], {"colors": ["#E53935"], "outline": outline}, 4)
         assert r.outline_px == width
         assert (r.rgb[r.outline] == hex_to_rgb("#E53935")).all()
