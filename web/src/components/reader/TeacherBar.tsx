@@ -73,6 +73,16 @@ export function TeacherBar({ manifest, position, canPrev, canNext, onPrev, onNex
                 {fullscreen.active ? 'Leave full screen' : 'Full screen'}
               </button>
             )}
+            {/* Done reading: back to this child's contact sheet, out of full screen. Teacher bar only, never in front of the child. */}
+            <Link
+              to={sheetLink}
+              className={`${btn} inline-flex items-center bg-white ring-1 ring-inset ring-slate-300 hover:bg-slate-50`}
+              onClick={() => {
+                if (fullscreen.active) fullscreen.toggle();
+              }}
+            >
+              Leave the reader
+            </Link>
             <button ref={closeRef} type="button" className={`${btn} bg-sky-700 text-white`} onClick={onClose}>
               Close
             </button>
