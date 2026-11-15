@@ -124,6 +124,6 @@ The project includes Python and frontend tests covering the API contracts, segme
 | Person | Part | Folders |
 | --- | --- | --- |
 | Bryan | Pipeline and server | `pipeline/`, `fixtures/`, `infra/`, `Dockerfile`, `compose.yaml`, `Caddyfile` |
-| Kevin | Display, checks and pitch | `render/`, `checks/`, `eval/`, `pitch/`, `tests/` |
+| Kevin | Display, checks, pitch, and the cut-out model code (with Bryan) | `render/`, `checks/`, `pitch/`, `tests/`, `cutout_model/` |
 | Andrew | API and data | `api/`, `contracts/` |
 | Thomas | Web app | `web/` |

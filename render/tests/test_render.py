@@ -8,7 +8,7 @@ from PIL import Image
 
 from render import RENDER_VERSION, SUBJECT_PALETTE, overlay, overlay_palette, render
 from render.color import contrast_ratio, hex_to_rgb
-from render.core import (CANVAS_LONG, TEXT_BAND, TEXT_SIZE, compose, layout_text, load_mask, load_rgb,
+from render.core import (TEXT_BOX_PAD, CANVAS_LONG, TEXT_BAND, TEXT_SIZE, compose, layout_text, load_mask, load_rgb,
                          resample, subject_placement, text_lines)
 
 SAMPLES = Path(__file__).resolve().parents[1] / "samples"
@@ -130,11 +130,12 @@ def test_text_band_only_when_text_is_on():
     assert contrast_ratio(on.text_color, on.background) >= 4.5
     band = on.rgb[on.picture_height:]
     assert (band == 255).all(axis=2).any()
-    # Tinted and Cut-out always carry the words below (the page itself is gone there).
-    forced = compose(*PAGES[0], {"text_mode": "off"}, 2, TEXT)
-    assert forced.text_color is not None and forced.picture_height < forced.rgb.shape[0]
-    # Faded page and Outlined keep the words on the page; the band is the profile's extra copy.
-    off = compose(*PAGES[0], {"text_mode": "off"}, 3, TEXT)
+    # Every look carries the words below, in the same type, whatever the profile says.
+    for level in (1, 2, 3, 4):
+        forced = compose(*PAGES[0], {"text_mode": "off"}, level, TEXT)
+        assert forced.text_color is not None and forced.picture_height < forced.rgb.shape[0]
+    # No words, no band.
+    off = compose(*PAGES[0], {"text_mode": "off"}, 3, None)
     assert off.picture_height == off.rgb.shape[0] and off.text_color is None
     empty = compose(*PAGES[0], {"text_mode": "below"}, 2, "  ")
     assert empty.text_color is None
@@ -319,16 +320,25 @@ def test_gather_layout_keeps_order_and_one_scale():
     assert right - min(lefts) <= round(0.7 * 1600) + 2
 
 
-def test_faded_page_keeps_the_words_as_vivid_as_the_subject():
-    """With the page's text boxes known, Faded page leaves those areas untouched."""
-    view = load_rgb(PAGES[0][1])
-    box = (0.05, 0.05, 0.35, 0.12)  # a strip far from the sample's subject
-    r = compose(*PAGES[0], {"background": "#000000", "text_mode": "off"}, 3, TEXT, [box])
-    px, py, pw, ph = r.page_rect
-    x0, y0 = px + int(box[0] * pw) + 12, py + int(box[1] * ph) + 12
-    x1, y1 = px + int(box[2] * pw) - 12, py + int(box[3] * ph) - 12
-    assert np.array_equal(r.rgb[y0:y1, x0:x1], view[y0 - py:y1 - py, x0 - px:x1 - px])
-    plain = compose(*PAGES[0], {"background": "#000000", "text_mode": "off"}, 3, TEXT)
-    assert not np.array_equal(plain.rgb[y0:y1, x0:x1], view[y0 - py:y1 - py, x0 - px:x1 - px])
-    # No band at Faded page unless asked; the words are already on the page.
-    assert r.text_color is None
+def test_printed_letters_are_covered_and_the_words_set_below_at_faded_and_outlined():
+    """With the page's text boxes known, the printed letters are covered with the paper tone and the
+    words are set once, in the band, in the same type as Tinted and Cut-out."""
+    yellow = "#FDD835"
+    box = (0.05, 0.05, 0.35, 0.20)  # a patch of sky with white clouds: the clouds stand in for letters
+    settings = {"background": "#000000", "colors": [yellow], "text_mode": "off"}
+    for level in (3, 4):
+        r = compose(*PAGES[0], settings, level, TEXT, [box])
+        plain = compose(*PAGES[0], settings, level, TEXT)
+        assert r.text_color is not None and r.picture_height < r.rgb.shape[0]  # the band is there
+        px, py, pw, ph = r.page_rect
+        strip = (slice(py + int(box[1] * ph), py + int(box[3] * ph)), slice(px + int(box[0] * pw), px + int(box[2] * pw)))
+        # The covered block is flatter than the original: the bright "letters" are gone.
+        assert r.rgb[strip].std() < plain.rgb[strip].std()
+        assert not (r.rgb[strip] == hex_to_rgb(yellow)).all(axis=2).any()  # nothing repainted in place
+        # Outside the block the page is as before.
+        pad = round(TEXT_BOX_PAD * max(pw, ph)) + 2  # the cover reaches a few px past the box
+        outside = np.ones(r.rgb.shape[:2], dtype=bool)
+        outside[strip[0].start - pad:strip[0].stop + pad, strip[1].start - pad:strip[1].stop + pad] = False
+        outside[r.picture_height:] = False
+        outside[r.outline] = False
+        assert np.array_equal(r.rgb[outside], plain.rgb[outside])
