@@ -194,8 +194,12 @@ describe('Reader', () => {
     expect(leo).toBeDisabled();
     expect(leo).toHaveTextContent('(not approved)');
     expect(within(bar).getByText(/Page 1 · 1 of 3/)).toBeInTheDocument();
+    // Done reading: the bar (and only the bar) offers a way out, back to this child's contact sheet.
+    const leave = within(bar).getByRole('link', { name: 'Leave the reader' });
+    expect(leave).toHaveAttribute('href', `/books/${backup.id}/approve?profile=${maya.id}&level=1`);
     await key('Escape');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Leave the reader' })).not.toBeInTheDocument();
   });
 
   it('holding a corner for a second also opens the teacher bar (a harmless extra)', async () => {
