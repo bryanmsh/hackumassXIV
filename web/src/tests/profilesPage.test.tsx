@@ -60,7 +60,7 @@ describe('Child profiles', () => {
     expect(writesTo(calls, 'POST', '/api/profiles')[0]?.body).toEqual({
       name: 'Ana',
       level: 3,
-      settings: { colors: ['#43A047', '#1E88E5'], background: '#001F3F', size: 'medium', position: 'center', text_mode: 'off', outline: 'off' },
+      settings: { colors: ['#43A047', '#1E88E5'], background: '#001F3F', size: 'medium', position: 'center', text_mode: 'below', outline: 'off' },
       contrast_override_note: null,
     });
     const card = within((await screen.findByRole('heading', { name: 'Ana' })).closest('li')!);
