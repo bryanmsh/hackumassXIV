@@ -1,4 +1,4 @@
-# Mirai
+# Miraai
 
 **Picture books, adapted for children with cortical visual impairment (CVI), using only the book's own artwork, with a teacher approving every page.**
 
@@ -8,7 +8,7 @@ Built at HackUMass XIV in 24 hours by four people.
 
 Children with CVI recognize an object far better when it is shown alone, on a plain background, with strong contrast. Picture-book pages are the opposite. Today a teacher of students with visual impairments (TVI) rebuilds pages by hand, often with scissors and black card, so each child gets only a few adapted books.
 
-## What Mirai does
+## What Miraai does
 
 1. **Upload.** The teacher uploads a PDF picture book.
 2. **Find the subject, once.** For each page, an AI model reads the picture and the text together and suggests what the page is about. A segmentation model then traces each suggestion on the original page and saves it as a cut-out.
@@ -30,8 +30,8 @@ The four looks:
 - **The subject is always copied from the original page.** Nothing is drawn or invented by AI. Tinting, resizing and outlines are display changes on top.
 - **A child never sees a version the teacher has not approved.** An approval is tied to one page, one cut-out, one set of profile settings and one look. Change any of them and the reader refuses the page until it is approved again. Change it back and the earlier approval returns.
 - **Automatic checks are not approval.** They measure whether the adaptation was built correctly: the cut-out has no stray specks, the background is plain, the subject stands out. Only the teacher decides whether a page is right for a child.
-- Mirai does not assess or diagnose CVI, and does not recommend a look.
-- No child with CVI has used Mirai yet, and no TVI has reviewed it yet.
+- Miraai does not assess or diagnose CVI, and does not recommend a look.
+- No child with CVI has used Miraai yet, and no TVI has reviewed it yet.
 
 ## Where AI is used
 
@@ -106,7 +106,7 @@ On Nov 14, 2026 these ran 212, 219 and 178 tests, all passing. The reader tests 
 
 ## Data and attribution
 
-- Demo book: *Animal Homes*, published by Pratham Books on StoryWeaver, CC BY 4.0. Mirai keeps each book's credits and license on a credits screen at the end of the reader, with a note that the pages were adapted.
+- Demo book: *Animal Homes*, published by Pratham Books on StoryWeaver, CC BY 4.0. Miraai keeps each book's credits and license on a credits screen at the end of the reader, with a note that the pages were adapted.
 - Text font: Atkinson Hyperlegible, SIL Open Font License (`render/fonts/OFL.txt`).
 - The demo children, Maya and Leo, are fictional. No real child's data is stored.
 - Book pages are sent to an outside AI service (Gemini) to find the subject. The upload screen says so.

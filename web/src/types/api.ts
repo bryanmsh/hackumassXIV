@@ -1,5 +1,5 @@
 /**
- * Contract 1 (HTTP API) types for the Mirai web app.
+ * Contract 1 (HTTP API) types for the Miraai web app.
  *
  * Source of truth: contracts/examples.json (Andrew's agreed request/response
  * example for every route). tests/examples.test.ts checks these shapes and the

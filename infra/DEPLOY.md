@@ -1,4 +1,4 @@
-# Deploying Mirai
+# Deploying Miraai
 
 One Vultr server runs two containers: the API, and Caddy, which serves the built web
 app, forwards `/api` to the API, handles HTTPS and asks for a password on every path.

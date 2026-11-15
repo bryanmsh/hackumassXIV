@@ -32,7 +32,7 @@ export function ProfilesPage() {
         )}
       </PageHeader>
       <p className="mb-6 max-w-3xl text-slate-700">
-        A profile holds the display choices you make for one child. The looks are presentation modes, not stages, and Mirai
+        A profile holds the display choices you make for one child. The looks are presentation modes, not stages, and Miraai
         never assesses a child or recommends a look.
       </p>
 

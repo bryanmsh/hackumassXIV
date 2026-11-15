@@ -289,7 +289,7 @@ export function PageSurface({
       {shapeMismatch && (
         <p role="alert" className="mt-2 text-sm text-amber-900">
           The page image ({natural?.w}×{natural?.h}) is not the shape the server reported ({page.width}×{page.height}).
-          Positions may be off; tell the Mirai team before using this page.
+          Positions may be off; tell the Miraai team before using this page.
         </p>
       )}
     </div>

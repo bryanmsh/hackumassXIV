@@ -100,7 +100,7 @@ describe('Library', () => {
     scenarios.uploadTooManyPagesNext = true;
     await user.upload(fileInput(), pdf());
     await user.click(screen.getByRole('button', { name: 'Upload book' }));
-    expect(await screen.findByText(/The PDF has 34 pages\. Mirai supports up to 30\./)).toBeInTheDocument();
+    expect(await screen.findByText(/The PDF has 34 pages\. Miraai supports up to 30\./)).toBeInTheDocument();
     expect(screen.getByText('The upload was not accepted.')).toBeInTheDocument();
   });
 

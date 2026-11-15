@@ -1,6 +1,6 @@
-# Mirai
+# Miraai
 
-Mirai is a web app that adapts picture-book pages for children with cortical
+Miraai is a web app that adapts picture-book pages for children with cortical
 visual impairment (CVI). A teacher uploads a PDF, the app finds the subject of
 each page and cuts it out of the original artwork, and each child sees the page
 in a look set by their profile. A teacher approves every page before a child

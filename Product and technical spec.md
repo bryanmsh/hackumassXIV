@@ -1,4 +1,4 @@
-# Mirai Product and Technical Spec
+# Miraai Product and Technical Spec
 
 Nov 13, 2026 · @Andrew Choi
 
@@ -6,7 +6,7 @@ Nov 13, 2026 · @Andrew Choi
 
 ## Summary
 
-Mirai adapts picture-book pages for children with cortical visual impairment (CVI) using the book's original artwork, and gives the teacher control over what each child is shown. The app finds the subject of each page once, then re-displays that same cut-out for each child's profile.
+Miraai adapts picture-book pages for children with cortical visual impairment (CVI) using the book's original artwork, and gives the teacher control over what each child is shown. The app finds the subject of each page once, then re-displays that same cut-out for each child's profile.
 
 **What it guarantees**
 
@@ -311,7 +311,7 @@ The hard page is the point of the demo. It shows a tool that admits uncertainty 
 
 # Part 2: Technical requirements
 
-Mirai is four modules joined by three contracts, which are frozen as written in this part. Each of four owners can start now: everyone makes their own fake inputs, so nobody waits for anyone else's code, and the lanes meet at three scheduled checkpoints.
+Miraai is four modules joined by three contracts, which are frozen as written in this part. Each of four owners can start now: everyone makes their own fake inputs, so nobody waits for anyone else's code, and the lanes meet at three scheduled checkpoints.
 
 ## Architecture
 

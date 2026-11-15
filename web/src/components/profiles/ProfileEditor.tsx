@@ -107,7 +107,7 @@ export function ProfileEditor({
         <fieldset>
           <legend className="font-semibold">Look</legend>
           <p className="text-sm text-slate-600">
-            Looks are ways of showing the page, not stages or steps. Any look can suit any child; Mirai does not recommend one.
+            Looks are ways of showing the page, not stages or steps. Any look can suit any child; Miraai does not recommend one.
           </p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {LEVELS.map((l) => (

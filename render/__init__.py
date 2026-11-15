@@ -1,4 +1,4 @@
-"""Display for Mirai (Owner B): Contract 2 `render`, `overlay` and `RENDER_VERSION`."""
+"""Display for Miraai (Owner B): Contract 2 `render`, `overlay` and `RENDER_VERSION`."""
 from __future__ import annotations
 
 from typing import Optional

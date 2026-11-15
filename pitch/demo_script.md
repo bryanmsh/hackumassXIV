@@ -1,4 +1,4 @@
-# Mirai demo script (word for word)
+# Miraai demo script (word for word)
 
 About 4 minutes. **Kevin speaks. Thomas drives** the laptop. Bryan stands by for the server, Andrew for the API.
 The app runs in a desktop or laptop browser only. In the reader: arrow keys or space turn the page, T opens the teacher bar.
@@ -26,7 +26,7 @@ If size, position and text controls are not in Profiles yet, Leo is Cut-out, cen
 | # | Time | Thomas does | Kevin says |
 | --- | --- | --- | --- |
 | 1 | 0:00 | Title slide | "Children with cortical visual impairment, CVI, recognize one clear object on a plain background far better than a busy picture-book page. Today their teachers rebuild pages by hand, with scissors and black card, so each child gets only a few books." |
-| 2 | 0:20 | Library: Animal Homes, already uploaded | "Mirai adapts a real picture book, using only the book's own artwork. This is Animal Homes, a free StoryWeaver book. When we upload it, each page goes to an AI once to find what the page is about. The upload screen tells the teacher that." |
+| 2 | 0:20 | Library: Animal Homes, already uploaded | "Miraai adapts a real picture book, using only the book's own artwork. This is Animal Homes, a free StoryWeaver book. When we upload it, each page goes to an AI once to find what the page is about. The upload screen tells the teacher that." |
 | 3 | 0:40 | Open Subject review; point at the states | "Every page ends in a clear state. When a page is about one thing, the AI pre-selects it. When a page names several things, it does not guess: it asks the teacher. Nothing reaches a child until the teacher confirms it." |
 | 4 | 1:00 | Open page 2: Needs subject, with hornbill, beehive, nest and the combined "beehive, bird and bird nest" offered | "This page is the hard one. 'Birds build their homes up high, and so do bees.' The AI found a hornbill, a beehive and a nest, and offers all three together too. For a child with CVI, three objects can be two too many. Only a person knows which one matters for this child today." |
 | 5 | 1:20 | **Suggestions**: pick the hornbill alone, then confirm | "One click on the hornbill, and the teacher confirms. The cut-out is the original drawing, traced by a segmentation model. Nothing is drawn or invented by AI." |
@@ -37,8 +37,8 @@ If size, position and text controls are not in Profiles yet, Leo is Cut-out, cen
 | 10 | 2:50 | Open the reader for Maya; arrow key through two pages | "The reader is full screen and calm. Nothing moves unless the teacher presses a key. A child's clicks do nothing." |
 | 11 | 3:10 | Press **T**, switch to Leo, arrow on | "Switching to Leo is instant, because it reuses the saved cut-outs. No new AI work. Versions that were never approved are greyed out; the reader refuses to show them." |
 | 12 | 3:25 | Last page: credits screen | "Every book ends with its author, illustrator and license, and a note that it was adapted." |
-| 13 | 3:35 | Limits slide | "What we have not done yet: no child with CVI has used Mirai, and it is not yet reviewed by a TVI. The AI's confidence is not proof; the teacher's confirmation is. That is the point of the design." |
-| 14 | 3:50 | Title slide | "Mirai: the book's own pictures, adapted for each child, and a teacher in charge of every page. Thank you." |
+| 13 | 3:35 | Limits slide | "What we have not done yet: no child with CVI has used Miraai, and it is not yet reviewed by a TVI. The AI's confidence is not proof; the teacher's confirmation is. That is the point of the design." |
+| 14 | 3:50 | Title slide | "Miraai: the book's own pictures, adapted for each child, and a teacher in charge of every page. Thank you." |
 
 ## Words to use and avoid
 
