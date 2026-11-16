@@ -1,5 +1,5 @@
 # The whole site sits behind one username and password, so a stranger with the URL
-# cannot upload PDFs and spend the Gemini key. HTTPS is automatic for a real host name.
+# cannot upload PDFs and use the server's CPU. HTTPS is automatic for a real host name.
 {$SITE_ADDRESS:localhost} {
 	encode zstd gzip
 

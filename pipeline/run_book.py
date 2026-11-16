@@ -4,7 +4,7 @@
 
 Writes the same files the API would (out_dir/source.pdf, pages/, masks/) plus
 out_dir/summary.json, and prints each page's state, reason and time.
-Reads .env from the current folder for GEMINI_API_KEY and the other settings.
+Reads .env from the current folder for SEGMENTER, PAGE_CONCURRENCY and the other settings.
 """
 import json
 import os

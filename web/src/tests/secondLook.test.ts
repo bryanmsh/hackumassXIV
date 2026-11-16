@@ -12,8 +12,8 @@ describe('second look text', () => {
   });
 
   it('shows a short plain reason as is', () => {
-    const t = secondLookText({ status: 'warn', answer: '', detail: 'Second look skipped: no GEMINI_API_KEY is set.' });
-    expect(t).toBe('Second look skipped: no GEMINI_API_KEY is set. Check the picture yourself.');
+    const t = secondLookText({ status: 'warn', answer: '', detail: 'Shown only the adapted page, our model could not name anything.' });
+    expect(t).toBe('Shown only the adapted page, our model could not name anything. Check the picture yourself.');
   });
 
   it('names a different answer as a weak signal', () => {

@@ -125,17 +125,17 @@ def test_cli_with_a_missing_pdf_exits_1(tmp_path, capsys):
 
 def test_load_env_sets_missing_names_only_and_prints_nothing(tmp_path, monkeypatch, capsys):
     env = tmp_path / ".env"
-    env.write_text('# comment\nGEMINI_API_KEY=secret123\nSEGMENTER="grabcut"\n\nEMPTY=\nnot a line\n')
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    env.write_text('# comment\nMIRAI_TEST_SETTING=on\nSEGMENTER="grabcut"\n\nEMPTY=\nnot a line\n')
+    monkeypatch.delenv("MIRAI_TEST_SETTING", raising=False)
     monkeypatch.setenv("SEGMENTER", "stub")
     monkeypatch.delenv("EMPTY", raising=False)
     load_env(env)
-    assert os.environ["GEMINI_API_KEY"] == "secret123"
+    assert os.environ["MIRAI_TEST_SETTING"] == "on"
     assert os.environ["SEGMENTER"] == "stub"  # what is already set wins
     assert "EMPTY" not in os.environ  # an empty value is the same as unset
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err == ""
-    monkeypatch.delenv("GEMINI_API_KEY")
+    monkeypatch.delenv("MIRAI_TEST_SETTING")
 
 
 def test_load_env_missing_file_is_fine(tmp_path):

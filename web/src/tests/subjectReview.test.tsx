@@ -132,7 +132,7 @@ describe('Subject review', () => {
     const calls = capturePosts();
     await user.click(screen.getByRole('button', { name: 'Ask the AI again…' }));
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveTextContent('outside AI service');
+    expect(dialog).toHaveTextContent('our AI model again');
     expect(dialog).toHaveTextContent('Pages 1,');
     expect(dialog).toHaveTextContent('keep their subject and stay confirmed');
     expect(calls).toHaveLength(0);

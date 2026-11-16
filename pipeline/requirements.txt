@@ -1,5 +1,4 @@
 pymupdf
-google-genai
 opencv-python-headless
 numpy
 pillow

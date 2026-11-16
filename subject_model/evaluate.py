@@ -1,9 +1,12 @@
-"""Score the local mode (and Gemini) on hand-labelled pages: which main subjects are found and named, whether
+"""Score the local mode (and saved Gemini answers) on hand-labelled pages: which main subjects are found and named, whether
 the first choice is one of them, and what the teacher gets. A page may have several main subjects; labels.csv has
 one row per subject, `name,label,x0,y0,x1,y1,text`, with the rectangle in the page picture's pixels. A label may
 list several accepted names with `/` ("police officer/officer/woman"), so a general and a specific name both count.
 
 python -m subject_model.evaluate TESTSET_DIR [--modes local gemini] [--plain-crops]
+
+The app no longer calls Gemini (since 2026-11-15). The `gemini` mode reads the answers saved in
+TESTSET_DIR/gemini/ when it still did, so our model can be compared with it; a page with no saved answer fails.
 """
 from __future__ import annotations
 
@@ -16,9 +19,9 @@ from pathlib import Path
 import cv2
 import pymupdf
 
-from pipeline.gemini import SubjectAnswer, choose_subjects
+from pipeline.subjects import SubjectAnswer, local_is_enough
 from pipeline.ingest import rasterize
-from pipeline.process import call_with_retry, decide_state, gemini_box_to_pixels
+from pipeline.process import box_to_pixels, decide_state
 from subject_model import local, namer
 from subject_model.words import match
 
@@ -65,26 +68,29 @@ def box_iou(a, b) -> float:
     return shared / union if union > 0 else 0.0
 
 
-def ask_gemini(view_path, text, cache=None) -> SubjectAnswer:
-    """Gemini's answer, read from `cache` when it is there and written there after a call that worked."""
-    if cache is not None and Path(cache).exists():
-        return SubjectAnswer.model_validate_json(Path(cache).read_text())
-    answer = call_with_retry(lambda: choose_subjects(view_path, text))
-    if cache is not None:
-        Path(cache).parent.mkdir(parents=True, exist_ok=True)
-        Path(cache).write_text(answer.model_dump_json())
+def ask_gemini(view_path, text, cache) -> SubjectAnswer:
+    """Gemini's answer saved in `cache` before the app stopped calling it. Raises when none was saved."""
+    if not Path(cache).exists():
+        raise FileNotFoundError(f"no saved Gemini answer: {Path(cache).name}")
+    return SubjectAnswer.model_validate_json(Path(cache).read_text())
+
+
+def ask_local(view_path, text) -> SubjectAnswer:
+    """Our model's answer with `trusted` set, exactly as the pipeline gets it."""
+    answer = local.local_answer(view_path, text)
+    answer.trusted = local_is_enough(answer, text)[0]
     return answer
 
 
 def _is_a_subject(candidate, hand_boxes, width, height) -> bool:
-    box = gemini_box_to_pixels(candidate.box_2d, width, height)
+    box = box_to_pixels(candidate.box_2d, width, height)
     return any(box_iou(box, hand) >= FOUND_IOU for hand in hand_boxes)
 
 
 def judge(answer, subjects, width, height) -> tuple[int, bool, int]:
     """(subjects found, first choice is a main subject, subjects named) for a SubjectAnswer against the
     page's main subjects, [(word, (x0, y0, x1, y1)), ...]."""
-    boxes = [gemini_box_to_pixels(c.box_2d, width, height) for c in answer.candidates]
+    boxes = [box_to_pixels(c.box_2d, width, height) for c in answer.candidates]
     found = named = 0
     for word, hand in subjects:
         overlaps = [box_iou(box, hand) for box in boxes]
@@ -102,7 +108,7 @@ def outcome(answer, hand_boxes, width, height) -> str:
     if not answer.candidates:
         return "nothing"
     _, members, _ = decide_state(answer.page_kind, answer.candidates)
-    if len(members) != 1:
+    if len(members) != 1 or not answer.trusted:
         return "asked"
     right = _is_a_subject(answer.candidates[members[0]], hand_boxes, width, height)
     return "ready_right" if right else "ready_wrong"
@@ -121,7 +127,7 @@ def _working_copy(page: Path, folder: Path) -> Path:
 
 def _answer(mode, view_path, text, testset_dir, name) -> SubjectAnswer:
     if mode == "local":
-        return local.local_answer(view_path, text)
+        return ask_local(view_path, text)
     if mode == "gemini":
         return ask_gemini(view_path, text, cache=Path(testset_dir) / "gemini" / f"{name}.json")
     raise ValueError(f"unknown mode {mode!r}")
@@ -227,7 +233,7 @@ def main(argv=None) -> None:
     parser.add_argument("testset_dir")
     parser.add_argument("--modes", nargs="+", default=["local"], choices=["local", "gemini"])
     parser.add_argument("--plain-crops", action="store_true", help="name plain rectangles, not whitened cut-outs")
-    parser.add_argument("--agree", action="store_true", help="agreement with Gemini on pages nobody picked")
+    parser.add_argument("--agree", action="store_true", help="agreement with saved Gemini answers on pages nobody picked")
     parser.add_argument("--every", type=int, default=3)
     parser.add_argument("--limit", type=int, default=20)
     args = parser.parse_args(argv)

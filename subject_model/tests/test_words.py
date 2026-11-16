@@ -1,5 +1,5 @@
 from pathlib import Path
-from pipeline.gemini import SETTING_WORDS
+from pipeline.subjects import SETTING_WORDS
 from subject_model import words
 from subject_model.words import GENERAL, NEVER_A_LABEL, NOT_A_SUBJECT, SYNONYMS, match
 

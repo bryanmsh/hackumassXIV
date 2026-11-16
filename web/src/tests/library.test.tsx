@@ -63,9 +63,9 @@ describe('Library', () => {
     expect(busy.queryByRole('link', { name: 'Review subjects' })).not.toBeInTheDocument();
   });
 
-  it('says pages go to an outside AI service and states the limits', async () => {
+  it('says pages stay on our server and states the limits', async () => {
     renderLibrary();
-    expect(screen.getByText(/sent to an outside AI service/)).toBeInTheDocument();
+    expect(screen.getByText(/never sent to an outside AI service/)).toBeInTheDocument();
     expect(screen.getByText(/up to 30 pages and 50 MB/)).toBeInTheDocument();
   });
 

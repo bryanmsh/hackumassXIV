@@ -78,7 +78,7 @@ export function UploadForm({ onUploaded }: { onUploaded: (res: UploadBookRespons
       </h2>
       <p className="mt-1 text-slate-700">PDF only, up to 30 pages and 50 MB, one book page per PDF page.</p>
       <p className="mt-2 rounded-lg bg-sky-50 p-3 text-slate-800 ring-1 ring-inset ring-sky-200">
-        <strong>Before you upload:</strong> each page is sent to an outside AI service, which suggests the subject of the page.
+        <strong>Before you upload:</strong> our own AI model suggests the subject of each page. It runs on our server, so the book is never sent to an outside AI service.
         You check every suggestion before a child sees anything.
       </p>
 

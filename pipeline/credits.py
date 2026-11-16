@@ -3,7 +3,7 @@
 read_credits(pdf_path) -> {"author", "illustrator", "publisher", "source", "license"},
 each a string or None.
 
-It only copies text that is printed in the PDF's text layer. There is no Gemini and no
+It only copies text that is printed in the PDF's text layer. There is no AI model and no
 OCR, so it can't invent a name: anything it doesn't find stays None for the teacher to fill
 in. It looks at the first 2 and last 4 pages, where picture books put their cover and credits.
 It never raises: on any error every value is None.

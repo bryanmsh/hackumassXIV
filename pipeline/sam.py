@@ -6,7 +6,7 @@ rest of the pipeline (and the `stub` and `grabcut` segmenters) runs without torc
 How it stays fast on a 4-vCPU box:
 - Each model is loaded once per process (lazy singleton) and kept.
 - The image encoder, the expensive part, runs once per page. Its output is cached by the
-  page's pixel hash, so the up-to-3 Gemini boxes on a page, and later clicks on the same
+  page's pixel hash, so the up-to-5 subject boxes on a page, and later clicks on the same
   page, only run the cheap prompt decoder.
 - One lock guards the model: up to PAGE_CONCURRENCY threads call in, and torch already
   spreads one call across all cores, so running them one at a time is faster than fighting.

@@ -191,7 +191,7 @@ export function SubjectReviewPage() {
                     Ask the AI again about {rerunnable.length} {rerunnable.length === 1 ? 'page' : 'pages'}?
                   </h3>
                   <p className="mt-1">
-                    Pages {rerunnable.map((p) => p.number).join(', ')} will be sent to the outside AI service again. New
+                    Pages {rerunnable.map((p) => p.number).join(', ')} will go through our AI model again, which usually gives the same suggestions. New
                     suggestions are added to the ones already there. Pages you have confirmed keep their subject and stay
                     confirmed. On the other pages, the subject becomes the AI’s new guess.
                   </p>

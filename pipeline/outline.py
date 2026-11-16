@@ -1,6 +1,6 @@
 """Manual label and outline: the teacher's drawn shape becomes the mask.
 
-The raw path (tidy=False) calls no model, so it still works when Gemini and the
+The raw path (tidy=False) calls no model, so it still works when the subject model and the
 segmenter are both down. It is the demo safety net.
 """
 import cv2

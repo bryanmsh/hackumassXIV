@@ -159,7 +159,16 @@ def test_second_look_pass_warn_and_failure():
     assert failed.status == "warn" and "TimeoutError" in failed.detail
 
 
-def test_second_look_without_key_is_a_warning(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    r = second_look(P1[0], P1[2], "bird", [])
-    assert r.status == "warn" and "GEMINI_API_KEY" in r.detail
+def test_second_look_with_no_name_is_a_warning():
+    r = second_look(P1[0], P1[2], "bird", [], ask=lambda png: "")
+    assert r.status == "warn" and "could not name" in r.detail
+
+
+def test_second_look_uses_our_namer_on_white(monkeypatch):
+    pytest.importorskip("torch")
+    seen = []
+    import subject_model.namer as namer
+    monkeypatch.setattr(namer, "name", lambda image, mask=None, top=5: seen.append(image) or [("text", 0.6), ("bird", 0.3)])
+    r = second_look(P1[0], P1[2], "robin", ["bird"])
+    assert r.status == "pass" and r.answer == "bird"   # printed words are not a thing, so the next guess counts
+    assert tuple(seen[0][0, 0]) == (255, 255, 255)     # the corner is the white background

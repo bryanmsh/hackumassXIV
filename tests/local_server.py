@@ -19,7 +19,6 @@ def main() -> None:
     os.environ["MONGODB_URI"] = "mongodb://localhost:27017/mirai_http_tests"
     os.environ.setdefault("PIPELINE", "stub")
     os.environ.setdefault("RENDER", "real")
-    os.environ.pop("GEMINI_API_KEY", None)  # the second look must not spend the key here
 
     import mongomock
     import pymongo

@@ -1,6 +1,6 @@
-"""The Gemini-shaped answer from the local models: blobs from the finder, names from the namer, ranked by page text.
+"""The page's subjects from our own models: blobs from the finder, names from the namer, ranked by page text.
 
-`choose_subjects` returns the JSON that `pipeline.gemini.SubjectAnswer` accepts; `local_answer` is exactly what the
+`choose_subjects` returns the JSON that `pipeline.subjects.SubjectAnswer` accepts; `local_answer` is exactly what the
 pipeline's hook returns; `label_crop` names a teacher's click.
 """
 from __future__ import annotations
@@ -8,8 +8,8 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from pipeline import gemini
-from pipeline.gemini import DUPLICATE_IOU, GROUP_HOLDS, INSIDE_FRACTION, SubjectAnswer, _drop_non_subjects
+from pipeline import subjects
+from pipeline.subjects import DUPLICATE_IOU, GROUP_HOLDS, INSIDE_FRACTION, SubjectAnswer, _drop_non_subjects
 from subject_model.words import GENERAL, NEVER_A_LABEL, NOT_A_SUBJECT, SYNONYMS, match
 
 TEXT_BASE = 0.6  # a guess the text confirms starts here...
@@ -85,7 +85,7 @@ def _read_rgb(view_path) -> np.ndarray:
 
 
 def choose_subjects(view_path, text, *, find=None, name=None) -> dict:
-    """Up to five subjects of the page, in the JSON shape Gemini returns."""
+    """Up to five subjects of the page, in the JSON shape `pipeline.subjects.SubjectAnswer` accepts."""
     if find is None:
         from subject_model.finder import find_blobs as find
     if name is None:
@@ -156,7 +156,7 @@ def choose_subjects(view_path, text, *, find=None, name=None) -> dict:
 def local_answer(view_path, text):
     """Exactly what the pipeline's hook returns: the answer, checked, with the pipeline's own guard applied."""
     answer = SubjectAnswer.model_validate(choose_subjects(view_path, text))
-    answer.candidates = _drop_non_subjects(answer.candidates)[:gemini.MAX_CANDIDATES]
+    answer.candidates = _drop_non_subjects(answer.candidates)[:subjects.MAX_CANDIDATES]
     return answer
 
 

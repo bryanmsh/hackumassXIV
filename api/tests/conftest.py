@@ -42,8 +42,8 @@ def clean_db(throwaway_database):
 
 @pytest.fixture(autouse=True)
 def fixed_second_look(monkeypatch):
-    """The second look is one AI call. Tests answer it themselves, so a run against the real
-    display code (RENDER=real) gives the same result and never calls Gemini."""
+    """The second look runs our namer. Tests answer it themselves, so a run against the real
+    display code (RENDER=real) gives the same result and never loads the model."""
     from api import modules
     from contracts.types import SecondLook
 

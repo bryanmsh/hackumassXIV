@@ -5,7 +5,7 @@ Swap commands (run from the repo root):
   pipeline only:          PIPELINE=real .venv/bin/python -m pytest api/tests/test_swap.py -q
   hour 7, both together:  PIPELINE=real RENDER=real .venv/bin/python -m pytest api/tests/test_swap.py -q
 Nothing here may depend on stand-in values (page count, colors, shapes). second_look is not
-called: with real code it spends the Gemini key.
+called: with real code it loads our namer, which is slow and needs the weights.
 """
 import io
 from pathlib import Path

@@ -4,9 +4,8 @@ import numpy as np
 
 from contracts.types import Candidate
 from pipeline import segment as segmenter
-from pipeline.gemini import label_crop
 from pipeline.masks import clean_mask, mask_box, save_mask
-from pipeline.process import call_with_retry
+from pipeline.subjects import label_crop
 
 CROP_PADDING = 0.08  # margin around the cut-out in the crop sent for a label, as a share of its longer side
 REFINE_REACH = 0.05  # a refine click may grow the old box by this share of the page's longer side
@@ -26,7 +25,7 @@ def _on_page(x, y, image) -> tuple[float, float]:
 
 
 def _label(image: np.ndarray, box) -> str:
-    """Ask Gemini to name what is in the box. Empty when it cannot, and the teacher types it."""
+    """Ask our subject model to name what is in the box. Empty when it is not sure, and the teacher types it."""
     try:
         height, width = image.shape[:2]
         x0, y0, x1, y1 = box
@@ -36,7 +35,7 @@ def _label(image: np.ndarray, box) -> str:
         ok, png = cv2.imencode(".png", cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
         if not ok:
             return ""
-        return call_with_retry(lambda: label_crop(png.tobytes()))
+        return label_crop(png.tobytes())
     except Exception:
         return ""
 

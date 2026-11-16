@@ -1,22 +1,20 @@
-"""Second look: a separate AI pass names the subject from the adapted page alone.
+"""Second look: our namer (subject_model/) names the subject from the adapted page alone.
 
-It shares the AI service with subject choosing, so it is a weak signal and is
-only ever a warning. It never raises and never blocks approval.
+It is the same namer that suggests labels when subjects are chosen, so on a page
+whose label it suggested it mostly agrees with itself. It is most useful when the
+teacher typed or changed the label. A weak signal, so only ever a warning. It
+never raises and never blocks approval. No outside AI service is called.
 """
 from __future__ import annotations
 
-import os
 import re
 from typing import Iterable, List, Optional, Set
 
 from render._types import LocalSecondLook, to_contract_second_look
 from render.core import compose, encode
 
-DEFAULT_MODEL = "gemini-3.8-flash"
-TIMEOUT_MS = 20_000
-PROMPT = ("Name the main object in this picture in one to three words. "
-          "Reply with only those words, no punctuation.")
-LEVEL2_ON_BLACK = {"colors": ["#FFFFFF"], "background": "#000000", "size": "medium",
+# The Cut-out look on white: the namer was trained on cut-outs on white.
+LEVEL2_ON_WHITE = {"colors": ["#000000"], "background": "#FFFFFF", "size": "medium",
                    "position": "center", "text_mode": "off", "outline": "off"}
 
 _IRREGULAR = {"mice": "mouse", "geese": "goose", "children": "child", "people": "person",
@@ -48,48 +46,45 @@ def matches(answer: str, label: str, synonyms: Iterable[str]) -> bool:
     return bool(words(answer) & targets)
 
 
-def _ask_model(png: bytes, model: str, api_key: str) -> str:
-    from google import genai
-    from google.genai import types
+def _ask_namer(png: bytes) -> str:
+    """The namer's first guess that is a thing, for the whole picture. "" when it has none."""
+    import cv2
+    import numpy as np
 
-    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=TIMEOUT_MS))
-    resp = client.models.generate_content(
-        model=model,
-        contents=[types.Part.from_bytes(data=png, mime_type="image/png"), PROMPT],
-        config=types.GenerateContentConfig(temperature=0),
-    )
-    return (resp.text or "").strip()
+    from subject_model.namer import name
+    from subject_model.words import NEVER_A_LABEL, NOT_A_SUBJECT
+
+    image = cv2.cvtColor(cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+    for label, _ in name(image, None):
+        if label not in NOT_A_SUBJECT and label not in NEVER_A_LABEL:
+            return label
+    return ""
 
 
 def second_look(image_path, mask_path, label: str, synonyms: Optional[List[str]] = None,
                 ask=None):
-    """Contract 2: one AI call. `ask` replaces the model call in tests."""
+    """Contract 2: one pass of our namer. `ask` replaces it in tests."""
     synonyms = list(synonyms or [])
     try:
-        png = encode(compose(image_path, image_path, mask_path, LEVEL2_ON_BLACK, 2).rgb, "png")
+        png = encode(compose(image_path, image_path, mask_path, LEVEL2_ON_WHITE, 2).rgb, "png")
     except Exception as e:  # noqa: BLE001
         return to_contract_second_look(LocalSecondLook(
             status="warn", answer="", detail=f"Could not render the subject for a second look: {e}"))
 
     try:
-        if ask is None:
-            api_key = os.environ.get("GEMINI_API_KEY", "")
-            if not api_key:
-                return to_contract_second_look(LocalSecondLook(
-                    status="warn", answer="", detail="Second look skipped: no GEMINI_API_KEY is set."))
-            model = os.environ.get("SECOND_LOOK_MODEL") or os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
-            answer = _ask_model(png, model, api_key)
-        else:
-            answer = ask(png)
+        answer = (ask or _ask_namer)(png)
     except Exception as e:  # noqa: BLE001
         return to_contract_second_look(LocalSecondLook(
             status="warn", answer="", detail=f"Second look unavailable: {type(e).__name__}: {e}"[:300]))
 
     answer = " ".join(answer.split())[:80]
+    if not answer:
+        return to_contract_second_look(LocalSecondLook(
+            status="warn", answer="", detail="Shown only the adapted page, our model could not name anything."))
     if matches(answer, label, synonyms):
         return to_contract_second_look(LocalSecondLook(
-            status="pass", answer=answer, detail=f'Shown only the adapted page, the AI saw "{answer}".'))
+            status="pass", answer=answer, detail=f'Shown only the adapted page, our model saw "{answer}".'))
     return to_contract_second_look(LocalSecondLook(
         status="warn", answer=answer,
-        detail=f'Shown only the adapted page, the AI saw "{answer}", not "{label}". '
+        detail=f'Shown only the adapted page, our model saw "{answer}", not "{label}". '
                f"This is a weak signal; the teacher's confirmation decides."))

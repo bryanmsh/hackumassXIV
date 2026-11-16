@@ -1,29 +1,26 @@
-"""Subject choosing for one page: ask Gemini, cut a mask per candidate, set the page state.
+"""Subject choosing for one page: ask our subject model, cut a mask per candidate, set the page state.
 
 process_page never raises. Anything that goes wrong becomes a Failed page with a reason,
 so one bad page cannot stop the rest of the book.
 """
-import os
-import time
-
 import cv2
 
 from contracts.types import Candidate, PageResult
 from pipeline import segment as segmenter
-from pipeline.gemini import GeminiError, RateLimited, choose_subjects
+from pipeline.subjects import SubjectError, choose_subjects
 from pipeline.masks import clean_mask, save_mask
 
 SELECT_MIN_CONFIDENCE = 0.5  # a subject at least this sure is pre-selected; below it the teacher is asked
-RATE_LIMIT_WAIT_S = 10
-GEMINI_SCALE = 1000  # Gemini boxes are [ymin, xmin, ymax, xmax] on a 0 to 1000 scale
+BOX_SCALE = 1000  # subject boxes are [ymin, xmin, ymax, xmax] on a 0 to 1000 scale
 MAX_REASON_LENGTH = 200
+UNSURE_REASON = "The app is not sure this is the subject. Please check it."
 
 
-def gemini_box_to_pixels(box_2d, width, height) -> tuple[float, float, float, float]:
+def box_to_pixels(box_2d, width, height) -> tuple[float, float, float, float]:
     """The only place the 0 to 1000 scale is converted. Returns (x0, y0, x1, y1) in master pixels."""
-    ymin, xmin, ymax, xmax = (min(GEMINI_SCALE, max(0, value)) for value in box_2d)
-    x0, x1 = sorted((xmin / GEMINI_SCALE * width, xmax / GEMINI_SCALE * width))
-    y0, y1 = sorted((ymin / GEMINI_SCALE * height, ymax / GEMINI_SCALE * height))
+    ymin, xmin, ymax, xmax = (min(BOX_SCALE, max(0, value)) for value in box_2d)
+    x0, x1 = sorted((xmin / BOX_SCALE * width, xmax / BOX_SCALE * width))
+    y0, y1 = sorted((ymin / BOX_SCALE * height, ymax / BOX_SCALE * height))
     return (x0, y0, x1, y1)
 
 
@@ -76,23 +73,9 @@ def _group(members: list[Candidate], masks: list, image_path, out_dir) -> Candid
         mask_path=mask_path, mask_hash=mask_hash, source="auto")
 
 
-def call_with_retry(fn):
-    """Run one AI call with one retry. A rate limit waits first; a second failure is raised."""
-    try:
-        return fn()
-    except RateLimited:
-        time.sleep(RATE_LIMIT_WAIT_S)
-    except GeminiError:
-        pass
-    return fn()
-
-
 def _reason(error: Exception) -> str:
-    """A short reason a teacher can read. Never contains the key."""
-    message = str(error) if isinstance(error, GeminiError) else f"{type(error).__name__}: {error}"
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if key:
-        message = message.replace(key, "***")
+    """A short reason a teacher can read."""
+    message = str(error) if isinstance(error, SubjectError) else f"{type(error).__name__}: {error}"
     return message[:MAX_REASON_LENGTH] or type(error).__name__
 
 
@@ -113,11 +96,11 @@ def process_page(asset, out_dir, force=False) -> PageResult:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         height, width = image.shape[:2]
 
-        answer = call_with_retry(lambda: choose_subjects(asset.view_path, asset.text))
+        answer = choose_subjects(asset.view_path, asset.text)
 
         candidates, masks, lost_first_choice = [], [], None
         for index, found in enumerate(answer.candidates):  # highest confidence first
-            box = gemini_box_to_pixels(found.box_2d, width, height)
+            box = box_to_pixels(found.box_2d, width, height)
             mask = clean_mask(segmenter.segment(image, box=box))
             if not mask.any():
                 # Nothing was cut out, so there is nothing to show the teacher.
@@ -134,9 +117,13 @@ def process_page(asset, out_dir, force=False) -> PageResult:
             return _result("no_clear_subject", answer.page_kind, reason="No usable cut-out could be made")
         state, members, reason = decide_state(answer.page_kind, candidates)
         if state == "ready" and lost_first_choice is not None:
-            # The AI's first choice is gone; the others must not be picked silently.
+            # The model's first choice is gone; the others must not be picked silently.
             state, members = "needs_subject", []
             reason = f'No cut-out could be made for "{lost_first_choice}", the first choice'
+        if state == "ready" and len(members) == 1 and not answer.trusted:
+            # Our model's pick, but the page text does not back it up: offer it, do not pre-select it.
+            state, members = "needs_subject", []
+            reason = UNSURE_REASON
         selected = None
         if len(members) == 1:
             selected = members[0]

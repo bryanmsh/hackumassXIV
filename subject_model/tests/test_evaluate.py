@@ -1,6 +1,6 @@
 import json
 import pytest
-from pipeline.gemini import SubjectAnswer
+from pipeline.subjects import LOCAL_CONFIRMED, SubjectAnswer
 from subject_model import evaluate
 from subject_model.evaluate import box_iou, judge, load_labels, outcome, page_text, score
 
@@ -10,9 +10,14 @@ HERE, AWAY = [333, 250, 667, 750], [0, 0, 100, 100]       # the same rectangle a
 DOG, THERE = (300, 0, 400, 100), [0, 750, 333, 1000]     # a second subject at the top right, and its box_2d
 
 
-def answer(label, synonyms, box_2d, confidence=0.9):
+def answer(label, synonyms, box_2d, confidence=0.9, reason=""):
     return SubjectAnswer.model_validate({"things_on_page": [label], "page_kind": "single", "candidates": [
-        {"label": label, "synonyms": synonyms, "box_2d": box_2d, "confidence": confidence, "reason": ""}]})
+        {"label": label, "synonyms": synonyms, "box_2d": box_2d, "confidence": confidence, "reason": reason}]})
+
+
+def confirmed(label, synonyms, box_2d):
+    """Our model's answer when the page text names the subject, so the trust rule lets it be pre-selected."""
+    return answer(label, synonyms, box_2d, reason=LOCAL_CONFIRMED)
 
 
 def two(first, second):
@@ -57,7 +62,7 @@ def test_outcome_is_what_the_teacher_gets():
 
 
 def test_score_counts_and_writes_results(testset, monkeypatch):
-    monkeypatch.setattr(evaluate.local, "local_answer", lambda view_path, text: answer("ball", ["toy"], HERE))
+    monkeypatch.setattr(evaluate.local, "local_answer", lambda view_path, text: confirmed("ball", ["toy"], HERE))
     result = score(testset, modes=("local",))
     assert result["total"] == 1 and result["subjects"] == 1 and result["candidates"] == {"local": 1}
     assert result["found"] == result["first"] == result["named"] == {"local": 1}
@@ -103,15 +108,18 @@ def test_page_text_comes_from_the_pdf_when_it_is_there(testset):
     assert page_text(testset, "ball", fallback="typed") == "typed"
 
 
-def test_gemini_is_asked_once_for_a_page(tmp_path, monkeypatch):
-    calls = []
-    def fake(view_path, text):
-        calls.append(view_path)
-        return answer("ball", [], HERE)
-    monkeypatch.setattr(evaluate, "choose_subjects", fake)
+def test_gemini_answers_come_only_from_the_saved_files(tmp_path):
     cache = tmp_path / "gemini" / "page.json"
-    assert evaluate.ask_gemini("page.png", "", cache=cache) == evaluate.ask_gemini("page.png", "", cache=cache)
-    assert len(calls) == 1
+    with pytest.raises(FileNotFoundError):
+        evaluate.ask_gemini("page.png", "", cache=cache)
+    cache.parent.mkdir()
+    cache.write_text(answer("ball", [], HERE).model_dump_json())
+    assert evaluate.ask_gemini("page.png", "", cache=cache).candidates[0].label == "ball"
+
+
+def test_an_untrusted_pick_counts_as_asking_the_teacher(testset, monkeypatch):
+    monkeypatch.setattr(evaluate.local, "local_answer", lambda view_path, text: answer("ball", ["toy"], HERE))
+    assert score(testset, modes=("local",))["outcomes"]["local"]["asked"] == 1
 
 
 from subject_model.evaluate import agree

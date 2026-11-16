@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import pytest
-from pipeline.gemini import SubjectAnswer, _drop_non_subjects
+from pipeline.subjects import SubjectAnswer, _drop_non_subjects
 from pipeline.process import SELECT_MIN_CONFIDENCE, decide_state
 from subject_model import local
 

@@ -1,4 +1,4 @@
-"""Shared test helpers: synthetic PDFs, one synthetic page image, and the `live` marker."""
+"""Shared test helpers: synthetic PDFs, one synthetic page image, and the `torch` marker."""
 import io
 import os
 from pathlib import Path
@@ -13,12 +13,11 @@ ELLIPSE_RADII = (200, 150)
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "live: calls the real Gemini API; runs only with RUN_LIVE=1")
     config.addinivalue_line("markers", "torch: runs a real PyTorch segmenter (downloads weights); runs only with RUN_TORCH=1")
 
 
 def pytest_collection_modifyitems(config, items):
-    for marker, variable in (("live", "RUN_LIVE"), ("torch", "RUN_TORCH")):
+    for marker, variable in (("torch", "RUN_TORCH"),):
         if os.environ.get(variable) == "1":
             continue
         skip = pytest.mark.skip(reason=f"{marker} test; set {variable}=1 to run")

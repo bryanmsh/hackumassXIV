@@ -1,13 +1,12 @@
-"""SUBJECT_FINDER routing: Gemini, our own subject model, or both in a cascade. No real model is called."""
-import json
+"""Subject choosing with our own model, and the trust rule. No real model is called, except where marked."""
+import logging
 
 import pytest
 
-from pipeline import gemini
-from pipeline.gemini import GeminiError, SubjectAnswer, choose_subjects, label_crop
+from pipeline import subjects
+from pipeline.subjects import LOCAL_CONFIRMED, SubjectAnswer, SubjectError, choose_subjects, label_crop
 
-GEMINI_ANSWER = json.dumps({"page_kind": "single", "candidates": [
-    {"label": "crocodile", "synonyms": ["animal"], "box_2d": [100, 100, 600, 900], "confidence": 0.95}]})
+NOT_SET_UP = "^The subject finder is not set up on this server$"
 
 
 def local(*confidences, reason="", page_kind=None):
@@ -17,106 +16,66 @@ def local(*confidences, reason="", page_kind=None):
         for i, c in enumerate(confidences)])
 
 
-CONFIRMED = gemini.LOCAL_CONFIRMED
-
-
-class Calls(list):
-    """Who was asked, in order, plus use_local() to set our model's fake answer."""
+def named(label, page_kind="single"):
+    return SubjectAnswer(page_kind=page_kind, candidates=[
+        {"label": label, "box_2d": [100, 100, 500, 500], "confidence": 0.9, "reason": LOCAL_CONFIRMED}])
 
 
 @pytest.fixture
-def calls(monkeypatch):
-    """Fakes for both models; calls lists who was asked, in order."""
-    made = Calls()
-
-    def fake_generate(image_png, prompt, schema):
-        made.append("gemini")
-        return GEMINI_ANSWER if schema is SubjectAnswer else json.dumps({"label": "Crocodile"})
-    monkeypatch.setattr(gemini, "_generate", fake_generate)
+def model(monkeypatch):
+    """model(answer=..., label=..., error=...) sets our model's fake answer; model.calls lists the calls."""
     for name in ("SUBJECT_FINDER", "SUBJECT_MODEL"):
         monkeypatch.delenv(name, raising=False)
+    calls = []
 
-    def use_local(answer=None, label="", error=None):
+    def use(answer=None, label="", error=None):
         def fake_subjects(view_path, text):
-            made.append("local")
+            calls.append("subjects")
             if error:
                 raise error
             return answer
+
         def fake_label(png):
-            made.append("local")
+            calls.append("label")
             if error:
                 raise error
             return label
-        monkeypatch.setattr(gemini, "_local_subjects", fake_subjects)
-        monkeypatch.setattr(gemini, "_local_label", fake_label)
-    made.use_local = use_local
-    return made
+        monkeypatch.setattr(subjects, "_local_subjects", fake_subjects)
+        monkeypatch.setattr(subjects, "_local_label", fake_label)
+    use.calls = calls
+    return use
 
 
-def test_gemini_is_the_default_and_never_asks_ours(page_image, calls):
-    calls.use_local(local(0.99))
-    assert choose_subjects(page_image, "").candidates[0].label == "crocodile"
-    assert calls == ["gemini"] and gemini.last_subject_route()["model"] == "gemini"
-
-
-def test_local_mode_never_calls_gemini(page_image, calls, monkeypatch):
-    monkeypatch.setenv("SUBJECT_FINDER", "local")
-    calls.use_local(local(0.2))
-    assert choose_subjects(page_image, "").candidates[0].label == "thing0"
-    assert calls == ["local"]
-
-
-def test_local_mode_without_the_model_fails_with_a_plain_sentence(page_image, calls, monkeypatch):
-    monkeypatch.setenv("SUBJECT_FINDER", "local")
-    calls.use_local(error=FileNotFoundError("namer.pt"))
-    with pytest.raises(GeminiError, match="^The local subject finder is not set up on this server$"):
-        choose_subjects(page_image, "")
-    assert calls == ["local"]
-
-
-def test_cascade_keeps_one_preselected_subject_the_text_names(page_image, calls, monkeypatch):
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
-    calls.use_local(local(0.9, reason=CONFIRMED))
-    assert choose_subjects(page_image, "").candidates[0].label == "thing0"
-    assert calls == ["local"]
-    assert gemini.last_subject_route() == {"model": "local", "reason": 'the page text names "thing0"'}
+def test_one_subject_the_text_names_is_trusted(page_image, model):
+    model(local(0.9, reason=LOCAL_CONFIRMED))
+    answer = choose_subjects(page_image, "")
+    assert answer.trusted and answer.candidates[0].label == "thing0"
+    assert subjects.last_subject_route() == {"trusted": True, "reason": 'the page text names "thing0"'}
 
 
 @pytest.mark.parametrize("answer, reason", [
     (SubjectAnswer(page_kind="scene", candidates=[]), "found nothing"),
     # sure and selected, but the text does not name it: the 4-of-7 wrong Ready pages on Animal Homes
     (local(0.9, reason="Stands out on the page."), 'the page text does not name "thing0"'),
-    # nothing reasonably sure, so the page would ask the teacher anyway
-    (local(0.3, reason=CONFIRMED), "would not pre-select one subject (needs_subject, 0 selected)"),
-    # several sure subjects: not one pre-selected subject
-    (local(0.9, 0.8, reason=CONFIRMED), "would not pre-select one subject (ready, 2 selected)"),
+    (local(0.3, reason=LOCAL_CONFIRMED), "would not pre-select one subject (needs_subject, 0 selected)"),
+    (local(0.9, 0.8, reason=LOCAL_CONFIRMED), "would not pre-select one subject (ready, 2 selected)"),
 ])
-def test_cascade_asks_gemini_when_ours_is_not_enough(page_image, calls, monkeypatch, answer, reason):
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
-    calls.use_local(answer)
-    assert choose_subjects(page_image, "").candidates[0].label == "crocodile"
-    assert calls == ["local", "gemini"]
-    assert gemini.last_subject_route() == {"model": "gemini", "reason": reason}
+def test_anything_less_is_not_trusted_but_still_returned(page_image, model, answer, reason):
+    model(answer)
+    result = choose_subjects(page_image, "")
+    assert not result.trusted and result.candidates == answer.candidates
+    assert subjects.last_subject_route() == {"trusted": False, "reason": reason}
 
 
-def test_a_single_page_with_extra_unsure_things_still_counts_as_one(page_image, calls, monkeypatch):
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
-    calls.use_local(local(0.9, 0.9, reason=CONFIRMED, page_kind="single"))  # "single" selects only the top one
-    choose_subjects(page_image, "")
-    assert calls == ["local"]
+def test_a_single_page_with_extra_unsure_things_still_counts_as_one(page_image, model):
+    model(local(0.9, 0.9, reason=LOCAL_CONFIRMED, page_kind="single"))  # "single" selects only the top one
+    assert choose_subjects(page_image, "").trusted
 
 
-def named(label, page_kind="single"):
-    return SubjectAnswer(page_kind=page_kind, candidates=[
-        {"label": label, "box_2d": [100, 100, 500, 500], "confidence": 0.9, "reason": CONFIRMED}])
-
-
-def test_one_subject_the_text_names_alone_is_kept(page_image, calls, monkeypatch):
+def test_one_subject_the_text_names_alone_is_trusted(page_image, model):
     pytest.importorskip("subject_model.words")
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
-    calls.use_local(named("crocodile"))
-    assert choose_subjects(page_image, "10/12\nCrocodiles live in swamps.").candidates[0].label == "crocodile"
-    assert calls == ["local"]
+    model(named("crocodile"))
+    assert choose_subjects(page_image, "10/12\nCrocodiles live in swamps.").trusted
 
 
 @pytest.mark.parametrize("label, text, why", [
@@ -125,68 +84,69 @@ def test_one_subject_the_text_names_alone_is_kept(page_image, calls, monkeypatch
     ("cat", "A cat & a hat.", "it links things"),
     ("bear", "A bear sleeps under a tree.", 'it also names "tree"'),
 ])
-def test_text_about_more_than_one_thing_goes_to_gemini(page_image, calls, monkeypatch, label, text, why):
+def test_text_about_more_than_one_thing_is_not_trusted(page_image, model, label, text, why):
     pytest.importorskip("subject_model.words")
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
-    calls.use_local(named(label))
-    assert choose_subjects(page_image, text).candidates[0].label == "crocodile"
-    assert calls == ["local", "gemini"]
-    assert gemini.last_subject_route()["reason"] == f"the page text is about more than one thing ({why})"
+    model(named(label))
+    assert not choose_subjects(page_image, text).trusted
+    assert subjects.last_subject_route()["reason"] == f"the page text is about more than one thing ({why})"
 
 
-def test_a_failing_text_check_goes_to_gemini(page_image, calls, monkeypatch):
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
-    calls.use_local(named("crocodile"))
+def test_a_failing_text_check_is_not_trusted(page_image, model, monkeypatch):
+    model(named("crocodile"))
+
     def broken(text, chosen):
         raise ImportError("no subject_model")
-    monkeypatch.setattr(gemini, "_text_names_more", broken)
-    assert choose_subjects(page_image, "Crocodiles live in swamps.").candidates[0].label == "crocodile"
-    assert gemini.last_subject_route()["reason"] == "could not check the page text: ImportError"
+    monkeypatch.setattr(subjects, "_text_names_more", broken)
+    assert not choose_subjects(page_image, "Crocodiles live in swamps.").trusted
+    assert subjects.last_subject_route()["reason"] == "could not check the page text: ImportError"
 
 
 def test_the_confirmed_reason_matches_the_subject_model():
     local_module = pytest.importorskip("subject_model.local")
-    assert gemini.LOCAL_CONFIRMED == local_module.CONFIRMED
+    assert LOCAL_CONFIRMED == local_module.CONFIRMED
 
 
 @pytest.mark.parametrize("error", [ImportError("no subject_model"), FileNotFoundError("finder.pt"), RuntimeError("x")])
-def test_cascade_uses_gemini_when_ours_is_missing_or_fails(page_image, calls, monkeypatch, error):
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
-    calls.use_local(error=error)
-    assert choose_subjects(page_image, "").candidates[0].label == "crocodile"
-    assert gemini.last_subject_route()["reason"] == f"our model unavailable: {type(error).__name__}"
+def test_a_missing_or_failing_model_is_a_plain_sentence(page_image, model, error):
+    model(error=error)
+    with pytest.raises(SubjectError, match=NOT_SET_UP):
+        choose_subjects(page_image, "")
+    with pytest.raises(SubjectError, match=NOT_SET_UP):
+        label_crop(b"png")
 
 
-def test_this_branch_has_no_subject_model_and_the_cascade_still_answers(page_image, calls, monkeypatch):
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")  # the real import runs and fails where subject_model is absent
+def test_missing_weights_fail_with_the_plain_sentence(page_image, monkeypatch):
+    pytest.importorskip("torch")
+    for name in ("SUBJECT_FINDER", "SUBJECT_MODEL"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("NAMER_WEIGHTS", "does-not-exist.pt")
     monkeypatch.setenv("FINDER_WEIGHTS", "does-not-exist.pt")
-    assert choose_subjects(page_image, "").candidates[0].label == "crocodile"
-    assert gemini.last_subject_route()["model"] == "gemini"
-
-
-def test_the_standin_always_escalates(page_image, calls, monkeypatch):
-    monkeypatch.setenv("SUBJECT_FINDER", "cascade")
-    monkeypatch.setenv("SUBJECT_MODEL", "standin")
-    assert choose_subjects(page_image, "").candidates[0].label == "crocodile"
-    assert gemini.last_subject_route() == {"model": "gemini", "reason": "found nothing"}
-
-
-def test_a_mistyped_setting_fails_loudly(page_image, calls, monkeypatch):
-    monkeypatch.setenv("SUBJECT_FINDER", "locall")
-    with pytest.raises(GeminiError, match="SUBJECT_FINDER must be"):
+    with pytest.raises(SubjectError, match=NOT_SET_UP):
         choose_subjects(page_image, "")
-    assert calls == []
 
 
-@pytest.mark.parametrize("finder, local_label, expected, asked", [
-    ("gemini", "rabbit", "crocodile", ["gemini"]),
-    ("local", "", "", ["local"]),  # not sure, and nothing behind it: the teacher types the name
-    ("cascade", "rabbit", "rabbit", ["local"]),
-    ("cascade", "", "crocodile", ["local", "gemini"]),
-])
-def test_label_crop_routing(calls, monkeypatch, finder, local_label, expected, asked):
-    monkeypatch.setenv("SUBJECT_FINDER", finder)
-    calls.use_local(label=local_label)
-    assert label_crop(b"png") == expected
-    assert calls == asked
+def test_the_standin_finds_nothing(page_image, monkeypatch):
+    monkeypatch.setenv("SUBJECT_MODEL", "standin")
+    answer = choose_subjects(page_image, "")
+    assert answer.candidates == [] and not answer.trusted
+    assert label_crop(b"png") == ""
+
+
+@pytest.mark.parametrize("old", ["gemini", "cascade"])
+def test_an_old_setting_is_ignored_with_one_warning(page_image, model, monkeypatch, caplog, old):
+    monkeypatch.setenv("SUBJECT_FINDER", old)
+    monkeypatch.setattr(subjects, "_warned", [])
+    model(local(0.9, reason=LOCAL_CONFIRMED))
+    with caplog.at_level(logging.WARNING, logger="mirai.subjects"):
+        choose_subjects(page_image, "")
+        choose_subjects(page_image, "")
+    assert model.calls == ["subjects", "subjects"]
+    assert [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING] == [
+        f"SUBJECT_FINDER={old} is ignored: subjects always come from our own model"]
+
+
+@pytest.mark.parametrize("found", ["rabbit", ""])  # "": not sure, and the teacher types the name
+def test_label_crop_is_our_model(model, found):
+    model(label=found)
+    assert label_crop(b"png") == found
+    assert model.calls == ["label"]

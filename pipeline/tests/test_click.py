@@ -10,7 +10,7 @@ import pipeline.click
 import pipeline.segment
 from contracts.hashing import hash_bytes
 from pipeline import refine_mask, segment_at_point
-from pipeline.gemini import GeminiError
+from pipeline.subjects import SubjectError
 from pipeline.masks import save_mask
 from pipeline.segment import point_box
 
@@ -29,7 +29,6 @@ def labeller(monkeypatch):
         monkeypatch.setattr(pipeline.click, "label_crop", fake)
 
     set_outcome.crops = crops
-    monkeypatch.setattr(pipeline.process.time, "sleep", lambda seconds: None)
     return set_outcome
 
 
@@ -63,14 +62,14 @@ def test_click_returns_mask_and_label(page_image, tmp_path, labeller, monkeypatc
     assert candidate.mask_hash == hash_bytes(path.read_bytes())
 
 
-def test_click_label_empty_when_gemini_fails(page_image, tmp_path, labeller, monkeypatch):
+def test_click_label_empty_when_the_model_fails(page_image, tmp_path, labeller, monkeypatch):
     monkeypatch.setenv("SEGMENTER", "grabcut")
-    labeller(GeminiError("down"))
+    labeller(SubjectError("down"))
     candidate = segment_at_point(page_image, 600, 450, tmp_path)
     assert candidate.label == ""
     assert candidate.source == "click"
     assert read_mask(candidate)[450, 600] == 255
-    assert len(labeller.crops) == 2  # one retry, then give up
+    assert len(labeller.crops) == 1  # no retry
 
 
 def test_click_label_empty_on_any_labelling_error(page_image, tmp_path, labeller, monkeypatch):
@@ -100,7 +99,7 @@ def test_segmenter_is_prompted_with_the_click_only(page_image, tmp_path, labelle
     assert calls == [{"box": None, "points": [(600, 450)]}]
 
 
-def test_crop_sent_to_gemini_is_the_mask_box(page_image, tmp_path, labeller, monkeypatch):
+def test_crop_sent_for_a_name_is_the_mask_box(page_image, tmp_path, labeller, monkeypatch):
     labeller("ball")
     square = np.zeros((900, 1200), np.uint8)
     square[300:500, 500:800] = 255  # box 300 wide, 200 tall: padding is 8% of 300 = 24 px

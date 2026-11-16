@@ -46,8 +46,8 @@ def test_fewer_than_three_points_raises_value_error(page_image, tmp_path):
         mask_from_outline(page_image, "rabbit", [(1, 1), (5, 5)], tmp_path)
 
 
-def test_works_with_gemini_and_segmenter_off(page_image, tmp_path, monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+def test_works_with_the_models_off(page_image, tmp_path, monkeypatch):
+    monkeypatch.setenv("SUBJECT_MODEL", "standin")
     monkeypatch.setenv("SEGMENTER", "edgesam")
     import pipeline.segment
 
@@ -59,8 +59,9 @@ def test_works_with_gemini_and_segmenter_off(page_image, tmp_path, monkeypatch):
     assert np.array_equal(read_mask(candidate), polygon_mask(TRIANGLE, 1200, 900))
 
 
-def test_importing_the_pipeline_does_not_load_the_gemini_sdk():
-    code = "import sys, pipeline, pipeline.outline; sys.exit(1 if 'google.genai' in sys.modules else 0)"
+def test_importing_the_pipeline_loads_no_model_library():
+    code = ("import sys, pipeline, pipeline.outline; "
+            "sys.exit(1 if {'google.genai', 'torch'} & set(sys.modules) else 0)")
     result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).parents[2])
     assert result.returncode == 0
 

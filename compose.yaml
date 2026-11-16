@@ -25,7 +25,7 @@ services:
       context: .
       dockerfile: infra/caddy.Dockerfile
     environment:
-      # Only these three reach Caddy; the Gemini key stays in the api container.
+      # Only these three reach Caddy; every other setting stays in the api container.
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
       SITE_USER: ${SITE_USER:?set SITE_USER in .env}
       SITE_PASSWORD: ${SITE_PASSWORD:?set SITE_PASSWORD in .env}
