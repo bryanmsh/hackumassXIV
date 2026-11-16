@@ -23,9 +23,8 @@ wins on schedule, ownership and scope.
 
 ## Who owns what
 
-Ask which person you are working with if it is not obvious, and only edit that
-person's folders. Never edit another owner's folder; say what is needed and let
-them change it.
+Since the hackathon ended (2026-11-15), Bryan maintains the whole project alone
+and may edit every folder. The table records who built what.
 
 | Person | Owns                      | Folders                                                                       |
 | ------ | ------------------------- | ----------------------------------------------------------------------------- |
@@ -41,8 +40,8 @@ The spec calls these lanes A, B, C and D in that order.
 - Web app: React 18, Vite, TypeScript, Tailwind CSS
 - API: Python 3.11, FastAPI, Pydantic v2, PyMongo
 - PDF: PyMuPDF
-- Subject choosing: Gemini API with JSON output
-- Cut-outs: EdgeSAM on CPU, or SAM 2 small
+- Subject choosing: our own subject model (`subject_model/`, finder U-Net + namer ResNet-18) on the server. No outside AI service; Gemini was removed on 2026-11-15
+- Cut-outs: our own cut-out model (`cutout_model/`) first, SAM 2.1 small behind it
 - Image display: NumPy, OpenCV, Pillow, WebP output
 - Database: MongoDB Atlas. Images live on disk, not in the database
 - Hosting: one Vultr instance, Docker Compose, Caddy

@@ -1,5 +1,12 @@
 # Plan: drop Gemini, use only our own models
 
+**Status: done 2026-11-15** (Bryan alone, after the hackathon, so every folder was edited directly).
+Differences from the plan below: `pipeline/gemini.py` was renamed to `pipeline/subjects.py` (with
+`SubjectError` and `SubjectCandidate`) since nobody else edits `subject_model/` now; the one retry
+was removed (our model gives the same answer twice); `subject_model/try_book.py` was removed
+(`pipeline.run_book` does the same now); the second look renders on white, since the namer was
+trained on cut-outs on white. Measured: *Animal Homes* 1 Ready and right, 15 ask, 0 failed, 93 s.
+
 2026-11-15. The Gemini key has been deleted and removed from the Vultr server. From now on every AI
 step runs on our own models: the subject finder and namer (`subject_model/`), and the cut-out cascade
 (our cut-out model, then SAM 2.1 small) that is already live.

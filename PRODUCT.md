@@ -33,7 +33,7 @@ The subject always comes from the original page through a mask; nothing is drawn
 
 ## Capabilities and Constraints
 
-- Stack in place: React 18, Vite, TypeScript, Tailwind CSS in `web/`; FastAPI API; Gemini for subject choosing; EdgeSAM or SAM 2 for cut-outs. Atkinson Hyperlegible is the chosen text font.
+- Stack in place: React 18, Vite, TypeScript, Tailwind CSS in `web/`; FastAPI API; our own subject model for subject choosing (Gemini until 2026-11-15); our cut-out model with SAM 2.1 behind it for cut-outs. Atkinson Hyperlegible is the chosen text font.
 - Automatic checks (subject match, source fidelity, page edge, background detail, subject visibility, second look) say the adaptation was built correctly. Only the teacher approves. Each measurement is reported on its own; there is no combined score.
 - An approval is tied to one page, one cut-out, one profile's settings and one look; changing any of them requires approval again.
 - Positions in the API are 0 to 1 fractions of page size.

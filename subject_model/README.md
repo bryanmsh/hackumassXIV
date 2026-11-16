@@ -1,9 +1,11 @@
-# Local subject finder
+# Subject finder
 
-A fallback for Mirai's subject choosing that uses no outside AI. Given a page picture and its words, it
-returns the same JSON `pipeline.gemini.choose_subjects` gets from Gemini: up to five subjects, each with a
-name, synonyms, a rectangle and a confidence. Gemini stays the default; this mode is clearly worse, and the
-results below show by how much.
+Miraai's subject choosing, with no outside AI. Since 2026-11-15 it is the only subject finder:
+`pipeline.subjects.choose_subjects` calls it on every page. Given a page picture and its words, it returns up
+to five subjects, each with a name, synonyms, a rectangle and a confidence. Before that date Gemini was the
+default and this was a fallback; it is clearly worse than Gemini, and the results below show by how much.
+The pipeline's trust rule (`pipeline/README.md`, "How subjects are found") makes up for it: a guess is
+pre-selected only when the page text backs it up, and otherwise the teacher picks.
 
 Both models were trained by the team from random weights. No pretrained weights are used anywhere.
 
@@ -14,7 +16,7 @@ Both models were trained by the team from random weights. No pretrained weights 
 - **Finder** (`finder.py`): the cut-out model's U-Net, trained on whole photos with every labelled object
   marked, so it marks what stands out on a page; its separate blobs become rectangles.
 - **Chooser** (`local.py`): names each blob, lets the page text confirm a name, and builds the
-  Gemini-shaped answer, with confidences set so the pipeline's existing rules decide the page state.
+  answer `pipeline.subjects.SubjectAnswer` accepts, with confidences set so the pipeline's existing rules decide the page state.
 
 ## Commands
 
@@ -44,14 +46,14 @@ subject_model/.venv/bin/python -m subject_model.finder_train --duts data/dataset
   --out data/models/finder_run --epochs 37 --size 256 --widths 16 32 64 128 256
 cp data/models/finder_run/best.pt data/models/finder.pt
 
-# Score on the hand-labelled pages (add --modes local gemini to score Gemini too; it needs GEMINI_API_KEY,
-# and each page's Gemini answer is kept in data/subject_testset/gemini/ so it is asked only once)
+# Score on the hand-labelled pages (add --modes local gemini to compare with Gemini's answers saved in
+# data/subject_testset/gemini/ before the app stopped calling it; the local score applies the trust rule)
 subject_model/.venv/bin/python -m subject_model.evaluate data/subject_testset
 subject_model/.venv/bin/python -m subject_model.evaluate data/subject_testset --plain-crops
 subject_model/.venv/bin/python -m subject_model.evaluate data/subject_testset --agree
 
-# Run a whole book through the real page code with the local mode (no Gemini call)
-subject_model/.venv/bin/python -m subject_model.try_book fixtures/animal-homes-pratham-FKB.pdf data/try_book/animal-homes
+# Run a whole book through the real page code
+subject_model/.venv/bin/python -m pipeline.run_book fixtures/animal-homes-pratham-FKB.pdf data/runs/animal-homes
 
 # Tests
 subject_model/.venv/bin/python -m pytest subject_model/tests -q
@@ -81,11 +83,15 @@ on a plain background with its name in the page text (the elephant, the tiger). 
 big blob or the wrong thing, and its names are mostly wrong (ants called a map, a girl called a mermaid). Neither
 mode sent a wrong page through as Ready on these pages; the local mode asks the teacher on nearly every page.
 
-**One whole book through the real page code** (`try_book`, Animal Homes, 16 pages, no Gemini call): 22 seconds in
+**One whole book through the real page code** (2026-11-14, before the trust rule; Animal Homes, 16 pages, no Gemini call): 22 seconds in
 all with four pages at a time, about 1 to 5 seconds a page; no page failed; 7 pages Ready and 9 asking the teacher.
 Of the 7 Ready pages, 3 were confirmed by the page text and look right (bear, crocodile, tiger). The other 4 were
 pre-selected on the namer's confidence alone, with names the text does not support (crocodile on the fish and frog
 page, map twice, sword). Nothing was tuned on this book.
+
+With the trust rule (2026-11-15, `pipeline.run_book`, `SEGMENTER=cascade`, 93 s on a laptop CPU): 1 page Ready
+and right (the crocodile), 15 asking the teacher, none failed. The 4 wrong Ready pages now ask, and so do the
+bear and tiger pages, whose text names a second animal.
 
 Agreement with Gemini on unpicked pages (`--agree`): not run. Two of the three books were labelled in full, so the
 rule leaves 9 pages, 5 of them credits pages.

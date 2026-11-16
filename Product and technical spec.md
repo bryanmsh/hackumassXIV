@@ -329,16 +329,16 @@ One Python backend, one React frontend, one hosted database and one server; ever
 | API mocking | Mock Service Worker with JSON fixtures | Frontend runs with no backend | Static JSON files |
 | API server | Python 3.11, FastAPI, Uvicorn, Pydantic v2 | Same language as the image code; typed request and response models | None needed |
 | PDF | PyMuPDF | Renders pages at a chosen resolution and reads the text layer | Poppler (`pdftoppm`, `pdftotext`) |
-| Subject choosing | Gemini API, Flash tier, JSON output | Reads picture and text together and returns boxes | Teacher picks or outlines every subject |
+| Subject choosing | Our own subject model (`subject_model/`: a finder U-Net and a namer ResNet-18, trained from scratch), on the server. Gemini Flash until 2026-11-15 | No page leaves the server; no key, cost or rate limit | Teacher picks or outlines every subject |
 | Cut-outs | EdgeSAM on CPU first; SAM 2 small on a GPU if quality is poor | Box and point prompts; runs once per page | Teacher's rough outline as the mask (P0, needs no model) |
 | Image display | NumPy, OpenCV, Pillow; WebP output | Plain compositing, no model, repeatable; small files for the reader | None needed |
 | Text font | Atkinson Hyperlegible | Free font designed for low-vision readers | Any bundled sans-serif |
 | Database | MongoDB Atlas free cluster, PyMongo | Sponsor prize; flexible documents | Local MongoDB in Docker |
 | Image storage | Disk on the server | Keeps images out of the 512 MB database | Same |
-| Hosting | One Vultr instance, Docker Compose, Caddy for HTTPS, the domain and a password on the whole site | Sponsor prize; one box to manage; keeps strangers off the Gemini key | Laptop with pre-processed books |
+| Hosting | One Vultr instance, Docker Compose, Caddy for HTTPS, the domain and a password on the whole site | Sponsor prize; one box to manage; keeps strangers from uploading books | Laptop with pre-processed books |
 | Dependencies | One requirements file per Python folder | Owners add packages without touching a shared file | None needed |
 
-To confirm in the first hours: the current Gemini model name, and that it returns boxes as `[ymin, xmin, ymax, xmax]` on a 0 to 1000 scale.
+Subject boxes are `[ymin, xmin, ymax, xmax]` on a 0 to 1000 scale (the format Gemini used; our model keeps it).
 
 ## Contracts
 
@@ -440,19 +440,20 @@ The pipeline turns a PDF into page images, text, subject candidates and masks. I
 **Subject choosing: `process_page`**
 
 1. A page flagged `spread` returns Unsupported, unless `force` is set.
-2. Send the working copy and the page text to Gemini with a fixed prompt and a JSON schema.
-3. The schema returns `things_on_page` (everything the model can see, listed before it ranks), `page_kind` (single, several, scene) and up to 5 candidates, most important first: `label`, up to 5 `synonyms` that include the general kind of thing (hornbill: bird), `box`, `confidence`, and a one-line `reason`. The prompt asks for every main subject, one person, animal or object per candidate.
-4. Three guards in code hold even when the model ignores the prompt: drop a candidate whose label is the setting (forest, sky, ground, background), drop a box that holds two or more other candidates, and merge two boxes on the same object (IoU of 0.8 or more).
-5. Convert boxes from Gemini's 0 to 1000 scale to master pixels, and cut a mask for each candidate. A candidate with an empty mask is dropped.
+2. Give the working copy and the page text to our subject model (`pipeline.subjects.choose_subjects`).
+3. It returns `things_on_page`, `page_kind` (single, several, scene) and up to 5 candidates, most confident first: `label`, `synonyms` that include the general kind of thing (hornbill: bird), `box`, `confidence`, and a one-line `reason`, plus `trusted`: whether the page text backs up the one subject the rules below would pre-select (the text names it, and links nothing else to it).
+4. Three guards in code hold on every answer: drop a candidate whose label is the setting (forest, sky, ground, background), drop a box that holds two or more other candidates, and merge two boxes on the same object (IoU of 0.8 or more).
+5. Convert boxes from the 0 to 1000 scale to master pixels, and cut a mask for each candidate. A candidate with an empty mask is dropped.
 6. Set the state in this order, where "sure" means a confidence of 0.5 or more:
    - No clear subject when there are no candidates, or none gave a usable cut-out.
    - Needs subject when no candidate is sure, or when the model's first choice gave no usable cut-out. The others are never picked silently.
    - Ready, with the top candidate selected, when `page_kind` is single and that candidate is sure.
+   - Needs subject, with nothing selected and the candidates kept, when one candidate would be selected but the answer is not `trusted`.
    - When `page_kind` is several or scene: Ready with the one sure candidate selected if there is exactly one. With two or more, append a combined candidate and return Needs subject with nothing selected.
 7. The combined candidate is an ordinary `Candidate`, so no contract changes: its mask is the union of the sure candidates' masks, its label joins their labels ("rabbit and rat"), its synonyms are all of theirs, its confidence is the lowest of theirs, its box surrounds them all, and its `source` is `auto`. It comes after the single candidates.
-8. Any exception, a 20-second timeout, or a second failed attempt returns Failed with a `reason`. A rate-limit reply waits and retries once. The function never raises.
+8. Any exception returns Failed with a `reason`. The function never raises.
 
-Every Gemini call uses a fixed seed, so the same page is likelier to get the same answer. Each call is capped at 16,384 output tokens, 8,192 thinking tokens and 8,000 characters of page text; an answer cut off by a cap counts as a failed call.
+The same page always gives the same answer.
 
 Confidence is the model's own estimate and is not calibrated, so it only screens out weak guesses and never chooses between two sure subjects. The 0.5 value is tuned on the six test pages, never on the 20 evaluation pages.
 
@@ -461,12 +462,12 @@ Confidence is the model's own estimate and is not calibrated, so it only screens
 - Run the segmenter on the master with the candidate's box as the prompt.
 - Clean the mask: keep the largest connected region plus any region at least 5% of its size, and fill holes smaller than 0.1% of the page. A combined cut-out is not cleaned again, so a small subject beside a large one is kept.
 - Save the mask under its own hash and return the hash in the candidate.
-- `segment_at_point` runs the segmenter with one positive point where the teacher clicked, and asks Gemini to label that crop. If Gemini fails, the label is empty and the teacher types it.
+- `segment_at_point` runs the segmenter with one positive point where the teacher clicked, and asks our namer to label that crop. If it is not sure (under 0.5) or fails, the label is empty and the teacher types it.
 - `refine_mask` (P1) reruns with the original prompt plus the new point.
 
 **Manual label and outline: `mask_from_outline`**
 
-- **P0, `tidy=False`:** fill the teacher's polygon (at least 3 points) and use it as the mask, exactly as drawn. This calls no model, so it works when Gemini and the segmenter are both down.
+- **P0, `tidy=False`:** fill the teacher's polygon (at least 3 points) and use it as the mask, exactly as drawn. This calls no model, so it works when the models are both down.
 - **P1, `tidy=True`:** run the segmenter with the polygon's bounding box as the prompt. If its mask overlaps the polygon with an IoU of 0.6 or more, use it, clipped to the polygon grown by 12 px. Otherwise keep the raw polygon.
 - Either way the candidate has `source` set to `manual`, confidence 1.0, and the teacher's label.
 
@@ -514,10 +515,10 @@ The output canvas is 1,600 px on its longer side, in the page's own proportions.
 
 **Second look: `second_look`**
 
-- Renders the subject at level 2 on black and asks the model to name the object in one to three words, with no label and no original.
+- Renders the subject at level 2 on white and asks our namer to name it, with no label and no original.
 - Passes when the answer shares a word with the label or any synonym, after lowercasing and making words singular. So "bird" passes for a hornbill whose synonyms include "bird."
 - A miss is a warning that shows the model's answer. It never blocks approval.
-- By default it uses the same Gemini model as subject choosing, so its errors can match the first pass. `SECOND_LOOK_MODEL` can point it at another model if the team has a second key.
+- It is the same namer that suggests labels, so its errors match the first pass; it mostly matters when the teacher typed or changed the label.
 
 **Evaluation (P1)**
 
@@ -556,7 +557,7 @@ The API is the only part that touches the database, and it owns every rule about
 
 1. `POST /books` checks the page count and file size, saves the PDF, creates the book as `ingesting`, and returns.
 2. A background task runs `rasterize`, creates page records in Processing with `processing_started_at`, and marks the book ready.
-3. It then runs `process_page` in a thread pool, `PAGE_CONCURRENCY` pages at a time (default 4, lowered if Gemini rate limits appear).
+3. It then runs `process_page` in a thread pool, `PAGE_CONCURRENCY` pages at a time (default 4).
 4. Each result is written to its page as it lands. A failed page is marked Failed with its reason and does not stop the others.
 5. On startup, any book still `ingesting` and any page still Processing is marked Failed with the reason "interrupted, retry." Jobs run inside the server process, so this is what stops a restart from stranding them.
 6. `POST /pages/{id}/retry` puts one page back in the queue.
@@ -565,7 +566,7 @@ The API is the only part that touches the database, and it owns every rule about
 **Checks and second look**
 
 - Confirming a subject starts `second_look` in the background, once per page and `subject_hash`. The result is stored on the page; until it lands, the sheet shows it as pending.
-- The sheet route runs `run_checks` for any page without a stored result for the current version. It is local image work of a few milliseconds per page, with no AI call, so a GET never spends the Gemini key.
+- The sheet route runs `run_checks` for any page without a stored result for the current version. It is local image work of a few milliseconds per page, with no AI call, so a GET never runs a model.
 
 **Other rules**
 
@@ -615,7 +616,7 @@ All four owners can start now. The rule that makes this possible: **you make you
 
 | Owner | Folders | Fake inputs they make for themselves |
 | --- | --- | --- |
-| A: Pipeline and infrastructure | `pipeline/`, `fixtures/`, `infra/`, root `Dockerfile`, `compose.yaml`, `Caddyfile` | None needed: works from the real PDF and the Gemini key |
+| A: Pipeline and infrastructure | `pipeline/`, `fixtures/`, `infra/`, root `Dockerfile`, `compose.yaml`, `Caddyfile` | None needed: works from the real PDF and the model weights |
 | B: Display, checks and pitch | `render/`, `checks/`, `eval/`, `pitch/` | Two page screenshots and two masks painted by hand in any image editor |
 | C: API and data | `api/`, `contracts/` setup | Stubs for A's and B's functions: fixed candidates, a rectangle mask, a render that returns the page unchanged |
 | D: Web app | `web/` | Mock API responses typed from the Contract 1 table, with placeholder images |
@@ -744,7 +745,7 @@ One server runs everything, behind a password, and a few settings switch each mo
 
 | Setting | Used by | Purpose |
 | --- | --- | --- |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | A, B | Subject choosing and the second look |
+| `NAMER_WEIGHTS`, `FINDER_WEIGHTS` | A, B | Our subject model, for subject choosing and the second look |
 | `SECOND_LOOK_MODEL` | B | Optional different model for the second look |
 | `SEGMENTER` | A | `edgesam`, `sam2` or `stub` |
 | `PIPELINE`, `RENDER` | C | `real` or `stub`, so a broken module can be bypassed |
@@ -759,7 +760,7 @@ Secrets live in `.env`, which is never committed; `.env.example` lists the names
 
 - Start on a Vultr CPU instance with 4 vCPUs and 8 GB of memory.
 - Docker Compose runs two containers: the API, and Caddy, which serves the built web app, forwards `/api` to the API, and handles HTTPS for the domain.
-- Caddy asks for a username and password on every path. Without it, anyone with the URL could upload PDFs and spend the Gemini key.
+- Caddy asks for a username and password on every path. Without it, anyone with the URL could upload PDFs and use the server.
 - The API enforces the 30-page and 50 MB upload limits itself.
 - `data/` is a mounted folder, so pre-processed books survive a restart.
 - A redeploys from `main` at every checkpoint.
@@ -778,6 +779,6 @@ Secrets live in `.env`, which is never committed; `.env.example` lists the names
 **Demo safety**
 
 - Five books are processed, confirmed and approved in advance. They load with no model calls.
-- If Gemini or the segmenter is down, the hand-drawn outline still produces a page. It is P0 and calls no model.
+- If the subject model or the segmenter is down, the hand-drawn outline still produces a page. It is P0 and calls no model.
 - `RENDER_VERSION` is frozen at hour 30. If it must change, A runs the re-approve tool on the backup books after checking their sheets.
 - A screen recording of the full demo is ready before judging starts.

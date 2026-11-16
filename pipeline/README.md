@@ -8,8 +8,7 @@ code: it reads and writes files under a book folder and returns the types in
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r pipeline/requirements.txt
-.venv/bin/python -m pytest pipeline/tests -q          # offline, Gemini is mocked
-RUN_LIVE=1 .venv/bin/python -m pytest pipeline/tests -q -m live   # calls the real Gemini API
+.venv/bin/python -m pytest pipeline/tests -q          # the subject model is faked, except where torch is installed
 ```
 
 Run everything from the repo root so `contracts` and `pipeline` import.
@@ -23,8 +22,8 @@ Run everything from the repo root so `contracts` and `pipeline` import.
 | `outline.py` | `mask_from_outline(...)`: the teacher's drawn shape as the mask. `tidy=False` calls no model; tidy=True uses the segmenter's mask when it overlaps the drawing by 30 % or more, clipped to the drawing's box grown by 15 %; otherwise the drawing is kept. |
 | `segment.py` | `segment(image, box=None, points=None)`: the one door to the segmenter, chosen by `SEGMENTER` |
 | `sam.py` | SAM 2.1 small and EdgeTAM through transformers. The only file that imports torch |
-| `gemini.py` | `choose_subjects(view_path, text)` and `label_crop(png_bytes)`: the one door to Gemini |
-| `process.py` | `process_page(asset, out_dir, force=False)`: Gemini, a mask per candidate, the state rules. Never raises |
+| `subjects.py` | `choose_subjects(view_path, text)` and `label_crop(png_bytes)`: the one door to our subject model (`subject_model/`), the guards on its answer, and the trust rule |
+| `process.py` | `process_page(asset, out_dir, force=False)`: our subject model, a mask per candidate, the state rules. Never raises |
 | `click.py` | `segment_at_point(image_path, x, y, out_dir)` and `refine_mask(image_path, mask_path, x, y, out_dir)` |
 | `cascade.py` | `SEGMENTER=mirai` and `cascade`: our cut-out model, its confidence checks, and the hand-off to SAM 2 |
 | `calibrate_cascade.py` | Command line: measures our cut-out model against SAM 2 and picks `CASCADE_MIN_CONFIDENCE` |
@@ -37,9 +36,9 @@ Run everything from the repo root so `contracts` and `pipeline` import.
 .venv/bin/python -m pipeline.run_book path/to/book.pdf data/books/my-book
 ```
 
-Run it from the repo root: it reads `.env` there for `GEMINI_API_KEY`, `GEMINI_MODEL`,
-`SEGMENTER` and `PAGE_CONCURRENCY` (default 4 pages at once). **This calls the real Gemini
-API, one call per page.** It prints one line per page (state, reason, seconds) and writes
+Run it from the repo root: it reads `.env` there for `SEGMENTER`, `PAGE_CONCURRENCY` (default
+4 pages at once) and the model weight paths. Everything runs on this machine; nothing is sent
+to an outside service. It prints one line per page (state, reason, seconds) and writes
 `summary.json` beside the page and mask folders. A page that fails does not stop the others.
 
 ## Files written (Contract 3)
@@ -50,29 +49,18 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 {out_dir}/masks/{n}_{hash}.png   8-bit, one channel, master size, 255 = subject
 ```
 
-## Gemini findings (to post to the team)
-
-| Question | Answer |
-| --- | --- |
-| Model name | `gemini-3.8-flash` (newest Flash in the live model list, 2026-11-14). `gemini-flash-latest` does not exist for our key: 404 |
-| Box format | `[ymin, xmin, ymax, xmax]`, integers 0 to 1000. Confirmed by eye on one page: both boxes landed on their objects |
-| Four calls at once | not yet tested |
-| Time per call | 9.4 s and 9.2 s for the same page (1600 px view, no page text), two samples |
-| Tokens per call | 1,355 in (image plus prompt), 471 thinking, 203 answer; one sample |
-
 ## Settings
 
 | Setting | Values | Notes |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | your key | Read from the environment only. Never printed or logged |
-| `GEMINI_MODEL` | a Flash model name | Empty uses `gemini-3.8-flash` |
 | `SEGMENTER` | `grabcut` (default), `stub`, `sam2`, `edgetam`, `mirai`, `cascade` | `sam2` is the recommended setting on the server. `edgesam` raises: it has no installable package. `mirai` is our own cut-out model alone; `cascade` runs it first and sends unsure boxes to SAM 2 (`pipeline/cascade.py`) |
 | `CASCADE_MIN_CONFIDENCE` | 0 to 1 | Empty means 0.65, from `calibrate_cascade` on *Animal Homes* with the run B weights: our model keeps 67% of boxes at 0.919 agreement with SAM 2.1. Below it, a box goes to the fallback |
 | `CASCADE_FALLBACK` | a segmenter name | Empty means `sam2`. Not `cascade` or `mirai` |
 | `CASCADE_FLIP` | `1` (default) or `0` | `0` skips the mirrored-page check, which halves our model's time per box but makes it a worse judge of itself: at the same agreement it keeps 53% of boxes instead of 67% (threshold 0.75). The mirror pass runs only when the first pass clears the threshold, since it can only lower the score |
 | `CUTOUT_MODEL` | empty or `standin` | `standin` replaces our model with GrabCut with blurred edges, until the weights exist |
-| `SUBJECT_FINDER` | `gemini` (default), `local`, `cascade` | `local` is Andrew's `subject_model` with no Gemini call; `cascade` asks it first and keeps its answer only when exactly one subject would be pre-selected, the page text names it, and the text is not about anything else (no "and", "&", "or", "with", and no other name our model knows); otherwise Gemini answers. Accuracy first: on *Animal Homes* our model answers 1 page of 16. Weights: `NAMER_WEIGHTS` and `FINDER_WEIGHTS`, else `$DATA_DIR/models/`; the trained ones are in `subject_model/weights/` |
-| `SUBJECT_MODEL` | empty or `standin` | `standin` is a placeholder that finds nothing, so the cascade always asks Gemini |
+| `NAMER_WEIGHTS`, `FINDER_WEIGHTS` | paths | Our subject model's weights. Empty means `$DATA_DIR/models/namer.pt` and `finder.pt`; the trained ones are in `subject_model/weights/` |
+| `SUBJECT_MODEL` | empty or `standin` | `standin` is a placeholder that finds nothing, for a machine without torch or the weights: every page asks the teacher |
+| `SUBJECT_FINDER` | not used | Chose between Gemini and our model until 2026-11-15. Any old value only logs one warning |
 | `MODEL_CACHE_DIR` | a folder | Where model weights download on first use. Empty means `$DATA_DIR/models` (the mounted `data/` folder in Docker) |
 | `TORCH_THREADS` | a number | Threads torch may use. Empty means every core |
 
@@ -81,35 +69,44 @@ API, one call per page.** It prints one line per page (state, reason, seconds) a
 
 ## How subjects are found
 
-One call per page asks Gemini for **every main subject**, up to 5, each as one clean object.
+Our subject model (`subject_model/`, trained from scratch) answers every page; no outside AI
+service is called.
 
-- The model first lists everything it sees (`things_on_page`), then ranks.
-- Each candidate is one person, animal or object, or one tight group of the same kind that
-  touch (two children playing). Things apart on the page are separate candidates.
-- Guards in `gemini.py` hold even if the model ignores the prompt: the setting is dropped
-  (forest, sky, ground, grass, background...), a box holding two or more other candidates is
-  dropped as a group, and two boxes on the same object keep the more confident one.
-- A fixed `seed` makes the same page give the same answer.
+- The **finder**, a half-width U-Net, marks up to a few blobs that stand out on the page.
+- The **namer**, a ResNet-18 over 347 names, names each blob from a cut-out on white.
+- The **page text** confirms a name when it mentions it ("Crocodiles live in swamps."), which
+  raises that candidate's confidence. Printed words, marks and settings are dropped.
+- Guards in `subjects.py` hold on every answer: the setting is dropped (forest, sky, ground,
+  grass, background...), a box holding two or more other candidates is dropped as a group, and
+  two boxes on the same object keep the more confident one.
+- The same page always gives the same answer.
 
-Measured on *Animal Homes* with `gemini-3.8-flash` (2026-11-14, 9 live calls):
+**The trust rule** (`subjects.local_is_enough`). Our model finds things that stand out well but
+names them poorly and misses second subjects, so a page is pre-selected only when all three hold:
 
-| Page | Text | Result |
-| --- | --- | --- |
-| 2 | Animals live all around us. | `scene`: children 0.85, woodpecker 0.80, ants 0.75, ant 0.65, ant 0.65. Identical in 4 runs out of 4 |
-| 3 | Birds build their homes up high. And so do bees. | `several`: beehive 0.95, bird 0.95, bird nest 0.90, bird 0.85 |
-| 7 | Rabbits and rats live in burrows under the ground. | `several`: rabbit 0.95, rabbit 0.95, rat 0.90, rat 0.90 |
-| 10 | Crocodiles live in swamps. | `single`: crocodile 1.00, so Ready |
+1. `process.decide_state` would pre-select exactly one subject;
+2. the page text names it (`subject_model.local.CONFIRMED`);
+3. the text is not about anything else: no "and", "&", "or", "with", and no other name our
+   model knows.
 
-Before this change the same page 2 gave a different answer on each of three runs, one of them
-a grouped "bird and..." box, the "forest", and no children.
+Otherwise the answer is marked `trusted=False` and the page asks the teacher, with our
+candidates still offered. Without checks 1 and 2 our model pre-selected a wrong cut-out on 4 of
+7 Ready pages of *Animal Homes*; check 3 came from page 11 ("Deer live in forests. And so do
+tigers!"), where it chose the tiger and never offered the deer. `subjects.last_subject_route()`
+says why each page was or was not trusted.
 
-Per call: about 1,545 tokens in, 400 to 816 thinking, 161 to 509 answer; 7.6 to 12.9 s.
-Sending the picture at high `media_resolution` changed neither the answer nor the token
-count, so it is not set.
+**Naming a click.** `label_crop` asks the namer about the crop around the clicked cut-out. It
+answers only when it is at least 0.5 sure; otherwise the name is empty and the teacher types it.
 
-Cut-outs are a separate matter: on page 2 GrabCut cut the children and the woodpecker
-cleanly, did poorly on the ants among leaves, and found no shape for one ant, which was
-dropped. That is the segmenter's limit, not the finding step.
+On *Animal Homes* (16 pages, measured 2026-11-15) one page comes back Ready, and it is right
+(page 10, the crocodile). The other 15 ask the teacher; on 6 of them the trust check held back a
+single guess, 4 of which were wrong (pages 6, 7, 12 and 16) and 2 right but on pages about two
+things (the bear and the tiger, whose page text also names wolves and deer). No page failed.
+The whole book took 93 s on a laptop CPU with `SEGMENTER=cascade`, 4 pages at a time.
+
+Until 2026-11-15 Gemini Flash chose subjects, with our model in front of it as a cascade.
+Gemini found about two of every three labelled subjects; ours finds about one in seven
+(`subject_model/README.md`), so the teacher now picks the subject on most pages.
 
 ## What gets pre-selected
 
@@ -119,7 +116,8 @@ story is about, and that is the teacher's call. The teacher still confirms or ch
 
 | Page | Pre-selected | State |
 | --- | --- | --- |
-| About one thing (`single`) | The top candidate, if its confidence is 0.5 or more | Ready |
+| About one thing (`single`), and the trust rule holds | The top candidate, if its confidence is 0.5 or more | Ready |
+| About one thing, but the trust rule fails | Nothing; our candidates are offered | Needs subject ("The app is not sure this is the subject. Please check it.") |
 | Several main subjects, or a scene | Nothing. One **combined cut-out** of every candidate at 0.5 or more is added after the single ones (for example "rabbit and rat"), one click away | Needs subject |
 | Candidates found, none at 0.5 | Nothing | Needs subject |
 | No candidates, or no usable cut-out | Nothing | No clear subject |
@@ -134,21 +132,6 @@ No clear subject (Andrew's decision, 2026-11-14).
 On *Animal Homes*: page 2 selects "children, woodpecker and ants", page 3 "beehive, bird and
 bird nest", page 7 "rabbit and rat" (both rabbits and both rats), page 10 "crocodile".
 
-## Limits on one Gemini call
-
-Set in `gemini.py`, far above normal use, so they trip only when a call goes badly wrong.
-
-| Limit | Value | A real call on the demo page |
-| --- | --- | --- |
-| Thinking tokens (`MAX_THINKING_TOKENS`) | 8,192 | 400 to 816 across four pages |
-| Thinking plus answer (`MAX_OUTPUT_TOKENS`) | 16,384 | 561 to 1,291 |
-| Page text sent (`MAX_TEXT_CHARS`) | 8,000 characters | 0 (no text layer); a picture-book page is a few hundred |
-| Time per attempt | 20 s | 7.6 to 12.9 s |
-| Attempts per page | 2 | 1 |
-
-An answer cut off at the output cap is treated as a failed call: one retry, then the page is
-Failed with the reason "Gemini's answer was cut off at the output limit".
-
 ## Segmenter: SAM 2.1 small
 
 `SEGMENTER=sam2` runs Meta's SAM 2.1 small (`facebook/sam2.1-hiera-small`, Apache-2.0) on the
@@ -158,7 +141,7 @@ and it imports it lazily, so `stub` and `grabcut` run without torch installed.
 How it works:
 - **Load once.** The model loads on first use and stays loaded for the life of the process.
 - **Encode once per page.** The image encoder, the slow part, runs once per page. Its output
-  is cached by the page's pixel hash (the last 8 pages), so the up-to-3 Gemini boxes on a page,
+  is cached by the page's pixel hash (the last 8 pages), so the up-to-5 subject boxes on a page,
   and later clicks on it, only run the fast prompt decoder (about 0.15 s each).
 - **One lock.** Up to 4 pages are processed in parallel threads, and torch already spreads one
   call across every core, so the model runs one call at a time.
@@ -178,7 +161,7 @@ How it works:
 
 Kevin's two hand-masked sample pages (`render/samples/1` bird on a branch, `2` rabbit), each
 scored by IoU against his mask. "Tight" is the subject's box padded 3%, "loose" padded 12%
-(closer to Gemini's boxes), "click" is one point on the body. Torch limited to 4 threads to
+(closer to the boxes subject finding gives), "click" is one point on the body. Torch limited to 4 threads to
 match the server. Measured on a laptop CPU; the server's 4 vCPUs may be somewhat slower.
 
 | Segmenter | Bird tight | Bird loose | Bird click | Rabbit tight | Rabbit loose | Rabbit click | Encode per page | Per prompt |
@@ -198,14 +181,14 @@ match the server. Measured on a laptop CPU; the server's 4 vCPUs may be somewhat
 
 ## Model cascade
 
-Both AI steps can run a model we trained ourselves first and call the big model only when
-ours is unsure. Each step has a setting to turn this on, and both fall back to the big model
-if our model is missing or fails, so `main` starts without the weights.
+The cut-out step runs a model we trained ourselves first and calls SAM 2.1 only when ours is
+unsure. It falls back to SAM if our model is missing or fails, so `main` starts without the
+weights. (Subject choosing used the same pattern in front of Gemini until 2026-11-15; it now
+uses our model alone, see "How subjects are found".)
 
 | Step | Ours first | Behind it | Setting | On the live server |
 | --- | --- | --- | --- | --- |
 | Cut-out | `cutout_model` (7.8M-parameter U-Net, trained from scratch) | SAM 2.1 small, then GrabCut | `SEGMENTER=cascade` | On, with `CASCADE_MIN_CONFIDENCE=0.75` (about 42% of boxes ours at 0.967 agreement on *Animal Homes*) |
-| Subject | Andrew's `subject_model` (finder U-Net and namer ResNet-18) | Gemini | `SUBJECT_FINDER=cascade` | On since 2026-11-15 |
 
 ### Cut-out cascade
 
@@ -236,7 +219,7 @@ fallback alone. It writes `calibration.json`, `.csv` and an `.svg` chart. The so
 hand-masked test set (IoU against the masks) or a `run_book` folder. A book has no hand masks,
 so there it measures **agreement with SAM 2.1, not accuracy**.
 
-Result on *Animal Homes* (36 single-subject Gemini boxes, run B weights, laptop CPU):
+Result on *Animal Homes* (36 single-subject boxes from a Gemini run, run B weights, laptop CPU):
 
 | Threshold | Boxes kept by ours | Agreement with SAM 2.1 |
 | --- | --- | --- |
@@ -255,21 +238,3 @@ win needs a GPU: 0.02 s against 0.10 s a page on an L4 (`cutout_model/README.md`
 the server stays on `sam2`. To switch on: put the weights at `data/models/cutout.pt` (or set
 `CUTOUT_WEIGHTS`) and set `SEGMENTER=cascade`.
 
-### Subject cascade
-
-Accuracy first: the result must be as good as Gemini alone, even if our model answers few pages.
-Our model's answer is kept only when all three hold; otherwise Gemini answers the page:
-
-1. `process.decide_state` would pre-select exactly one subject;
-2. the page text names it (`subject_model.local.CONFIRMED`);
-3. the text is not about anything else: no "and", "&", "or", "with", and no other name our
-   model knows.
-
-On *Animal Homes* our model answers 1 page of 16 (page 10, crocodile, right) in about 0.3 s
-instead of an 8 to 20 s Gemini call. Without check 3 it kept 3 pages, but on page 11 ("Deer live
-in forests. And so do tigers!") it chose the tiger and never offered the deer.
-`gemini.last_subject_route()` says which model answered and why. `label_crop` follows the same
-setting: in `cascade`, an empty local label asks Gemini.
-
-Rollback on the server: delete the `SUBJECT_FINDER` line from `/opt/mirai/.env` and run
-`docker compose up -d api`.
