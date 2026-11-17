@@ -20,7 +20,7 @@ Built at HackUMass XIV
 
 ## Try it in your browser
 
-Open **[Miraai](https://miraai.study/)** (also at [jensenhuangexecutiveboard.vip](https://jensenhuangexecutiveboard.vip/)), choose a book from the library, review its subjects, and set up a child's display preferences. Approve the adapted pages, then open the full-screen reader. You can also upload a picture-book PDF to try the full workflow. The site asks for a password on every page; the team gives it to judges.
+Open **[Miraai](https://miraai.study/)**, choose a book from the library, review its subjects, and set up a child's display preferences. Approve the adapted pages, then open the full-screen reader. You can also upload a picture-book PDF to try the full workflow. The site asks for a password on every page; the team gives it to judges.
 
 ## Problem
 
